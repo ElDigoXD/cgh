@@ -1,7 +1,9 @@
-#include "Vector.h"
 #include "SFML/Graphics.hpp"
 #include "imgui-SFML.h"
 #include "imgui.h"
+
+#include "Color.h"
+#include "Vector.h"
 
 class GUI {
 public:
@@ -70,7 +72,8 @@ public:
         im::SetNextWindowSize({200, (float) window_size.y});
 
         im::Begin("GUI", nullptr, window_flags);
-        im::Text("a");
+        Vec b = Vec(1, 1, 1) / 2;
+        im::Text("%f", b.x);
         im::End();
         //PopItemWidth();
         //PopStyleColor();

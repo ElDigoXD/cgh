@@ -2,56 +2,132 @@
 
 #include <cmath>
 
-template<class Real>
+typedef double Real;
+
 class Vector {
 public:
-    Real x;
-    Real y;
-    Real z;
+    union {
+        struct {
+            Real x;
+            Real y;
+            Real z;
+        };
+        struct {
+            Real r;
+            Real g;
+            Real b;
+        };
+        Real data[3]{0, 0, 0};
+    };
 
-    Vector();
 
-    constexpr Vector(Real x, Real y, Real z);
+    constexpr Vector() {}; // NOLINT(*-pro-type-member-init)
 
-    constexpr Vector<Real> operator+(Vector<Real> other) const;
+    constexpr Vector(Real x, Real y, Real z) : x{x}, y{y}, z{z} {} // NOLINT(*-pro-type-member-init)
 
-    constexpr Vector<Real> operator-() const;
+    constexpr Vector operator+(Vector const other) const {
+        return Vector{x + other.x, y + other.y, z + other.z};
+    }
 
-    constexpr Vector<Real> operator-(Vector<Real> other) const;
 
-    constexpr Vector<Real> operator/(Real scalar) const;
+    inline constexpr Vector operator-() const {
+        return Vector{-x, -y, -z};
+    }
 
-    constexpr bool operator==(Vector<Real> other) const;
 
-    constexpr bool operator!=(Vector<Real> other) const;
+    constexpr Vector operator-(const Vector other) const {
+        return Vector{x - other.x, y - other.y, z - other.z};
+    }
 
-    constexpr Vector<Real> normalize() const;
 
-    constexpr Real length() const;
+    constexpr Vector operator*(const Real scalar) const {
+        return Vector{x * scalar, y * scalar, z * scalar};
+    }
 
-    constexpr Real length_squared() const;
 
-    constexpr Real dot(Vector<Real> other) const;
+    constexpr Vector operator/(const Real scalar) const {
+        return Vector{x / scalar, y / scalar, z / scalar};
+    }
 
-    constexpr Vector<Real> cross(Vector<Real> other) const;
 
-    constexpr void operator+=(Vector<Real> other);
+    constexpr bool operator==(const Vector other) const {
+        return x == other.x && y == other.y && z == other.z;
+    }
 
-    constexpr void operator-=(Vector<Real> other);
 
-    constexpr void operator*=(Real scalar);
+    constexpr bool operator!=(const Vector other) const {
+        return x != other.x || y != other.y || z != other.z;
+    }
 
-    constexpr void operator/=(Real scalar);
 
+    constexpr void operator+=(const Vector other) {
+        x += other.x;
+        y += other.y;
+        z += other.z;
+    }
+
+
+    constexpr void operator-=(const Vector other) {
+
+        x -= other.x;
+        y -= other.y;
+        z -= other.z;
+    }
+
+
+    constexpr void operator*=(const Real scalar) {
+        x *= scalar;
+        y *= scalar;
+        z *= scalar;
+    }
+
+
+    constexpr void operator/=(const Real scalar) {
+        x /= scalar;
+        y /= scalar;
+        z /= scalar;
+    }
+
+
+    // Vector specific stuff
+    [[nodiscard]] constexpr Vector normalize() const {
+        return *this / length();
+    }
+
+
+    [[nodiscard]] constexpr Real length() const {
+        return std::sqrt(length_squared());
+    }
+
+
+    [[nodiscard]] constexpr Real length_squared() const {
+        return x * x + y * y + z * z;
+    }
+
+
+    [[nodiscard]] constexpr Real dot(const Vector other) const {
+        return x * other.x + y * other.y + z * other.z;
+    }
+
+
+    [[nodiscard]] constexpr Vector cross(const Vector other) const {
+        return Vector{y * other.z - z * other.y,
+                      z * other.x - x * other.z,
+                      x * other.y - y * other.x};
+    }
 };
 
-template<class Real>
-constexpr Vector<Real> dot(Vector<Real> a, Vector<Real> b);
+constexpr Real dot(const Vector a, const Vector b) {
+    return a.dot(b);
+}
 
-template<class Real>
-constexpr Vector<Real> cross(Vector<Real> a, Vector<Real> b);
+constexpr Vector cross(const Vector a, const Vector b) {
+    return a.cross(b);
+}
 
-template<class Real>
-constexpr Vector<Real> normalize(Vector<Real> a);
+constexpr Vector normalize(const Vector a) {
+    return a.normalize();
+}
 
-typedef Vector<double> Vecd;
+typedef Vector Vec;
+typedef Vector Point;

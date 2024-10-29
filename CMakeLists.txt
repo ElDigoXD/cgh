@@ -3,10 +3,11 @@ cmake_minimum_required(VERSION 3.28)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 20)
 set(CMAKE_CUDA_ARCHITECTURES native)
+set(CMAKE_CUDA_FLAGS "-march=native -Wall -Wextra")
 
 set(CMAKE_CXX_STANDARD_REQUIRED 20)
 set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CUDA_FLAGS "-march=native -Wall -Wextra")
+set(CMAKE_CXX_FLAGS "-march=native -Wall -Wextra")
 
 project(untitled LANGUAGES CXX CUDA)
 include(FetchContent)
@@ -46,9 +47,10 @@ set(IMGUI_SFML_IMGUI_DEMO OFF)
 FetchContent_MakeAvailable(imgui-sfml)
 
 add_executable(untitled
-        src/main.cpp
+        src/Color.h
+        src/Ray.h
         src/Vector.h
-        src/Vector.cpp
+        src/main.cpp
 )
 target_link_libraries(untitled PRIVATE ImGui-SFML::ImGui-SFML)
 
