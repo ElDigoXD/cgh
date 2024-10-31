@@ -115,6 +115,22 @@ public:
                       z * other.x - x * other.z,
                       x * other.y - y * other.x};
     }
+
+    static Vector random_in_unit_sphere() {
+        Vector p;
+        do {
+            p = Vector::random() * 2 - Vector{1, 1, 1};
+        } while (p.length_squared() >= 1);
+        return p;
+    }
+
+    static Vector random_unit_vector() {
+        return random_in_unit_sphere().normalize();
+    }
+
+    static Vector random() {
+        return Vector{rand() / (Real) RAND_MAX, rand() / (Real) RAND_MAX, rand() / (Real) RAND_MAX};
+    }
 };
 
 constexpr Real dot(const Vector a, const Vector b) {

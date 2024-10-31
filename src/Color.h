@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <algorithm>
 
 typedef double Real;
 
@@ -72,6 +73,12 @@ public:
         z *= scalar;
     }
 
+    constexpr void operator*=(const Color other) {
+        x *= other.x;
+        y *= other.y;
+        z *= other.z;
+    }
+
     constexpr void operator/=(const Real scalar) {
         x /= scalar;
         y /= scalar;
@@ -82,4 +89,20 @@ public:
     [[nodiscard]] constexpr Color clamp(Real min, Real max) const {
         return Color{std::clamp(r, min, max), std::clamp(g, min, max), std::clamp(b, min, max)};
     }
+
+    static constexpr Color black() { return Color{0, 0, 0}; }
+
+    static constexpr Color white() { return Color{1, 1, 1}; }
+
+    static constexpr Color red() { return Color{1, 0, 0}; }
+
+    static constexpr Color green() { return Color{0, 1, 0}; }
+
+    static constexpr Color blue() { return Color{0, 0, 1}; }
+
+    static constexpr Color yellow() { return Color{1, 1, 0}; }
+
+    static constexpr Color magenta() { return Color{1, 0, 1}; }
+
+    static constexpr Color cyan() { return Color{0, 1, 1}; }
 };

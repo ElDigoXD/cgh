@@ -51,6 +51,10 @@ add_executable(untitled
         src/Ray.h
         src/Vector.h
         src/main.cpp
+        src/Material.h
+        src/Camera.h
+        src/utils.h
+        src/Triangle.h
 )
 target_link_libraries(untitled PRIVATE ImGui-SFML::ImGui-SFML)
 
