@@ -2,16 +2,17 @@
 #include "imgui-SFML.h"
 #include "imgui.h"
 
-#include "Color.h"
-#include "Vector.h"
 #include "Camera.h"
+#include "Color.h"
+#include "Scene.h"
+#include "Vector.h"
 
 class GUI {
 public:
     // GUI data
     sf::Vector2u window_size = {800, 400};
     sf::Vector2u image_size = window_size - sf::Vector2u{200, 0};
-    constexpr static const sf::Vector2u max_window_size = {1920, 1080};
+    constexpr static const sf::Vector2u max_window_size = {2120, 1080};
 
 
     sf::RenderWindow window = sf::RenderWindow(sf::VideoMode(window_size), "Raytracer GUI");
@@ -22,17 +23,29 @@ public:
     sf::Time dt;
 
     // Render data
-    unsigned char pixels[max_window_size.x * max_window_size.y * 4]{};
-    const Camera camera = Camera((int) image_size.x, (int) image_size.y);
-    const Material materials[1] = {Material()};
-    const Triangle mesh[1] = {
-            Triangle(Vec{-1, -.5, 0}, Vec{1, -.5, 0}, Vec{0, 1, 0}, 0)
-    };
+    unsigned char *pixels = new unsigned char[max_window_size.x * max_window_size.y * 4];
+    Camera camera = Camera((int) image_size.x, (int) image_size.y);
+    Material *materials;
+    Triangle *mesh;
+    int mesh_size = 1;
+    sf::Vector2u camera_image_size;
 
     void run() {
+        assert(materials != nullptr);
+        assert(mesh != nullptr);
+        basic_triangle(camera, &mesh, &mesh_size, &materials);
+        //camera.update(1920, 1080);
+
+        auto point_cloud = camera.compute_point_cloud(mesh, mesh_size);
+        //point_cloud.push_back({0, 0, 0});
         camera.render(pixels, mesh, 1, materials);
+        camera.render_cgh(pixels, mesh, 1, materials, point_cloud);
+
+        camera_image_size = sf::Vector2u{(unsigned int) camera.image_width, (unsigned int) camera.image_height};
+
         //memset(pixels, 255, max_window_size.x * max_window_size.y * 4);
-        texture.update(pixels, image_size, {0, 0});
+        texture.update(pixels, camera_image_size, {0, 0});
+        sprite.scale({(float) image_size.x / camera_image_size.x, (float) image_size.y / camera_image_size.y});
 
         window.setFramerateLimit(60);
         window.setMinimumSize({{400, 200}});
@@ -84,6 +97,12 @@ public:
         im::SetNextWindowSize({200, (float) window_size.y});
 
         im::Begin("GUI", nullptr, window_flags);
+
+        if (im::Button("Save")) {
+            auto image = sf::Image(camera_image_size, pixels);
+            [[maybe_unused]] auto _ = image.saveToFile("../output.png");
+        }
+
         im::End();
         //PopItemWidth();
         //PopStyleColor();

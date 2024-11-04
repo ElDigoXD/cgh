@@ -2,6 +2,8 @@
 
 #include <cmath>
 
+#include "Random.h"
+
 typedef double Real;
 
 class Vector {
@@ -129,7 +131,11 @@ public:
     }
 
     static Vector random() {
-        return Vector{rand() / (Real) RAND_MAX, rand() / (Real) RAND_MAX, rand() / (Real) RAND_MAX};
+        return Vector{rand_real(), rand_real(), rand_real()};
+    }
+
+    [[nodiscard]] constexpr bool is_close_to_0() const {
+        return std::abs(x) < 0.00001 && std::abs(y) < 0.00001 && std::abs(z) < 0.00001;
     }
 };
 

@@ -8,6 +8,7 @@ set(CMAKE_CUDA_FLAGS "-march=native -Wall -Wextra")
 set(CMAKE_CXX_STANDARD_REQUIRED 20)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_FLAGS "-march=native -Wall -Wextra")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3")
 
 project(untitled LANGUAGES CXX CUDA)
 include(FetchContent)
@@ -45,18 +46,23 @@ set(IMGUI_DIR ${imgui_SOURCE_DIR})
 set(IMGUI_SFML_FIND_SFML OFF)
 set(IMGUI_SFML_IMGUI_DEMO OFF)
 FetchContent_MakeAvailable(imgui-sfml)
+find_package(OpenMP REQUIRED)
+
 
 add_executable(untitled
+        src/Camera.h
         src/Color.h
+        src/Material.h
+        src/Random.h
         src/Ray.h
+        src/Scene.cpp
+        src/Scene.h
+        src/Triangle.h
         src/Vector.h
         src/main.cpp
-        src/Material.h
-        src/Camera.h
         src/utils.h
-        src/Triangle.h
 )
-target_link_libraries(untitled PRIVATE ImGui-SFML::ImGui-SFML)
+target_link_libraries(untitled PRIVATE ImGui-SFML::ImGui-SFML OpenMP::OpenMP_CXX)
 
 set_target_properties(untitled PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON)
