@@ -193,7 +193,7 @@ public:
             return {};
         }
         Real t = dot(edge2, s_cross_edge1) * inv_determinant;
-        if (t > epsilon) {
+        if (t > 0.000001) {
             return HitData{triangle, t, u, v};
         } else {
             return {}; // This ray intersects this triangle, but the intersection is behind the ray
