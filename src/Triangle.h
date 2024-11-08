@@ -5,10 +5,15 @@
 #include "Material.h"
 
 struct Triangle {
+
+    Triangle() = default;
+
     Vec a, b, c;
-    int material_idx;
+    int material_idx{};
 
     constexpr Triangle(Vec a, Vec b, Vec c, int material_idx) : a(a), b(b), c(c), material_idx(material_idx) {}
+
+    [[nodiscard]] constexpr Vec normal() const { return cross(b - a, c - a); }
 };
 
 struct HitData {

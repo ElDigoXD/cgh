@@ -48,11 +48,24 @@ set(IMGUI_SFML_IMGUI_DEMO OFF)
 FetchContent_MakeAvailable(imgui-sfml)
 find_package(OpenMP REQUIRED)
 
+FetchContent_Declare(
+        tinyobjloader
+        URL https://github.com/tinyobjloader/tinyobjloader/raw/refs/tags/v2.0.0rc13/tiny_obj_loader.h
+        URL_HASH SHA256=a55a0933a29caa0e9e84ef62a45cbe8cb25dd0e17bc2850c591c6b06f95d5ebe
+        DOWNLOAD_NO_EXTRACT ON
+
+)
+FetchContent_MakeAvailable(tinyobjloader)
+
+add_library(tinyobjloader-lib INTERFACE ${tinyobjloader_SOURCE_DIR})
+target_include_directories(tinyobjloader-lib INTERFACE ${tinyobjloader_SOURCE_DIR})
+
 
 add_executable(untitled
         src/Camera.h
         src/Color.h
         src/Material.h
+        src/ObjReader.h
         src/Random.h
         src/Ray.h
         src/Scene.cpp
@@ -62,7 +75,18 @@ add_executable(untitled
         src/main.cpp
         src/utils.h
 )
-target_link_libraries(untitled PRIVATE ImGui-SFML::ImGui-SFML OpenMP::OpenMP_CXX)
+
+target_link_libraries(untitled PRIVATE ImGui-SFML::ImGui-SFML OpenMP::OpenMP_CXX tinyobjloader-lib)
+
 
 set_target_properties(untitled PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON)
+
+# Embree test
+add_executable(test
+        src/test.cpp
+)
+
+
+find_package(embree REQUIRED)
+target_link_libraries(test PRIVATE embree)

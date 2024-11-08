@@ -7,6 +7,12 @@ typedef double Real;
 
 class Color {
 public:
+    explicit Color(const float array[3]) { // NOLINT(*-pro-type-member-init)
+        data[0] = array[0];
+        data[1] = array[1];
+        data[2] = array[2];
+    }
+
     union {
         struct {
             Real x;

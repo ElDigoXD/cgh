@@ -3,12 +3,14 @@
 #include <complex>
 #include <iostream>
 #include <optional>
+#include <stop_token>
 #include <vector>
 
 #include "omp.h"
 
 #include "Material.h"
 #include "Ray.h"
+#include "Scene.h"
 #include "Triangle.h"
 #include "Vector.h"
 #include "utils.h"
@@ -27,7 +29,6 @@ public:
     Vec u, v, w;
 
 
-private:
     Vec pixel_delta_x;
     Vec pixel_delta_y;
 
@@ -35,7 +36,7 @@ private:
     Real viewport_height{};
     Vec viewport_x;
     Vec viewport_y;
-    Vec viewport_upper_left;
+    Point viewport_upper_left;
 
     Point pixel_00_position;
 
@@ -53,8 +54,8 @@ public:
 
     Point slm_pixel_00_location;
 
-    int point_cloud_screen_height_in_px{400};
-    int point_cloud_screen_width_in_px{600};
+    int point_cloud_screen_height_in_px = 40;
+    int point_cloud_screen_width_in_px = 60;
 
     Vec point_cloud_screen_pixel_delta_x;
     Vec point_cloud_screen_pixel_delta_y;
@@ -81,15 +82,15 @@ public:
         image_width = width;
         image_height = height;
 
-        const auto focus_dist = (look_from - look_at).length();
+        const auto focus_dist = 1; //(look_from - look_at).length()
         const auto theta = degrees_to_radians(fov);
         const auto h = tan(theta / 2);
 
         viewport_height = 2.0 * h * focus_dist;
         viewport_width = viewport_height * ((Real) image_width / (Real) image_height);
 
-        viewport_height = slm_pixel_size * slm_height_in_pixels;
-        viewport_width = slm_pixel_size * slm_width_in_pixels;
+        viewport_height = slm_pixel_size * height;
+        viewport_width = slm_pixel_size * width;
 
 
         w = (look_from - look_at).normalize();
@@ -146,14 +147,14 @@ public:
     }
 
     [[nodiscard]] constexpr Ray get_orthogonal_ray_at(int x, int y) const {
-        return Ray{pixel_00_position + pixel_delta_x * x + pixel_delta_y * y, {0, 0, -1}};
+        return Ray{pixel_00_position + pixel_delta_x * x + pixel_delta_y * y, -w};
     }
 
     [[nodiscard]] Ray get_random_orthogonal_ray_at_screen(int x, int y) const {
         auto pixel_center = point_cloud_screen_pixel_00_position + point_cloud_screen_pixel_delta_x * x +
                             point_cloud_screen_pixel_delta_y * y;
         return Ray{pixel_center + point_cloud_screen_pixel_delta_x * (rand_real() - 0.5) +
-                   point_cloud_screen_pixel_delta_y * (rand_real() - 0.5), {0, 0, -1}};
+                   point_cloud_screen_pixel_delta_y * (rand_real() - 0.5), -w};
     }
 
     [[nodiscard]] constexpr Ray get_ray_at_screen(int x, int y) const {
@@ -199,12 +200,12 @@ public:
         }
     }
 
-    static constexpr std::optional<HitData> ray_mesh_intersection(const Ray ray, const Triangle mesh[], int mesh_size) {
+    static constexpr std::optional<HitData> ray_mesh_intersection(const Ray ray, const Scene &scene) {
         Real closest_t = std::numeric_limits<Real>::max();
         std::optional<HitData> closest_hit_data = {};
-        for (int i = 0; i < mesh_size; i++) {
+        for (int i = 0; i < scene.mesh_size; i++) {
 
-            auto hit_data = ray_triangle_intersection(ray, mesh[i]);
+            auto hit_data = ray_triangle_intersection(ray, scene.mesh[i]);
 
             if (hit_data.has_value()) {
                 if (hit_data.value().t < closest_t) {
@@ -216,15 +217,14 @@ public:
         return closest_hit_data;
     };
 
-    static Color
-    compute_ray_color(const Ray ray, const Triangle mesh[], int mesh_size, const Material materials[],
-                      int max_depth) {
+    static Color compute_ray_color(const Ray ray, const Scene &scene, int max_depth) {
 
         Ray current_ray = ray;
         int current_depth = max_depth;
         Color attenuation(1, 1, 1);
 
-        while (ray_mesh_intersection(current_ray, mesh, mesh_size).has_value()) {
+        while (auto hit_data_opt = ray_mesh_intersection(current_ray, scene)) {
+            auto hit_data = hit_data_opt.value();
 
             // Ray does not find an ambient source of light (escapes the scene)
             if (current_depth-- == 0) {
@@ -232,66 +232,57 @@ public:
                 break;
             }
 
-            auto hit_data = ray_mesh_intersection(current_ray, mesh, mesh_size).value();
-
-            auto material = materials[hit_data.triangle.material_idx];
+            auto material = scene.materials[hit_data.triangle.material_idx];
 
             if (material.is_diffuse) {
-                // N = edge1 x edge2
-                auto normal = cross(hit_data.triangle.b - hit_data.triangle.a,
-                                    hit_data.triangle.c - hit_data.triangle.a);
-                auto scatter_direction = normal + Vec::random_unit_vector();
+                auto scatter_direction = hit_data.triangle.normal().normalize() + Vec::random_unit_vector();
                 attenuation *= material.albedo;
                 current_ray = Ray{current_ray.at(hit_data.t), scatter_direction};
+            } else {
+                printf("Not diffuse material is not yet implemented\n");
             }
 
-            if constexpr (true) {
+            if constexpr (false) {
+                return material.albedo;
                 return Color{hit_data.u, hit_data.v, 1 - hit_data.u - hit_data.v};
             }
+        }
+
+        if (current_depth == max_depth) {
+            return Color::black();
         }
         return attenuation;
     }
 
-    void
-    render_line(unsigned char pixels[], const Triangle mesh[], int mesh_size, const Material materials[]) const {
+    void render(unsigned char pixels[], const Scene &scene, const std::stop_token &st = {}) const {
+#pragma omp parallel for collapse(1) shared(pixels) default(none) firstprivate(scene, st)
         for (int y = 0; y < image_height; y++) {
-            for (int x = 0; x < image_width; x++) {
-                Ray ray = get_ray_at(x, y);
-                Color color = compute_ray_color(ray, mesh, mesh_size, materials, max_depth);
-                pixels[(y * image_width + x) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
-                pixels[(y * image_width + x) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
-                pixels[(y * image_width + x) * 4 + 2] = static_cast<unsigned char>(std::sqrt(color.b) * 255);
-                pixels[(y * image_width + x) * 4 + 3] = 255;
+            if (!st.stop_requested()) {
+                for (int x = 0; x < image_width; x++) {
+                    // Ray ray = get_ray_at(x, y);
+                    Ray ortho = get_orthogonal_ray_at(x, y);
+                    Color color = compute_ray_color(ortho, scene, max_depth);
+
+                    pixels[(y * image_width + x) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
+                    pixels[(y * image_width + x) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
+                    pixels[(y * image_width + x) * 4 + 2] = static_cast<unsigned char>(std::sqrt(color.b) * 255);
+                    pixels[(y * image_width + x) * 4 + 3] = 255;
+                }
             }
         }
     }
 
-
-    void render(unsigned char pixels[], const Triangle mesh[], int mesh_size, const Material materials[]) const {
-        for (int y = 0; y < image_height; y++) {
-            for (int x = 0; x < image_width; x++) {
-                // Ray ray = get_ray_at(x, y);
-                Ray ortho = get_orthogonal_ray_at(x, y);
-                Color color = compute_ray_color(ortho, mesh, mesh_size, materials, max_depth);
-
-                pixels[(y * image_width + x) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
-                pixels[(y * image_width + x) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
-                pixels[(y * image_width + x) * 4 + 2] = static_cast<unsigned char>(std::sqrt(color.b) * 255);
-                pixels[(y * image_width + x) * 4 + 3] = 255;
-            }
-        }
-    }
-
-    std::vector<std::tuple<Point, Real>> compute_point_cloud(const Triangle mesh[], int mesh_size) const {
+    [[nodiscard]] std::vector<std::tuple<Point, Real>> compute_point_cloud(const Scene &scene) const {
         std::vector<std::tuple<Point, Real>> point_cloud;
 
         for (int y = 0; y < point_cloud_screen_height_in_px; y++) {
             for (int x = 0; x < point_cloud_screen_width_in_px; x++) {
                 auto ray = get_random_orthogonal_ray_at_screen(x, y);
 
-                auto hit_data = ray_mesh_intersection(ray, mesh, mesh_size);
+                auto hit_data = ray_mesh_intersection(ray, scene);
                 if (hit_data.has_value()) {
-                    point_cloud.emplace_back(std::pair{ray.at(hit_data.value().t), rand_real() * 2 * std::numbers::pi});
+                    //point_cloud.emplace_back(std::pair{ray.at(hit_data.value().t), rand_real() * 2 * std::numbers::pi});
+                    point_cloud.emplace_back(std::pair{ray.at(hit_data.value().t), 1});
                 }
             }
         }
@@ -301,63 +292,60 @@ public:
     }
 
     // __attribute__((flatten))
-    void render_cgh(unsigned char pixels[], const Triangle mesh[], int mesh_size, const Material materials[],
-                    const std::vector<std::tuple<Point, Real>> &point_cloud) const {
-        printf("Rendering CGH\n"
-               "size = %dx%d\n", image_width, image_height);
-#pragma omp parallel for collapse(2) shared(pixels) default(none) firstprivate(point_cloud, mesh, mesh_size, materials)
+    void render_cgh(unsigned char pixels[], const Scene &scene, const std::vector<std::tuple<Point, Real>> &point_cloud,
+                    const std::stop_token &st = {}) const {
+        printf("Rendering CGH of size = %dx%d\n", image_width, image_height);
+#pragma omp parallel for collapse(1) shared(pixels) default(none) firstprivate(point_cloud, scene, st)
         for (int y = 0; y < slm_height_in_pixels; y++) {
             for (int x = 0; x < slm_width_in_pixels; x++) {
-                auto slm_pixel_center = slm_pixel_00_location + (slm_pixel_delta_x * x) + (slm_pixel_delta_y * y);
-                std::complex<Real> agg;
-                for (const auto &pair: point_cloud) {
-                    auto point = std::get<0>(pair);
-                    auto phase = std::get<1>(pair);
-                    auto ray = Ray{slm_pixel_center, point - slm_pixel_center};
-                    auto wave = compute_wave(ray, mesh, mesh_size, materials, point, phase, max_depth);
-                    agg += wave;
+                if (!st.stop_requested()) {
+                    auto slm_pixel_center = slm_pixel_00_location + (slm_pixel_delta_x * x) + (slm_pixel_delta_y * y);
+                    std::complex<Real> agg;
+                    for (const auto &pair: point_cloud) {
+                        auto point = std::get<0>(pair);
+                        auto phase = std::get<1>(pair);
+                        auto ray = Ray{slm_pixel_center, point - slm_pixel_center};
+                        auto wave = compute_wave(ray, scene, point, phase, max_depth);
+                        agg += wave;
+                    }
+
+                    // Todo: divide by number of effective points
+                    agg /= (Real) point_cloud.size();
+                    auto a = static_cast<unsigned char>((arg(agg) + std::numbers::pi) / (2 * std::numbers::pi) * 255);
+                    pixels[(y * slm_width_in_pixels + x) * 4 + 0] = a;
+                    pixels[(y * slm_width_in_pixels + x) * 4 + 1] = a;
+                    pixels[(y * slm_width_in_pixels + x) * 4 + 2] = a;
+                    pixels[(y * slm_width_in_pixels + x) * 4 + 3] = 255;
                 }
-
-                // Todo: divide by number of effective points
-                agg /= (Real) point_cloud.size();
-                auto a = static_cast<unsigned char>((arg(agg) / std::numbers::pi + 1) * 255);
-                pixels[(y * slm_width_in_pixels + x) * 4 + 0] = a;
-                pixels[(y * slm_width_in_pixels + x) * 4 + 1] = a;
-                pixels[(y * slm_width_in_pixels + x) * 4 + 2] = a;
-                pixels[(y * slm_width_in_pixels + x) * 4 + 3] = 255;
-
-                //if (y % 100 == 0 && x == slm_width_in_pixels - 1) {
-                //    std::cout << "Rendered " << y << " / " << slm_height_in_pixels << std::endl;
-                //}
             }
         }
     }
 
     //__attribute__((flatten))
     static std::complex<Real>
-    compute_wave(Ray ray, const Triangle mesh[], int mesh_size, const Material materials[], const Point expected_point,
+    compute_wave(Ray ray, const Scene &scene, const Point expected_point,
                  [[maybe_unused]] const Real phase, int max_depth) {
         Ray current_ray = ray;
         int current_depth = max_depth;
         Color attenuation(1, 1, 1);
 
 
-        while (auto hit_data_opt = ray_mesh_intersection(current_ray, mesh, mesh_size)) {
+        while (auto hit_data_opt = ray_mesh_intersection(current_ray, scene)) {
             auto hit_data = hit_data_opt.value();
 
             // First iteration checks if the intersection point is the expected point
             if (current_depth == max_depth && !(ray.at(hit_data.t) - expected_point).is_close_to_0()) {
-                break;
+                return {0};
             }
 
-            // Ray does not find an ambient source of light (escapes the scene)
+            // Ray does not find an ambient source of light (trapped in the scene)
             if (current_depth-- == 0) {
                 attenuation = Color::black();
                 break;
             }
 
 
-            auto material = materials[hit_data.triangle.material_idx];
+            auto material = scene.materials[hit_data.triangle.material_idx];
 
             if (material.is_diffuse) {
                 // N = edge1 x edge2
@@ -368,8 +356,9 @@ public:
                 current_ray = Ray{current_ray.at(hit_data.t), scatter_direction};
             }
 
-            if constexpr (true) {
-                attenuation = Color{1, .5, .2};
+            if constexpr (false) {
+                attenuation = material.albedo;
+                break;
                 //attenuation = Color{hit_data.u, hit_data.v, 1 - hit_data.u - hit_data.v};
             }
         }

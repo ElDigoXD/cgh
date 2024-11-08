@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <iostream>
 
 #include "Random.h"
 
@@ -44,6 +45,10 @@ public:
 
     constexpr Vector operator*(const Real scalar) const {
         return Vector{x * scalar, y * scalar, z * scalar};
+    }
+
+    constexpr Vector operator*(const Vector other) const {
+        return Vector{x * other.x, y * other.y, z * other.z};
     }
 
 
@@ -136,6 +141,10 @@ public:
 
     [[nodiscard]] constexpr bool is_close_to_0() const {
         return std::abs(x) < 0.00001 && std::abs(y) < 0.00001 && std::abs(z) < 0.00001;
+    }
+
+    void print() const {
+        std::cout << "(" << x << " ," << y << " ," << z << ")";
     }
 };
 
