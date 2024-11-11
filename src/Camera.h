@@ -150,11 +150,22 @@ public:
         return Ray{pixel_00_position + pixel_delta_x * x + pixel_delta_y * y, -w};
     }
 
+    [[nodiscard]] Ray get_random_orthogonal_ray_at(int x, int y) const {
+        auto pixel_center = pixel_00_position + pixel_delta_x * x + pixel_delta_y * y;
+
+        return Ray{pixel_center
+                   + pixel_delta_x * (rand_real() - 0.5)
+                   + pixel_delta_y * (rand_real() - 0.5), -w};
+    }
+
     [[nodiscard]] Ray get_random_orthogonal_ray_at_screen(int x, int y) const {
-        auto pixel_center = point_cloud_screen_pixel_00_position + point_cloud_screen_pixel_delta_x * x +
-                            point_cloud_screen_pixel_delta_y * y;
-        return Ray{pixel_center + point_cloud_screen_pixel_delta_x * (rand_real() - 0.5) +
-                   point_cloud_screen_pixel_delta_y * (rand_real() - 0.5), -w};
+        auto pixel_center = point_cloud_screen_pixel_00_position
+                            + point_cloud_screen_pixel_delta_x * x
+                            + point_cloud_screen_pixel_delta_y * y;
+
+        return Ray{pixel_center
+                   + point_cloud_screen_pixel_delta_x * (rand_real() - 0.5)
+                   + point_cloud_screen_pixel_delta_y * (rand_real() - 0.5), -w};
     }
 
     [[nodiscard]] constexpr Ray get_ray_at_screen(int x, int y) const {
@@ -169,15 +180,19 @@ public:
     }
 
     // https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
-    [[nodiscard]]
-    static constexpr std::optional<HitData> ray_triangle_intersection(const Ray ray, const Triangle triangle) {
+    enum class CULL_BACKFACES: bool {
+        YES, NO
+    };
+
+    [[nodiscard]]static constexpr
+    std::optional<HitData> ray_triangle_intersection(const Ray ray, const Triangle triangle, CULL_BACKFACES cull_backfaces = CULL_BACKFACES::YES) {
         constexpr Real epsilon = std::numeric_limits<Real>::epsilon();
         Vec edge1 = triangle.b - triangle.a;
         Vec edge2 = triangle.c - triangle.a;
         Vec ray_cross_edge2 = cross(ray.direction, edge2);
         Real determinant = dot(edge1, ray_cross_edge2);
 
-        if (determinant > -epsilon && determinant < epsilon) {
+        if (determinant < epsilon && (cull_backfaces == CULL_BACKFACES::YES || determinant > -epsilon)) {
             return {}; // This ray is parallel to this triangle
         }
 
@@ -200,12 +215,15 @@ public:
         }
     }
 
-    static constexpr std::optional<HitData> ray_mesh_intersection(const Ray ray, const Scene &scene) {
+    static constexpr std::optional<HitData> ray_mesh_intersection(const Ray &ray, const Scene &scene, CULL_BACKFACES cull_backfaces = CULL_BACKFACES::YES) {
+
+        if (scene.aabb.has_volume() && !scene.aabb.intersect(ray)) return {};
+
         Real closest_t = std::numeric_limits<Real>::max();
         std::optional<HitData> closest_hit_data = {};
         for (int i = 0; i < scene.mesh_size; i++) {
 
-            auto hit_data = ray_triangle_intersection(ray, scene.mesh[i]);
+            auto hit_data = ray_triangle_intersection(ray, scene.mesh[i], cull_backfaces);
 
             if (hit_data.has_value()) {
                 if (hit_data.value().t < closest_t) {
@@ -223,7 +241,7 @@ public:
         int current_depth = max_depth;
         Color attenuation(1, 1, 1);
 
-        while (auto hit_data_opt = ray_mesh_intersection(current_ray, scene)) {
+        while (auto hit_data_opt = ray_mesh_intersection(current_ray, scene, CULL_BACKFACES::YES)) {
             auto hit_data = hit_data_opt.value();
 
             // Ray does not find an ambient source of light (escapes the scene)
@@ -259,9 +277,12 @@ public:
         for (int y = 0; y < image_height; y++) {
             if (!st.stop_requested()) {
                 for (int x = 0; x < image_width; x++) {
-                    // Ray ray = get_ray_at(x, y);
-                    Ray ortho = get_orthogonal_ray_at(x, y);
-                    Color color = compute_ray_color(ortho, scene, max_depth);
+                    Color color;
+                    for (int i = 0; i < samples_per_pixel; i++) {
+                        auto ray = get_random_orthogonal_ray_at(x, y);
+                        color += compute_ray_color(ray, scene, max_depth);
+                    }
+                    color /= samples_per_pixel;
 
                     pixels[(y * image_width + x) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
                     pixels[(y * image_width + x) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);

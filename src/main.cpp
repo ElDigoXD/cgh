@@ -1,11 +1,11 @@
 #include <thread>
+#include <functional>
 
 #include "SFML/Graphics.hpp"
 #include "imgui-SFML.h"
 #include "imgui.h"
 
 #include "Camera.h"
-#include "Color.h"
 #include "Scene.h"
 #include "Vector.h"
 
@@ -36,32 +36,55 @@ public:
     const Scene *scene = nullptr;
     std::vector<std::tuple<Point, Real>> point_cloud;
     sf::Vector2u camera_image_size;
+    int max_depth = 10;
+    int samples_per_pixel = 100;
 
     sf::VertexArray wire;
+    sf::VertexArray wire_aabb;
     std::jthread render_thread;
 
 
     // GUI state
     bool enable_wireframe = true;
+    bool enable_aabb = true;
     bool enable_render = true;
     bool enable_render_cgh = false;
     bool rendering = false;
     double render_time = 0;
+    int selected_scene_idx = -1;
 
     void run() {
-        // scene = basic_triangle(600, 400);
-        scene = test_mesh(600, 400);
+        scene = basic_triangle(600, 400);
+        scene->camera->max_depth = max_depth;
+        scene->camera->samples_per_pixel = samples_per_pixel;
+
+        for (uint i = 0; i < sizeof(scene_names) / sizeof(char *); i++) {
+            if (strcmp(scene_names[i], "teapot") == 0) {
+                selected_scene_idx = (int) i;
+                update_scene();
+                break;
+            };
+        }
+
+        for (int i = 0; i < scene->materials_size; i++) {
+            scene->materials[i].albedo.println();
+        }
+
+        //scene = test_mesh(600, 400);
         assert(scene != nullptr);
         assert(scene->materials != nullptr);
         assert(scene->mesh != nullptr);
         //camera.update(1920, 1080);
         memset(pixels, 256 / 2, max_window_size.x * max_window_size.y * 4);
 
-        scene->camera->max_depth = 200;
-        point_cloud = scene->camera->compute_point_cloud(*scene);
-        update_render();
+
         wire = sf::VertexArray(sf::PrimitiveType::Lines, 6 * scene->mesh_size);
+        wire_aabb = sf::VertexArray(sf::PrimitiveType::Lines, 12 * 2);
+
         update_wireframe();
+        update_aabb_wireframe();
+
+        update_render();
 
 
         camera_image_size = sf::Vector2u{(unsigned int) scene->camera->image_width,
@@ -110,6 +133,9 @@ public:
                 window.draw(wire);
             }
 
+            if (enable_aabb) {
+                window.draw(wire_aabb);
+            }
             ImGui::SFML::Render(window);
             window.display();
         }
@@ -137,10 +163,47 @@ public:
         if (ImGui::BeginTabItem("Main")) {
             ImGui::PushItemWidth(-1);
             ImGui::Checkbox("Enable wireframe", &enable_wireframe);
+            ImGui::Checkbox("Enable aabb", &enable_aabb);
             ImGui::Checkbox("Enable render", &enable_render);
             if (ImGui::Checkbox("Enable render cgh", &enable_render_cgh)) {
                 update_render();
             };
+            ImGui::PopItemWidth();
+            if (ImGui::SliderInt("Max Depth", &max_depth, 1, 1000, "%d", ImGuiSliderFlags_Logarithmic)) {
+                scene->camera->max_depth = max_depth;
+                update_render();
+            }
+            if (ImGui::SliderInt("Samples", &samples_per_pixel, 1, 1000, "%d", ImGuiSliderFlags_Logarithmic)) {
+                scene->camera->samples_per_pixel = samples_per_pixel;
+                update_render();
+            }
+            ImGui::PushItemWidth(-1);
+
+            ImGui::Text("Look From:");
+            if (im::DragDouble3("##Look From", scene->camera->look_from.data, 1, -300, 300)) {
+                update_render();
+                update_wireframe();
+                update_aabb_wireframe();
+            }
+            ImGui::Text("Look At:");
+            if (im::DragDouble3("##Look At", scene->camera->look_at.data, 0.01, -100, 100)) {
+                update_render();
+                update_wireframe();
+                update_aabb_wireframe();
+            }
+            ImGui::PopItemWidth();
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Scene")) {
+            ImGui::PushItemWidth(-1);
+
+            if (ImGui::Combo("##Scene", &selected_scene_idx, scene_names, IM_ARRAYSIZE(scene_names))) {
+
+                update_scene();
+                update_render();
+                update_wireframe();
+                update_aabb_wireframe();
+            }
 
             ImGui::Text("Point Cloud Size:");
             if (ImGui::DragInt2("##Point Cloud Size", &scene->camera->point_cloud_screen_height_in_px, 10, 40, 1000)) {
@@ -148,16 +211,7 @@ public:
                 point_cloud = scene->camera->compute_point_cloud(*scene);
                 update_render();
             }
-            ImGui::Text("Look From:");
-            if (im::DragDouble3("##Look From", scene->camera->look_from.data, 1, -300, 300)) {
-                update_render();
-                update_wireframe();
-            }
-            ImGui::Text("Look At:");
-            if (im::DragDouble3("##Look At", scene->camera->look_at.data, 0.01, -100, 100)) {
-                update_render();
-                update_wireframe();
-            }
+
             ImGui::PopItemWidth();
             ImGui::EndTabItem();
         }
@@ -167,7 +221,7 @@ public:
             [[maybe_unused]] auto _ = image.saveToFile("../output.png");
         }
 
-        if (rendering){
+        if (rendering) {
             im::Text("Render time: %f", timer.getElapsedTime().asSeconds() - start_time.asSeconds());
         } else {
             im::Text("Render time: %f", render_time);
@@ -179,16 +233,27 @@ public:
         im::EndFrame();
     }
 
-    void update_render() {
+    void stop_render_and_wait() {
         if (rendering) {
+            scene->camera->samples_per_pixel = 0;
             render_thread.request_stop();
             if (render_thread.joinable()) render_thread.join();
+            rendering = false;
+        }
+    }
+
+    void update_render() {
+        if (!enable_render) return;
+        if (rendering) {
+            stop_render_and_wait();
             memset(pixels, 256 / 2, max_window_size.x * max_window_size.y * 4);
             texture.update(pixels, camera_image_size, {0, 0});
         }
         render_thread = std::jthread([&](const std::stop_token &st) {
             rendering = true;
             start_time = timer.getElapsedTime();
+            scene->camera->samples_per_pixel = samples_per_pixel;
+            scene->camera->max_depth = max_depth;
             scene->camera->update();
             if (enable_render_cgh) {
                 scene->camera->render_cgh(pixels, *scene, point_cloud, st);
@@ -203,44 +268,100 @@ public:
         });
     }
 
+    void project(Point &p, float &ax, float &ay) const {
+        auto o = scene->camera->look_from;
+
+        ax = (float) (p - o).dot(scene->camera->u);
+        ay = (float) (p - o).dot(-scene->camera->v);
+
+        ax = (float) (ax / Camera::slm_pixel_size + image_size.x / 2.0);
+        ay = (float) (ay / Camera::slm_pixel_size + image_size.y / 2.0);
+    }
+
     void update_wireframe() {
+        scene->camera->update();
         for (int i = 0; i < scene->mesh_size; i++) {
             auto &t = scene->mesh[i];
 
-            //printf("%f %f %f | %f %f %f | %f %f %f\n",t.a.x, t.a.y, t.a.z, t.b.x, t.b.y, t.b.z, t.c.x, t.c.y, t.c.z);
+            float ax, ay, bx, by, cx, cy;
+            project(t.a, ax, ay);
+            project(t.b, bx, by);
+            project(t.c, cx, cy);
 
-            auto p = t.a;
-            auto o = scene->camera->look_at;
+            wire[i * 6 + 0].position.x = ax;
+            wire[i * 6 + 0].position.y = ay;
+            wire[i * 6 + 1].position.x = bx;
+            wire[i * 6 + 1].position.y = by;
 
-            auto ax = (p - o).dot(scene->camera->u);
-            auto ay = (p - o).dot(-scene->camera->v);
+            wire[i * 6 + 2].position.x = ax;
+            wire[i * 6 + 2].position.y = ay;
+            wire[i * 6 + 3].position.x = cx;
+            wire[i * 6 + 3].position.y = cy;
 
-            p = t.b;
-            o = scene->camera->look_at;
-
-            auto bx = (p - o).dot(scene->camera->u);
-            auto by = (p - o).dot(-scene->camera->v);
-
-            p = t.c;
-            o = scene->camera->look_at;
-
-            auto cx = (p - o).dot(scene->camera->u);
-            auto cy = (p - o).dot(-scene->camera->v);
-            wire[i * 6 + 0].position.x = (float) (ax / Camera::slm_pixel_size + image_size.x / 2.0);
-            wire[i * 6 + 0].position.y = (float) (ay / Camera::slm_pixel_size + image_size.y / 2.0);
-            wire[i * 6 + 1].position.x = (float) (bx / Camera::slm_pixel_size + image_size.x / 2.0);
-            wire[i * 6 + 1].position.y = (float) (by / Camera::slm_pixel_size + image_size.y / 2.0);
-
-            wire[i * 6 + 2].position.x = (float) (ax / Camera::slm_pixel_size + image_size.x / 2.0);
-            wire[i * 6 + 2].position.y = (float) (ay / Camera::slm_pixel_size + image_size.y / 2.0);
-            wire[i * 6 + 3].position.x = (float) (cx / Camera::slm_pixel_size + image_size.x / 2.0);
-            wire[i * 6 + 3].position.y = (float) (cy / Camera::slm_pixel_size + image_size.y / 2.0);
-
-            wire[i * 6 + 4].position.x = (float) (bx / Camera::slm_pixel_size + image_size.x / 2.0);
-            wire[i * 6 + 4].position.y = (float) (by / Camera::slm_pixel_size + image_size.y / 2.0);
-            wire[i * 6 + 5].position.x = (float) (cx / Camera::slm_pixel_size + image_size.x / 2.0);
-            wire[i * 6 + 5].position.y = (float) (cy / Camera::slm_pixel_size + image_size.y / 2.0);
+            wire[i * 6 + 4].position.x = bx;
+            wire[i * 6 + 4].position.y = by;
+            wire[i * 6 + 5].position.x = cx;
+            wire[i * 6 + 5].position.y = cy;
         }
+    }
+
+    void update_aabb_wireframe() {
+        scene->camera->update();
+
+        Point points[]{
+                Point{scene->aabb.x.min, scene->aabb.y.min, scene->aabb.z.min}, // 000
+                Point{scene->aabb.x.max, scene->aabb.y.min, scene->aabb.z.min}, // 100
+                Point{scene->aabb.x.max, scene->aabb.y.max, scene->aabb.z.min}, // 110
+                Point{scene->aabb.x.min, scene->aabb.y.max, scene->aabb.z.min}, // 010
+
+                Point{scene->aabb.x.min, scene->aabb.y.min, scene->aabb.z.max}, // 001
+                Point{scene->aabb.x.max, scene->aabb.y.min, scene->aabb.z.max}, // 101
+                Point{scene->aabb.x.max, scene->aabb.y.max, scene->aabb.z.max}, // 111
+                Point{scene->aabb.x.min, scene->aabb.y.max, scene->aabb.z.max}, // 011
+        };
+        float projected_ps[8 * 2];
+
+        for (int i = 0; i < 8; i++) {
+            project(points[i], projected_ps[i * 2], projected_ps[i * 2 + 1]);
+        }
+
+        // Create the edges for 2 faces
+        for (int i = 0; i < 8; i++) {
+            if (i % 4 == 3) {
+                wire_aabb[i * 2 + 0].position.x = projected_ps[i * 2];
+                wire_aabb[i * 2 + 0].position.y = projected_ps[i * 2 + 1];
+                wire_aabb[i * 2 + 1] = wire_aabb[(i - 3) * 2];
+            } else {
+                wire_aabb[i * 2 + 0].position.x = projected_ps[i * 2];
+                wire_aabb[i * 2 + 0].position.y = projected_ps[i * 2 + 1];
+                wire_aabb[i * 2 + 1].position.x = projected_ps[(i + 1) * 2];
+                wire_aabb[i * 2 + 1].position.y = projected_ps[(i + 1) * 2 + 1];
+            }
+        }
+
+        // Join the 2 faces
+        for (int i = 0; i < 4; i++) {
+            wire_aabb[8 * 2 + i * 2] = wire_aabb[i * 2];
+            wire_aabb[8 * 2 + i * 2 + 1] = wire_aabb[(i + 4) * 2];
+        }
+    }
+
+    void update_scene() {
+        stop_render_and_wait();
+        assert(scene != nullptr);
+        delete scene->camera;
+        delete[] scene->materials;
+        delete[] scene->mesh;
+        delete scene;
+        scene = scenes[selected_scene_idx](600, 400);
+
+        assert(scene != nullptr);
+        assert(scene->materials != nullptr);
+        assert(scene->mesh != nullptr);
+
+        wire = sf::VertexArray(sf::PrimitiveType::Lines, 6 * scene->mesh_size);
+        scene->camera->max_depth = max_depth;
+        point_cloud = scene->camera->compute_point_cloud(*scene);
     }
 };
 

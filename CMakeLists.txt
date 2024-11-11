@@ -74,6 +74,7 @@ add_executable(untitled
         src/Vector.h
         src/main.cpp
         src/utils.h
+        src/AABB.h
 )
 
 target_link_libraries(untitled PRIVATE ImGui-SFML::ImGui-SFML OpenMP::OpenMP_CXX tinyobjloader-lib)

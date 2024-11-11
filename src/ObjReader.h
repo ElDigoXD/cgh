@@ -5,6 +5,7 @@
 
 static int load(Scene &scene, const char *filename) {
     tinyobj::ObjReader reader;
+    tinyobj::ObjReaderConfig config;
     if (!reader.ParseFromFile(filename)) {
         std::fprintf(stderr, "[ERROR] %s\n", reader.Error().c_str());
         exit(1);

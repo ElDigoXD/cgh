@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <algorithm>
+#include <cstdio>
 
 typedef double Real;
 
@@ -111,4 +112,9 @@ public:
     static constexpr Color magenta() { return Color{1, 0, 1}; }
 
     static constexpr Color cyan() { return Color{0, 1, 1}; }
+
+    constexpr void println() const {
+        std::printf("%.1f %.1f %.1f | %i %i %i\n", r, g, b,
+                    static_cast<int>(r * 255), static_cast<int>(g * 255), static_cast<int>(b * 255));
+    }
 };
