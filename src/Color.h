@@ -114,7 +114,7 @@ public:
     static constexpr Color cyan() { return Color{0, 1, 1}; }
 
     constexpr void println() const {
-        std::printf("%.1f %.1f %.1f | %i %i %i\n", r, g, b,
+        std::printf("%.2f %.2f %.2f | %i %i %i\n", r, g, b,
                     static_cast<int>(r * 255), static_cast<int>(g * 255), static_cast<int>(b * 255));
     }
 };

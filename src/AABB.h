@@ -69,13 +69,16 @@ public:
     [[nodiscard]] constexpr bool intersect(const Ray &ray) const {
         Interval ray_t = {0, std::numeric_limits<Real>::infinity()};
         for (int axis = 0; axis < 3; axis++) {
+            if (ray.direction.data[axis] == 0) continue;
+
+            auto inverse_direction = 1 / ray.direction.data[axis];
             auto t0 = std::min(
-                    ((*this)[axis].min - ray.origin.data[axis]) / ray.direction.data[axis],
-                    ((*this)[axis].max - ray.origin.data[axis]) / ray.direction.data[axis]);
+                    ((*this)[axis].min - ray.origin.data[axis]) * inverse_direction,
+                    ((*this)[axis].max - ray.origin.data[axis]) * inverse_direction);
 
             auto t1 = std::max(
-                    ((*this)[axis].min - ray.origin.data[axis]) / ray.direction.data[axis],
-                    ((*this)[axis].max - ray.origin.data[axis]) / ray.direction.data[axis]);
+                    ((*this)[axis].min - ray.origin.data[axis]) * inverse_direction,
+                    ((*this)[axis].max - ray.origin.data[axis]) * inverse_direction);
 
             if (t0 < t1) {
                 if (t0 > ray_t.min) ray_t.min = t0;
@@ -112,5 +115,13 @@ public:
 
     [[nodiscard]] constexpr Real max_dimension() const {
         return std::max(std::max(x.max - x.min, y.max - y.min), z.max - z.min);
+    }
+
+    [[nodiscard]] constexpr int longest_axis() const {
+        if (x.max - x.min > y.max - y.min) {
+            return x.max - x.min > z.max - z.min ? 0 : 2;
+        } else {
+            return y.max - y.min > z.max - z.min ? 1 : 2;
+        }
     }
 };

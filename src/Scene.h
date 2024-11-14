@@ -4,9 +4,11 @@
 class Camera;
 
 #include <functional>
-#include "Material.h"
-#include "Triangle.h"
+
 #include "AABB.h"
+#include "Material.h"
+#include "Mesh.h"
+#include "Triangle.h"
 
 class Scene {
 public:
@@ -16,9 +18,13 @@ public:
     Material *materials;
     int materials_size;
 
+    Mesh *good_mesh{};
+
     AABB aabb;
 
-    Scene(Camera *camera, Triangle *mesh, int mesh_size, Material *materials, int materials_size);
+    Scene(Camera *camera, Triangle *mesh, int mesh_size, Material *materials, int materials_size)
+            : camera(camera), mesh(mesh), mesh_size(mesh_size), materials(materials), materials_size(materials_size) {
+    }
 
     void scale_mesh(Real factor) const {
         for (int i = 0; i < mesh_size; i++) {
@@ -105,6 +111,63 @@ public:
             aabb.extend(mesh[i].c);
         }
     }
+
+    static void scale_mesh(std::vector<Triangle> &mesh, const Vector &factor) {
+        for (auto &i: mesh) {
+            i.a = i.a * factor;
+            i.b = i.b * factor;
+            i.c = i.c * factor;
+        }
+    }
+
+    static void scale_mesh(std::vector<Triangle> &mesh, const Real &factor) {
+        scale_mesh(mesh, {factor, factor, factor});
+    }
+
+    static void normalize_mesh(std::vector<Triangle> &mesh, const AABB aabb) {
+        move_mesh(mesh, -aabb.center());
+        scale_mesh(mesh, 1 / aabb.max_dimension());
+    }
+
+    static void move_mesh(std::vector<Triangle> &mesh, const Vector &vec) {
+        for (auto &i: mesh) {
+            i.a += vec;
+            i.b += vec;
+            i.c += vec;
+        }
+    }
+
+    static AABB compute_aabb(const std::vector<Triangle> &mesh) {
+        assert(!mesh.empty());
+        AABB aabb{mesh[0].a, mesh[0].b};
+        for (auto &t: mesh) {
+            aabb.extend(t.a);
+            aabb.extend(t.b);
+            aabb.extend(t.c);
+        }
+        return aabb;
+    }
+
+    static void flip_mesh(std::vector<Triangle> &mesh, AXIS axis) {
+        switch (axis) {
+            case AXIS::X:
+                scale_mesh(mesh, {-1, 1, 1});
+                break;
+            case AXIS::Y:
+                scale_mesh(mesh, {1, -1, 1});
+                break;
+            case AXIS::Z:
+                scale_mesh(mesh, {1, 1, -1});
+                break;
+        }
+        flip_mesh_faces(mesh);
+    }
+
+    static void flip_mesh_faces(std::vector<Triangle> &mesh) {
+        for (auto &i: mesh) {
+            std::swap(i.a, i.c);
+        }
+    }
 };
 
 const Scene *basic_triangle(int image_width, int image_height);
@@ -117,17 +180,26 @@ const Scene *pumpkin(int image_width, int image_height);
 
 const Scene *teapot(int image_width, int image_height);
 
+const Scene *multi_mesh(int image_width, int image_height);
+
+const Scene *aabb_test(int image_width, int image_height);
+
 static constexpr const char *scene_names[] = {
         "basic_triangle",
         "cornell_box",
         "sphere_mesh",
         "pumpkin",
         "teapot",
+        "multi_mesh",
+        "aabb_test",
 };
+
 static const std::function<const Scene *(int, int)> scenes[] = {
         basic_triangle,
         cornell_box,
         sphere_mesh,
         pumpkin,
         teapot,
+        multi_mesh,
+        aabb_test,
 };

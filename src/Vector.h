@@ -160,5 +160,11 @@ constexpr Vector normalize(const Vector a) {
     return a.normalize();
 }
 
+template <> struct std::hash<Vector> {
+    std::size_t operator()(const Vector& v) const {
+        return std::hash<Real>()(v.x) ^ (std::hash<Real>()(v.y) << 1) ^ (std::hash<Real>()(v.z) << 2);
+    }
+};
+
 typedef Vector Vec;
 typedef Vector Point;

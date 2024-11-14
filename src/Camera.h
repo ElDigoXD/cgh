@@ -179,43 +179,13 @@ public:
 
     }
 
-    // https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
-    enum class CULL_BACKFACES: bool {
-        YES, NO
-    };
 
-    [[nodiscard]]static constexpr
-    std::optional<HitData> ray_triangle_intersection(const Ray ray, const Triangle triangle, CULL_BACKFACES cull_backfaces = CULL_BACKFACES::YES) {
-        constexpr Real epsilon = std::numeric_limits<Real>::epsilon();
-        Vec edge1 = triangle.b - triangle.a;
-        Vec edge2 = triangle.c - triangle.a;
-        Vec ray_cross_edge2 = cross(ray.direction, edge2);
-        Real determinant = dot(edge1, ray_cross_edge2);
 
-        if (determinant < epsilon && (cull_backfaces == CULL_BACKFACES::YES || determinant > -epsilon)) {
-            return {}; // This ray is parallel to this triangle
-        }
+    static constexpr std::optional<HitData> ray_mesh_intersection(const Ray &ray, const Scene &scene, Triangle::CULL_BACKFACES cull_backfaces = Triangle::CULL_BACKFACES::YES) {
 
-        Real inv_determinant = 1 / determinant;
-        Vec s = ray.origin - triangle.a;
-        Real u = dot(s, ray_cross_edge2) * inv_determinant;
-        if (u < 0 || u > 1) {
-            return {};
+        if (scene.good_mesh != nullptr) {
+            return scene.good_mesh->intersect(ray);
         }
-        Vec s_cross_edge1 = cross(s, edge1);
-        Real v = dot(ray.direction, s_cross_edge1) * inv_determinant;
-        if (v < 0 || u + v > 1) {
-            return {};
-        }
-        Real t = dot(edge2, s_cross_edge1) * inv_determinant;
-        if (t > 0.000001) {
-            return HitData{triangle, t, u, v};
-        } else {
-            return {}; // This ray intersects this triangle, but the intersection is behind the ray
-        }
-    }
-
-    static constexpr std::optional<HitData> ray_mesh_intersection(const Ray &ray, const Scene &scene, CULL_BACKFACES cull_backfaces = CULL_BACKFACES::YES) {
 
         if (scene.aabb.has_volume() && !scene.aabb.intersect(ray)) return {};
 
@@ -223,7 +193,7 @@ public:
         std::optional<HitData> closest_hit_data = {};
         for (int i = 0; i < scene.mesh_size; i++) {
 
-            auto hit_data = ray_triangle_intersection(ray, scene.mesh[i], cull_backfaces);
+            auto hit_data = scene.mesh[i].intersect(ray, cull_backfaces);
 
             if (hit_data.has_value()) {
                 if (hit_data.value().t < closest_t) {
@@ -241,7 +211,7 @@ public:
         int current_depth = max_depth;
         Color attenuation(1, 1, 1);
 
-        while (auto hit_data_opt = ray_mesh_intersection(current_ray, scene, CULL_BACKFACES::YES)) {
+        while (auto hit_data_opt = ray_mesh_intersection(current_ray, scene, Triangle::CULL_BACKFACES::YES)) {
             auto hit_data = hit_data_opt.value();
 
             // Ray does not find an ambient source of light (escapes the scene)
@@ -273,7 +243,7 @@ public:
     }
 
     void render(unsigned char pixels[], const Scene &scene, const std::stop_token &st = {}) const {
-#pragma omp parallel for collapse(1) shared(pixels) default(none) firstprivate(scene, st)
+#pragma omp parallel for collapse(1) shared(pixels) default(none) firstprivate(scene, st) num_threads(omp_get_max_threads()*2)
         for (int y = 0; y < image_height; y++) {
             if (!st.stop_requested()) {
                 for (int x = 0; x < image_width; x++) {
@@ -316,7 +286,7 @@ public:
     void render_cgh(unsigned char pixels[], const Scene &scene, const std::vector<std::tuple<Point, Real>> &point_cloud,
                     const std::stop_token &st = {}) const {
         printf("Rendering CGH of size = %dx%d\n", image_width, image_height);
-#pragma omp parallel for collapse(1) shared(pixels) default(none) firstprivate(point_cloud, scene, st)
+#pragma omp parallel for collapse(1) shared(pixels) default(none) firstprivate(point_cloud, scene, st) num_threads(omp_get_max_threads()*2)
         for (int y = 0; y < slm_height_in_pixels; y++) {
             for (int x = 0; x < slm_width_in_pixels; x++) {
                 if (!st.stop_requested()) {

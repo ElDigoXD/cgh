@@ -1,5 +1,6 @@
 #include <thread>
 #include <functional>
+#include <unordered_set>
 
 #include "SFML/Graphics.hpp"
 #include "imgui-SFML.h"
@@ -41,33 +42,35 @@ public:
 
     sf::VertexArray wire;
     sf::VertexArray wire_aabb;
+    sf::VertexArray wire_depth_aabb;
+    int aabb_depth = 1;
     std::jthread render_thread;
 
 
     // GUI state
     bool enable_wireframe = true;
+    bool enable_only_visible_wireframe = false;
     bool enable_aabb = true;
-    bool enable_render = true;
+    bool enable_render = false;
     bool enable_render_cgh = false;
+
     bool rendering = false;
     double render_time = 0;
+    bool render_has_finished = false;
+
     int selected_scene_idx = -1;
 
     void run() {
         scene = basic_triangle(600, 400);
-        scene->camera->max_depth = max_depth;
-        scene->camera->samples_per_pixel = samples_per_pixel;
+        // scene->camera->max_depth = max_depth;
+        // scene->camera->samples_per_pixel = samples_per_pixel;
 
         for (uint i = 0; i < sizeof(scene_names) / sizeof(char *); i++) {
-            if (strcmp(scene_names[i], "teapot") == 0) {
+            if (strcmp(scene_names[i], "aabb_test") == 0) {
                 selected_scene_idx = (int) i;
                 update_scene();
                 break;
             };
-        }
-
-        for (int i = 0; i < scene->materials_size; i++) {
-            scene->materials[i].albedo.println();
         }
 
         //scene = test_mesh(600, 400);
@@ -78,7 +81,6 @@ public:
         memset(pixels, 256 / 2, max_window_size.x * max_window_size.y * 4);
 
 
-        wire = sf::VertexArray(sf::PrimitiveType::Lines, 6 * scene->mesh_size);
         wire_aabb = sf::VertexArray(sf::PrimitiveType::Lines, 12 * 2);
 
         update_wireframe();
@@ -123,7 +125,7 @@ public:
             window.clear();
 
             if (enable_render) {
-                if (rendering && update_texture_clock.getElapsedTime().asSeconds() > 0.2) {
+                if (rendering && update_texture_clock.getElapsedTime().asSeconds() > 0.05) {
                     texture.update(pixels, camera_image_size, {0, 0});
                     update_texture_clock.restart();
                 }
@@ -134,7 +136,12 @@ public:
             }
 
             if (enable_aabb) {
-                window.draw(wire_aabb);
+                if (scene->good_mesh != nullptr) {
+                    window.draw(wire_depth_aabb);
+
+                } else {
+                    window.draw(wire_aabb);
+                }
             }
             ImGui::SFML::Render(window);
             window.display();
@@ -163,11 +170,36 @@ public:
         if (ImGui::BeginTabItem("Main")) {
             ImGui::PushItemWidth(-1);
             ImGui::Checkbox("Enable wireframe", &enable_wireframe);
+            if (enable_wireframe) {
+                im::Indent(5);
+
+                if (im::Checkbox("Only visible", &enable_only_visible_wireframe)) {
+                    update_wireframe();
+                }
+                im::Unindent(5);
+
+            }
             ImGui::Checkbox("Enable aabb", &enable_aabb);
-            ImGui::Checkbox("Enable render", &enable_render);
-            if (ImGui::Checkbox("Enable render cgh", &enable_render_cgh)) {
+            if (enable_aabb) {
+                im::Indent(5);
+                if (scene->good_mesh != nullptr
+                    && ImGui::SliderInt("##AABB Depth", &aabb_depth, 1, std::ceil(std::log2(scene->good_mesh->tree.size())), "%d", ImGuiSliderFlags_AlwaysClamp)) {
+                    update_aabb_wireframe();
+                }
+                im::Unindent(5);
+
+            }
+            if (ImGui::Checkbox("Enable render", &enable_render)) {
                 update_render();
-            };
+            }
+            if (enable_render){
+                im::Indent(5);
+                if (ImGui::Checkbox("Enable render cgh", &enable_render_cgh)) {
+                    update_render();
+                }
+                im::Unindent(5);
+            }
+
             ImGui::PopItemWidth();
             if (ImGui::SliderInt("Max Depth", &max_depth, 1, 1000, "%d", ImGuiSliderFlags_Logarithmic)) {
                 scene->camera->max_depth = max_depth;
@@ -264,11 +296,12 @@ public:
             rendering = false;
             if (!st.stop_requested()) {
                 render_time = timer.getElapsedTime().asSeconds() - start_time.asSeconds();
+                render_has_finished = true;
             }
         });
     }
 
-    void project(Point &p, float &ax, float &ay) const {
+    void project(const Point &p, float &ax, float &ay) const {
         auto o = scene->camera->look_from;
 
         ax = (float) (p - o).dot(scene->camera->u);
@@ -278,7 +311,55 @@ public:
         ay = (float) (ay / Camera::slm_pixel_size + image_size.y / 2.0);
     }
 
+    void test_wireframe_visible() {
+        std::unordered_set<Triangle> visible_triangles = {};
+        auto camera = scene->camera;
+        camera->update();
+        for (int x = 0; x < camera->image_width; x++) {
+            for (int y = 0; y < camera->image_height; y++) {
+                auto ray = camera->get_orthogonal_ray_at(x, y);
+                if (auto hit = Camera::ray_mesh_intersection(ray, *scene, Triangle::CULL_BACKFACES::YES)) {
+                    auto hit_data = hit.value();
+                    visible_triangles.insert(hit_data.triangle);
+                }
+            }
+        }
+        wire = sf::VertexArray(sf::PrimitiveType::Lines, visible_triangles.size() * 6);
+        int i = 0;
+        for (auto &t: visible_triangles) {
+            float ax, ay, bx, by, cx, cy;
+            project(t.a, ax, ay);
+            project(t.b, bx, by);
+            project(t.c, cx, cy);
+
+            wire[i * 6 + 0].position.x = ax;
+            wire[i * 6 + 0].position.y = ay;
+            wire[i * 6 + 1].position.x = bx;
+            wire[i * 6 + 1].position.y = by;
+
+            wire[i * 6 + 2].position.x = ax;
+            wire[i * 6 + 2].position.y = ay;
+            wire[i * 6 + 3].position.x = cx;
+            wire[i * 6 + 3].position.y = cy;
+
+            wire[i * 6 + 4].position.x = bx;
+            wire[i * 6 + 4].position.y = by;
+            wire[i * 6 + 5].position.x = cx;
+            wire[i * 6 + 5].position.y = cy;
+            ++i;
+        }
+
+
+    }
+
     void update_wireframe() {
+        if (enable_only_visible_wireframe) {
+            test_wireframe_visible();
+            return;
+        }
+
+        wire = sf::VertexArray(sf::PrimitiveType::Lines, scene->mesh_size * 6);
+
         scene->camera->update();
         for (int i = 0; i < scene->mesh_size; i++) {
             auto &t = scene->mesh[i];
@@ -306,6 +387,12 @@ public:
     }
 
     void update_aabb_wireframe() {
+        update_aabb_wireframe_depth();
+        if (!scene->aabb.has_volume()) {
+            wire_aabb.clear();
+            return;
+        };
+
         scene->camera->update();
 
         Point points[]{
@@ -343,6 +430,57 @@ public:
         for (int i = 0; i < 4; i++) {
             wire_aabb[8 * 2 + i * 2] = wire_aabb[i * 2];
             wire_aabb[8 * 2 + i * 2 + 1] = wire_aabb[(i + 4) * 2];
+        }
+    }
+
+    void update_aabb_wireframe_depth() {
+        if (scene->good_mesh == nullptr) {
+            wire_depth_aabb.clear();
+            return;
+        }
+
+        int pow = 1 << (aabb_depth - 1);
+        wire_depth_aabb = sf::VertexArray(sf::PrimitiveType::Lines, 12 * 2 * pow);
+        auto j = 0;
+        for (int d = pow - 1; d < pow * 2 - 1; d++ | j++) {
+            auto aabb = scene->good_mesh->tree[d].aabb;
+            Point points[]{
+                    Point{aabb.x.min, aabb.y.min, aabb.z.min}, // 000
+                    Point{aabb.x.max, aabb.y.min, aabb.z.min}, // 100
+                    Point{aabb.x.max, aabb.y.max, aabb.z.min}, // 110
+                    Point{aabb.x.min, aabb.y.max, aabb.z.min}, // 010
+
+                    Point{aabb.x.min, aabb.y.min, aabb.z.max}, // 001
+                    Point{aabb.x.max, aabb.y.min, aabb.z.max}, // 101
+                    Point{aabb.x.max, aabb.y.max, aabb.z.max}, // 111
+                    Point{aabb.x.min, aabb.y.max, aabb.z.max}, // 011
+            };
+
+            float projected_ps[8 * 2];
+
+            for (int i = 0; i < 8; i++) {
+                project(points[i], projected_ps[i * 2], projected_ps[i * 2 + 1]);
+            }
+
+            // Create the edges for 2 faces
+            for (int i = 0; i < 8; i++) {
+                if (i % 4 == 3) {
+                    wire_depth_aabb[j * 12 * 2 + i * 2 + 0].position.x = projected_ps[i * 2];
+                    wire_depth_aabb[j * 12 * 2 + i * 2 + 0].position.y = projected_ps[i * 2 + 1];
+                    wire_depth_aabb[j * 12 * 2 + i * 2 + 1] = wire_depth_aabb[(j * 12 * 2) + (i - 3) * 2];
+                } else {
+                    wire_depth_aabb[j * 12 * 2 + i * 2 + 0].position.x = projected_ps[i * 2];
+                    wire_depth_aabb[j * 12 * 2 + i * 2 + 0].position.y = projected_ps[i * 2 + 1];
+                    wire_depth_aabb[j * 12 * 2 + i * 2 + 1].position.x = projected_ps[(i + 1) * 2];
+                    wire_depth_aabb[j * 12 * 2 + i * 2 + 1].position.y = projected_ps[(i + 1) * 2 + 1];
+                }
+            }
+
+            // Join the 2 faces
+            for (int i = 0; i < 4; i++) {
+                wire_depth_aabb[j * 12 * 2 + 8 * 2 + i * 2] = wire_depth_aabb[j * 12 * 2 + i * 2];
+                wire_depth_aabb[j * 12 * 2 + 8 * 2 + i * 2 + 1] = wire_depth_aabb[j * 12 * 2 + (i + 4) * 2];
+            }
         }
     }
 

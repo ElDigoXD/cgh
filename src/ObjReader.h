@@ -1,7 +1,65 @@
 #pragma once
 
-#include "tiny_obj_loader.h"
 #include <cstdio>
+
+#include "tiny_obj_loader.h"
+
+static int load(const char *filename, std::vector<Triangle> &mesh_out, std::vector<Material> &materials_out) {
+    tinyobj::ObjReader reader;
+    tinyobj::ObjReaderConfig config;
+    if (!reader.ParseFromFile(filename)) {
+        std::fprintf(stderr, "[ERROR] %s\n", reader.Error().c_str());
+        exit(1);
+    };
+
+    if (!reader.Warning().empty()) {
+        std::fprintf(stderr, "[WARN] %s\n", reader.Warning().c_str());
+    };
+
+    auto &attrib = reader.GetAttrib();
+    auto &shapes = reader.GetShapes();
+    auto &obj_materials = reader.GetMaterials();
+
+    for (auto &shape: shapes) {
+        printf("shape: %s\n", shape.name.c_str());
+        for (unsigned long i = 0; i < shape.mesh.indices.size(); i += 3) {
+            mesh_out.emplace_back(
+                    Vec{
+                            attrib.vertices[3 * shape.mesh.indices[i + 0].vertex_index + 0],
+                            attrib.vertices[3 * shape.mesh.indices[i + 0].vertex_index + 1],
+                            attrib.vertices[3 * shape.mesh.indices[i + 0].vertex_index + 2]
+                    },
+                    Vec{
+                            attrib.vertices[3 * shape.mesh.indices[i + 1].vertex_index + 0],
+                            attrib.vertices[3 * shape.mesh.indices[i + 1].vertex_index + 1],
+                            attrib.vertices[3 * shape.mesh.indices[i + 1].vertex_index + 2]
+                    },
+                    Vec{
+                            attrib.vertices[3 * shape.mesh.indices[i + 2].vertex_index + 0],
+                            attrib.vertices[3 * shape.mesh.indices[i + 2].vertex_index + 1],
+                            attrib.vertices[3 * shape.mesh.indices[i + 2].vertex_index + 2]
+                    },
+                    shape.mesh.material_ids[i / 3] >= 0 ? shape.mesh.material_ids[i / 3] : 0
+            );
+        }
+    }
+
+    for (auto &material: obj_materials) {
+        materials_out.push_back(Material{
+                Color{material.diffuse}
+        });
+        printf("material: %s\n", material.name.c_str());
+    }
+
+
+    if (materials_out.empty()) {
+        printf("no materials found, using Material{Color{1, 1, 1}}\n");
+        materials_out.push_back(Material{Color{1, 1, 1}});
+    }
+
+    printf("mesh size: %zu\n", mesh_out.size());
+    return 0;
+}
 
 static int load(Scene &scene, const char *filename) {
     tinyobj::ObjReader reader;
