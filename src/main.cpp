@@ -49,7 +49,7 @@ public:
 
     // GUI state
     bool enable_wireframe = true;
-    bool enable_only_visible_wireframe = false;
+    bool enable_only_visible_wireframe = true;
     bool enable_aabb = true;
     bool enable_render = false;
     bool enable_render_cgh = false;
@@ -192,7 +192,7 @@ public:
             if (ImGui::Checkbox("Enable render", &enable_render)) {
                 update_render();
             }
-            if (enable_render){
+            if (enable_render) {
                 im::Indent(5);
                 if (ImGui::Checkbox("Enable render cgh", &enable_render_cgh)) {
                     update_render();
@@ -301,51 +301,55 @@ public:
         });
     }
 
-    void project(const Point &p, float &ax, float &ay) const {
+    void project(const Point &p, Real &ax, Real &ay) const {
         auto o = scene->camera->look_from;
 
-        ax = (float) (p - o).dot(scene->camera->u);
-        ay = (float) (p - o).dot(-scene->camera->v);
+        ax = (Real) (p - o).dot(scene->camera->u);
+        ay = (Real) (p - o).dot(-scene->camera->v);
 
-        ax = (float) (ax / Camera::slm_pixel_size + image_size.x / 2.0);
-        ay = (float) (ay / Camera::slm_pixel_size + image_size.y / 2.0);
+        ax = (Real) (ax / Camera::slm_pixel_size + image_size.x / 2.0);
+        ay = (Real) (ay / Camera::slm_pixel_size + image_size.y / 2.0);
     }
 
     void test_wireframe_visible() {
-        std::unordered_set<Triangle> visible_triangles = {};
+        std::vector<Triangle> visible_triangles = {};
         auto camera = scene->camera;
         camera->update();
-        for (int x = 0; x < camera->image_width; x++) {
-            for (int y = 0; y < camera->image_height; y++) {
-                auto ray = camera->get_orthogonal_ray_at(x, y);
-                if (auto hit = Camera::ray_mesh_intersection(ray, *scene, Triangle::CULL_BACKFACES::YES)) {
-                    auto hit_data = hit.value();
-                    visible_triangles.insert(hit_data.triangle);
+
+        for (int i = 0; i < scene->mesh_size; i++) {
+            auto t = scene->mesh[i];
+            Real px, py;
+            project(t.center(), px, py);
+            Ray ray = camera->get_orthogonal_ray_at(std::floor(px), std::floor(py));
+            if (auto hit = t.intersect(ray, Triangle::CULL_BACKFACES::YES)) {
+                if (hit->triangle == t){
+                    visible_triangles.emplace_back(t);
                 }
             }
         }
+
         wire = sf::VertexArray(sf::PrimitiveType::Lines, visible_triangles.size() * 6);
         int i = 0;
         for (auto &t: visible_triangles) {
-            float ax, ay, bx, by, cx, cy;
+            Real ax, ay, bx, by, cx, cy;
             project(t.a, ax, ay);
             project(t.b, bx, by);
             project(t.c, cx, cy);
 
-            wire[i * 6 + 0].position.x = ax;
-            wire[i * 6 + 0].position.y = ay;
-            wire[i * 6 + 1].position.x = bx;
-            wire[i * 6 + 1].position.y = by;
+            wire[i * 6 + 0].position.x = (float) ax;
+            wire[i * 6 + 0].position.y = (float) ay;
+            wire[i * 6 + 1].position.x = (float) bx;
+            wire[i * 6 + 1].position.y = (float) by;
 
-            wire[i * 6 + 2].position.x = ax;
-            wire[i * 6 + 2].position.y = ay;
-            wire[i * 6 + 3].position.x = cx;
-            wire[i * 6 + 3].position.y = cy;
+            wire[i * 6 + 2].position.x = (float) ax;
+            wire[i * 6 + 2].position.y = (float) ay;
+            wire[i * 6 + 3].position.x = (float) cx;
+            wire[i * 6 + 3].position.y = (float) cy;
 
-            wire[i * 6 + 4].position.x = bx;
-            wire[i * 6 + 4].position.y = by;
-            wire[i * 6 + 5].position.x = cx;
-            wire[i * 6 + 5].position.y = cy;
+            wire[i * 6 + 4].position.x = (float) bx;
+            wire[i * 6 + 4].position.y = (float) by;
+            wire[i * 6 + 5].position.x = (float) cx;
+            wire[i * 6 + 5].position.y = (float) cy;
             ++i;
         }
 
@@ -364,25 +368,25 @@ public:
         for (int i = 0; i < scene->mesh_size; i++) {
             auto &t = scene->mesh[i];
 
-            float ax, ay, bx, by, cx, cy;
+            Real ax, ay, bx, by, cx, cy;
             project(t.a, ax, ay);
             project(t.b, bx, by);
             project(t.c, cx, cy);
 
-            wire[i * 6 + 0].position.x = ax;
-            wire[i * 6 + 0].position.y = ay;
-            wire[i * 6 + 1].position.x = bx;
-            wire[i * 6 + 1].position.y = by;
+            wire[i * 6 + 0].position.x = (float) ax;
+            wire[i * 6 + 0].position.y = (float) ay;
+            wire[i * 6 + 1].position.x = (float) bx;
+            wire[i * 6 + 1].position.y = (float) by;
 
-            wire[i * 6 + 2].position.x = ax;
-            wire[i * 6 + 2].position.y = ay;
-            wire[i * 6 + 3].position.x = cx;
-            wire[i * 6 + 3].position.y = cy;
+            wire[i * 6 + 2].position.x = (float) ax;
+            wire[i * 6 + 2].position.y = (float) ay;
+            wire[i * 6 + 3].position.x = (float) cx;
+            wire[i * 6 + 3].position.y = (float) cy;
 
-            wire[i * 6 + 4].position.x = bx;
-            wire[i * 6 + 4].position.y = by;
-            wire[i * 6 + 5].position.x = cx;
-            wire[i * 6 + 5].position.y = cy;
+            wire[i * 6 + 4].position.x = (float) bx;
+            wire[i * 6 + 4].position.y = (float) by;
+            wire[i * 6 + 5].position.x = (float) cx;
+            wire[i * 6 + 5].position.y = (float) cy;
         }
     }
 
@@ -406,7 +410,7 @@ public:
                 Point{scene->aabb.x.max, scene->aabb.y.max, scene->aabb.z.max}, // 111
                 Point{scene->aabb.x.min, scene->aabb.y.max, scene->aabb.z.max}, // 011
         };
-        float projected_ps[8 * 2];
+        Real projected_ps[8 * 2];
 
         for (int i = 0; i < 8; i++) {
             project(points[i], projected_ps[i * 2], projected_ps[i * 2 + 1]);
@@ -415,14 +419,14 @@ public:
         // Create the edges for 2 faces
         for (int i = 0; i < 8; i++) {
             if (i % 4 == 3) {
-                wire_aabb[i * 2 + 0].position.x = projected_ps[i * 2];
-                wire_aabb[i * 2 + 0].position.y = projected_ps[i * 2 + 1];
+                wire_aabb[i * 2 + 0].position.x = (float) projected_ps[i * 2];
+                wire_aabb[i * 2 + 0].position.y = (float) projected_ps[i * 2 + 1];
                 wire_aabb[i * 2 + 1] = wire_aabb[(i - 3) * 2];
             } else {
-                wire_aabb[i * 2 + 0].position.x = projected_ps[i * 2];
-                wire_aabb[i * 2 + 0].position.y = projected_ps[i * 2 + 1];
-                wire_aabb[i * 2 + 1].position.x = projected_ps[(i + 1) * 2];
-                wire_aabb[i * 2 + 1].position.y = projected_ps[(i + 1) * 2 + 1];
+                wire_aabb[i * 2 + 0].position.x = (float) projected_ps[i * 2];
+                wire_aabb[i * 2 + 0].position.y = (float) projected_ps[i * 2 + 1];
+                wire_aabb[i * 2 + 1].position.x = (float) projected_ps[(i + 1) * 2];
+                wire_aabb[i * 2 + 1].position.y = (float) projected_ps[(i + 1) * 2 + 1];
             }
         }
 
@@ -456,7 +460,7 @@ public:
                     Point{aabb.x.min, aabb.y.max, aabb.z.max}, // 011
             };
 
-            float projected_ps[8 * 2];
+            Real projected_ps[8 * 2];
 
             for (int i = 0; i < 8; i++) {
                 project(points[i], projected_ps[i * 2], projected_ps[i * 2 + 1]);
@@ -465,14 +469,14 @@ public:
             // Create the edges for 2 faces
             for (int i = 0; i < 8; i++) {
                 if (i % 4 == 3) {
-                    wire_depth_aabb[j * 12 * 2 + i * 2 + 0].position.x = projected_ps[i * 2];
-                    wire_depth_aabb[j * 12 * 2 + i * 2 + 0].position.y = projected_ps[i * 2 + 1];
+                    wire_depth_aabb[j * 12 * 2 + i * 2 + 0].position.x = (float) projected_ps[i * 2];
+                    wire_depth_aabb[j * 12 * 2 + i * 2 + 0].position.y = (float) projected_ps[i * 2 + 1];
                     wire_depth_aabb[j * 12 * 2 + i * 2 + 1] = wire_depth_aabb[(j * 12 * 2) + (i - 3) * 2];
                 } else {
-                    wire_depth_aabb[j * 12 * 2 + i * 2 + 0].position.x = projected_ps[i * 2];
-                    wire_depth_aabb[j * 12 * 2 + i * 2 + 0].position.y = projected_ps[i * 2 + 1];
-                    wire_depth_aabb[j * 12 * 2 + i * 2 + 1].position.x = projected_ps[(i + 1) * 2];
-                    wire_depth_aabb[j * 12 * 2 + i * 2 + 1].position.y = projected_ps[(i + 1) * 2 + 1];
+                    wire_depth_aabb[j * 12 * 2 + i * 2 + 0].position.x = (float) projected_ps[i * 2];
+                    wire_depth_aabb[j * 12 * 2 + i * 2 + 0].position.y = (float) projected_ps[i * 2 + 1];
+                    wire_depth_aabb[j * 12 * 2 + i * 2 + 1].position.x = (float) projected_ps[(i + 1) * 2];
+                    wire_depth_aabb[j * 12 * 2 + i * 2 + 1].position.y = (float) projected_ps[(i + 1) * 2 + 1];
                 }
             }
 

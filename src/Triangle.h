@@ -27,6 +27,10 @@ struct Triangle {
     };
 
     constexpr std::optional<HitData> intersect(const Ray &ray, CULL_BACKFACES cull_backfaces);
+
+    constexpr Vec operator[](Real vertex) const { return vertex == 0 ? a : (vertex == 1 ? b : c); }
+
+    [[nodiscard]] constexpr Point center() const { return (a + b + c) / 3; }
 };
 
 struct HitData {
