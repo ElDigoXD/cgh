@@ -7,11 +7,9 @@ const Scene *basic_triangle(int image_width, int image_height) {
     auto *camera = new Camera(image_width, image_height);
     camera->look_from = {0, 1, 300};
     camera->update();
-    const int materials_size = 1;
-    auto *materials = new Material[1]{Material{Color{0.1, 0.1, 0.1}}};
+    auto materials = std::vector<Material>{Material{Color{0.1, 0.1, 0.1}}};
 
-    const int mesh_size = 1;
-    auto *mesh = new Triangle[mesh_size]{
+    auto mesh = std::vector<Triangle>{
             Triangle(Vec{-1, -.5, -1} * 1.5,
                      Vec{1, -.5, -1} * 1.5,
                      Vec{0, .8, -1} * 1.5,
@@ -21,25 +19,24 @@ const Scene *basic_triangle(int image_width, int image_height) {
             //          -Vec{0.5, 0.5, 0} + Vec{0, .8, -1} * 1.5,
             //          0)
     };
-    auto scene = new Scene(camera, mesh, mesh_size, materials, materials_size);
-    scene->compute_aabb();
+    auto scene = new Scene(camera);
+    scene->add_mesh(mesh, materials);
     return scene;
 }
 
+
 const Scene *cornell_box(int image_width, int image_height) {
     auto *camera = new Camera(image_width, image_height);
-    auto *materials = new Material[1]{Material()};
     camera->look_from = {50, 50, 290};
     camera->update();
-    auto scene = new Scene(camera, nullptr, 0, materials, 0);
-    load(*scene, "../resources/cornell_box_multimaterial.obj");
-    scene->flip_mesh(Scene::AXIS::Z);
-    scene->compute_aabb();
-    scene->center_mesh();
-    scene->normalize_mesh();
-    scene->scale_mesh(2.25);
-    scene->compute_aabb();
 
+    auto [mesh, materials] = load("../resources/cornell_box_multimaterial.obj");
+    Mesh::flip(mesh, Axis::Z);
+    Mesh::normalize(mesh, Mesh::compute_aabb(mesh));
+    Mesh::scale(mesh, 2.25);
+
+    auto scene = new Scene(camera);
+    scene->add_mesh(mesh, materials);
     return scene;
 }
 
@@ -47,14 +44,13 @@ const Scene *sphere_mesh(int image_width, int image_height) {
     auto *camera = new Camera(image_width, image_height);
     camera->look_from = {0, 0, 300};
     camera->update();
-    auto scene = new Scene(camera, nullptr, 0, nullptr, 0);
-    load(*scene, "../resources/low-poly-sphere.obj");
-    scene->compute_aabb();
-    scene->center_mesh();
-    scene->normalize_mesh();
-    scene->scale_mesh(2.25);
-    scene->compute_aabb();
 
+    auto [mesh, materials] = load("../resources/low-poly-sphere.obj");
+    Mesh::normalize(mesh, Mesh::compute_aabb(mesh));
+    Mesh::scale(mesh, 2.25);
+
+    auto scene = new Scene(camera);
+    scene->add_mesh(mesh, materials);
     return scene;
 }
 
@@ -62,20 +58,17 @@ const Scene *pumpkin(int image_width, int image_height) {
     auto *camera = new Camera(image_width, image_height);
     camera->look_from = {40, 200, 300};
     camera->update();
-    auto scene = new Scene(camera, nullptr, 0, nullptr, 0);
-    load(*scene, "../resources/pumpkin.obj");
-    scene->change_up_coord_mesh();
-    scene->flip_mesh(Scene::AXIS::Y);
-    //scene->flip_mesh_faces();
 
-    scene->compute_aabb();
-    scene->center_mesh();
-    scene->normalize_mesh();
-    scene->scale_mesh(2.25);
-    scene->compute_aabb();
+    auto [mesh, materials] = load("../resources/pumpkin.obj");
+    Mesh::change_up_coord(mesh);
+    Mesh::flip(mesh, Axis::Y);
+    Mesh::normalize(mesh, Mesh::compute_aabb(mesh));
+    Mesh::scale(mesh, 2.25);
 
-    scene->materials[0] = {Color{1, .4, .0} * .5};
+    materials[0] = Material{Color{1, .4, .0} * .5};
 
+    auto scene = new Scene(camera);
+    scene->add_mesh(mesh, materials);
     return scene;
 }
 
@@ -83,18 +76,20 @@ const Scene *teapot(int image_width, int image_height) {
     auto *camera = new Camera(image_width, image_height);
     camera->look_from = {50, 50, 290};
     camera->update();
-    auto scene = new Scene(camera, nullptr, 0, nullptr, 0);
-    load(*scene, "../resources/teapot.obj");
-    //scene->flip_mesh_faces();
-    //scene->flip_mesh(Scene::AXIS::Y);
-    scene->compute_aabb();
-    scene->center_mesh();
-    scene->normalize_mesh();
-    scene->scale_mesh(4);
-    scene->compute_aabb();
+    auto [mesh, materials] = load("../resources/teapot.obj");
+    //scene->compute_aabb();
+    //scene->center_mesh();
+    //scene->normalize_mesh();
+    //scene->scale_mesh(4);
+    //scene->compute_aabb();
 
-    scene->materials[0] = {Color{1, .4, .0} * .5};
+    Mesh::normalize(mesh, Mesh::compute_aabb(mesh));
+    Mesh::scale(mesh, 4);
 
+    materials[0] = Material{Color{1, .4, .0} * .5};
+
+    auto scene = new Scene(camera);
+    scene->add_mesh(mesh, materials);
     return scene;
 }
 
@@ -103,66 +98,40 @@ const Scene *multi_mesh(int image_width, int image_height) {
     camera->look_from = {50, 50, 290};
     camera->update();
 
-    auto scene = new Scene(camera, nullptr, 0, nullptr, 0);
+    auto [cornell_box_mesh, cornell_box_materials] = load("../resources/cornell_box_multimaterial.obj");
+    auto [teapot_mesh, teapot_materials] = load("../resources/teapot.obj");
+    auto [dragon_mesh, dragon_materials] = load("../resources/dragon.obj");
+    Mesh::flip(cornell_box_mesh, Axis::Z);
+    Mesh::normalize(cornell_box_mesh, Mesh::compute_aabb(cornell_box_mesh));
+    Mesh::scale(cornell_box_mesh, 2.25);
 
-    std::vector<Triangle> cornell_box_mesh;
-    std::vector<Triangle> teapot_mesh;
-    std::vector<Material> cornell_box_materials;
-    std::vector<Material> teapot_materials;
+    Mesh::normalize(teapot_mesh, Mesh::compute_aabb(teapot_mesh));
+    Mesh::move(teapot_mesh, {-0.4, -0.2, 0.4});
 
-    load("../resources/cornell_box_multimaterial.obj", cornell_box_mesh, cornell_box_materials);
-    load("../resources/teapot.obj", teapot_mesh, teapot_materials);
-
-    Scene::flip_mesh(cornell_box_mesh, Scene::AXIS::Z);
-    Scene::normalize_mesh(cornell_box_mesh, Scene::compute_aabb(cornell_box_mesh));
-    Scene::scale_mesh(cornell_box_mesh, 2.25);
-
-    Scene::normalize_mesh(teapot_mesh, Scene::compute_aabb(teapot_mesh));
-    Scene::move_mesh(teapot_mesh, {-0.4, -0.2, 0.4});
     teapot_materials[0] = Material{Color{1, .4, .0}};
 
-    for (auto &t: teapot_mesh) {
-        t.material_idx += (int) cornell_box_materials.size();
-    }
+    Mesh::normalize(dragon_mesh, Mesh::compute_aabb(dragon_mesh));
+    Mesh::scale(dragon_mesh, 0.8);
+    Mesh::move(dragon_mesh, {0.35, 0.5, -0.35});
 
-    scene->mesh = new Triangle[cornell_box_mesh.size() + teapot_mesh.size()];
-    std::copy(cornell_box_mesh.begin(), cornell_box_mesh.end(), scene->mesh);
-    std::copy(teapot_mesh.begin(), teapot_mesh.end(), scene->mesh + cornell_box_mesh.size());
-    scene->mesh_size = (int) (cornell_box_mesh.size() + teapot_mesh.size());
-
-    scene->materials = new Material[cornell_box_materials.size() + teapot_materials.size()];
-    std::copy(cornell_box_materials.begin(), cornell_box_materials.end(), scene->materials);
-    std::copy(teapot_materials.begin(), teapot_materials.end(), scene->materials + cornell_box_materials.size());
-    scene->materials_size = (int) (cornell_box_materials.size() + teapot_materials.size());
-
-    scene->compute_aabb();
-
+    auto scene = new Scene(camera);
+    scene->add_mesh(cornell_box_mesh, cornell_box_materials);
+    scene->add_mesh(teapot_mesh, teapot_materials);
+    scene->add_mesh(dragon_mesh, dragon_materials);
     return scene;
 }
 
-const Scene *aabb_test(int image_width, int image_height) {
+const Scene *dragon(int image_width, int image_height) {
     auto *camera = new Camera(image_width, image_height);
     camera->look_from = {50, 50, 290};
     camera->update();
-    auto scene = new Scene(camera, nullptr, 0, nullptr, 0);
 
-    std::vector<Triangle> teapot_mesh;
-    std::vector<Material> teapot_materials;
-    load("../resources/dragon.obj", teapot_mesh, teapot_materials);
+    auto [mesh, materials] = load("../resources/dragon.obj");
 
-    Scene::normalize_mesh(teapot_mesh, Scene::compute_aabb(teapot_mesh));
-    Scene::scale_mesh(teapot_mesh, 4);
+    Mesh::normalize(mesh, Mesh::compute_aabb(mesh));
+    Mesh::scale(mesh, 4);
 
-
-    scene->mesh = new Triangle[teapot_mesh.size()];
-    std::copy(teapot_mesh.begin(), teapot_mesh.end(), scene->mesh);
-    scene->mesh_size = (int) (teapot_mesh.size());
-
-    scene->materials = new Material[teapot_materials.size()];
-    std::copy(teapot_materials.begin(), teapot_materials.end(), scene->materials);
-    scene->materials_size = (int) (teapot_materials.size());
-
-    scene->good_mesh = new Mesh(teapot_mesh, teapot_materials);
-
+    auto scene = new Scene(camera);
+    scene->add_mesh(mesh, materials);
     return scene;
 }

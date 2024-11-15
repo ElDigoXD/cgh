@@ -44,6 +44,12 @@ public:
                                                      y(std::min(a.y, b.y), std::max(a.y, b.y)),
                                                      z(std::min(a.z, b.z), std::max(a.z, b.z)) {}
 
+    constexpr AABB(const AABB &a, const AABB &b) {
+        x = Interval{a.x, b.x};
+        y = Interval{a.y, b.y};
+        z = Interval{a.z, b.z};
+    }
+
     constexpr void extend(const Point &p) {
         x.min = std::min(x.min, p.x);
         x.max = std::max(x.max, p.x);

@@ -35,7 +35,7 @@ public:
     // Render data
     unsigned char *pixels = new unsigned char[max_window_size.x * max_window_size.y * 4];
     const Scene *scene = nullptr;
-    std::vector<std::tuple<Point, Real>> point_cloud;
+    std::vector<std::tuple<Point, Color>> point_cloud;
     sf::Vector2u camera_image_size;
     int max_depth = 10;
     int samples_per_pixel = 100;
@@ -58,30 +58,25 @@ public:
     double render_time = 0;
     bool render_has_finished = false;
 
-    int selected_scene_idx = -1;
+    int selected_scene_idx = 0;
 
     void run() {
-        scene = basic_triangle(600, 400);
+        // scene = basic_triangle(600, 400);
         // scene->camera->max_depth = max_depth;
         // scene->camera->samples_per_pixel = samples_per_pixel;
 
         for (uint i = 0; i < sizeof(scene_names) / sizeof(char *); i++) {
-            if (strcmp(scene_names[i], "aabb_test") == 0) {
+            if (strcmp(scene_names[i], "multi_mesh") == 0) {
                 selected_scene_idx = (int) i;
-                update_scene();
                 break;
-            };
+            }
         }
+        update_scene();
 
         //scene = test_mesh(600, 400);
-        assert(scene != nullptr);
-        assert(scene->materials != nullptr);
-        assert(scene->mesh != nullptr);
+
         //camera.update(1920, 1080);
         memset(pixels, 256 / 2, max_window_size.x * max_window_size.y * 4);
-
-
-        wire_aabb = sf::VertexArray(sf::PrimitiveType::Lines, 12 * 2);
 
         update_wireframe();
         update_aabb_wireframe();
@@ -122,7 +117,7 @@ public:
 
             imgui_window();
 
-            window.clear();
+            window.clear(sf::Color(3, 62, 114));
 
             if (enable_render) {
                 if (rendering && update_texture_clock.getElapsedTime().asSeconds() > 0.05) {
@@ -136,12 +131,7 @@ public:
             }
 
             if (enable_aabb) {
-                if (scene->good_mesh != nullptr) {
-                    window.draw(wire_depth_aabb);
-
-                } else {
-                    window.draw(wire_aabb);
-                }
+                window.draw(wire_depth_aabb);
             }
             ImGui::SFML::Render(window);
             window.display();
@@ -182,8 +172,10 @@ public:
             ImGui::Checkbox("Enable aabb", &enable_aabb);
             if (enable_aabb) {
                 im::Indent(5);
-                if (scene->good_mesh != nullptr
-                    && ImGui::SliderInt("##AABB Depth", &aabb_depth, 1, std::ceil(std::log2(scene->good_mesh->tree.size())), "%d", ImGuiSliderFlags_AlwaysClamp)) {
+                if (ImGui::SliderInt("##AABB Depth", &aabb_depth, 1,
+                                     std::ceil(std::log2(
+                                             std::max_element(scene->meshes.begin(), scene->meshes.end(), [](const Mesh &a, const Mesh &b) { return a.tree.size() < b.tree.size(); })->tree.size())),
+                                     "%d", ImGuiSliderFlags_AlwaysClamp)) {
                     update_aabb_wireframe();
                 }
                 im::Unindent(5);
@@ -276,11 +268,14 @@ public:
 
     void update_render() {
         if (!enable_render) return;
-        if (rendering) {
-            stop_render_and_wait();
-            memset(pixels, 256 / 2, max_window_size.x * max_window_size.y * 4);
-            texture.update(pixels, camera_image_size, {0, 0});
+        stop_render_and_wait();
+        for (uint i = 0; i < camera_image_size.x * camera_image_size.y * 4; i += 4) {
+            pixels[i + 0] = 3;
+            pixels[i + 1] = 62;
+            pixels[i + 2] = 114;
+            pixels[i + 3] = 255;
         }
+        texture.update(pixels, camera_image_size, {0, 0});
         render_thread = std::jthread([&](const std::stop_token &st) {
             rendering = true;
             start_time = timer.getElapsedTime();
@@ -315,15 +310,15 @@ public:
         std::vector<Triangle> visible_triangles = {};
         auto camera = scene->camera;
         camera->update();
-
-        for (int i = 0; i < scene->mesh_size; i++) {
-            auto t = scene->mesh[i];
-            Real px, py;
-            project(t.center(), px, py);
-            Ray ray = camera->get_orthogonal_ray_at(std::floor(px), std::floor(py));
-            if (auto hit = t.intersect(ray, Triangle::CULL_BACKFACES::YES)) {
-                if (hit->triangle == t){
-                    visible_triangles.emplace_back(t);
+        for (const auto &m: scene->meshes) {
+            for (const auto &t: m.triangles) {
+                Real px, py;
+                project(t.center(), px, py);
+                Ray ray = camera->get_orthogonal_ray_at(std::floor(px), std::floor(py));
+                if (auto hit = t.intersect(ray, Triangle::CULL_BACKFACES::YES)) {
+                    if (hit->triangle == t) {
+                        visible_triangles.emplace_back(t);
+                    }
                 }
             }
         }
@@ -362,53 +357,66 @@ public:
             return;
         }
 
-        wire = sf::VertexArray(sf::PrimitiveType::Lines, scene->mesh_size * 6);
+        wire = sf::VertexArray(sf::PrimitiveType::Lines, scene->get_triangle_count() * 6);
 
         scene->camera->update();
-        for (int i = 0; i < scene->mesh_size; i++) {
-            auto &t = scene->mesh[i];
+        auto offset = 0;
+        for (const auto &mesh: scene->meshes) {
+            for (size_t j = 0; j < mesh.triangles.size(); j++) {
+                const auto &t = mesh.triangles[j];
 
-            Real ax, ay, bx, by, cx, cy;
-            project(t.a, ax, ay);
-            project(t.b, bx, by);
-            project(t.c, cx, cy);
+                Real ax, ay, bx, by, cx, cy;
+                project(t.a, ax, ay);
+                project(t.b, bx, by);
+                project(t.c, cx, cy);
 
-            wire[i * 6 + 0].position.x = (float) ax;
-            wire[i * 6 + 0].position.y = (float) ay;
-            wire[i * 6 + 1].position.x = (float) bx;
-            wire[i * 6 + 1].position.y = (float) by;
+                wire[offset + j * 6 + 0].position.x = (float) ax;
+                wire[offset + j * 6 + 0].position.y = (float) ay;
+                wire[offset + j * 6 + 1].position.x = (float) bx;
+                wire[offset + j * 6 + 1].position.y = (float) by;
 
-            wire[i * 6 + 2].position.x = (float) ax;
-            wire[i * 6 + 2].position.y = (float) ay;
-            wire[i * 6 + 3].position.x = (float) cx;
-            wire[i * 6 + 3].position.y = (float) cy;
+                wire[offset + j * 6 + 2].position.x = (float) ax;
+                wire[offset + j * 6 + 2].position.y = (float) ay;
+                wire[offset + j * 6 + 3].position.x = (float) cx;
+                wire[offset + j * 6 + 3].position.y = (float) cy;
 
-            wire[i * 6 + 4].position.x = (float) bx;
-            wire[i * 6 + 4].position.y = (float) by;
-            wire[i * 6 + 5].position.x = (float) cx;
-            wire[i * 6 + 5].position.y = (float) cy;
+                wire[offset + j * 6 + 4].position.x = (float) bx;
+                wire[offset + j * 6 + 4].position.y = (float) by;
+                wire[offset + j * 6 + 5].position.x = (float) cx;
+                wire[offset + j * 6 + 5].position.y = (float) cy;
+            }
+            offset += (int) mesh.triangles.size() * 6;
         }
     }
 
     void update_aabb_wireframe() {
         update_aabb_wireframe_depth();
-        if (!scene->aabb.has_volume()) {
+        return;
+        if (scene->meshes.empty()) {
             wire_aabb.clear();
             return;
-        };
+        }
 
+        wire_aabb = sf::VertexArray(sf::PrimitiveType::Lines, 12 * 2 * scene->meshes.size());
         scene->camera->update();
 
-        Point points[]{
-                Point{scene->aabb.x.min, scene->aabb.y.min, scene->aabb.z.min}, // 000
-                Point{scene->aabb.x.max, scene->aabb.y.min, scene->aabb.z.min}, // 100
-                Point{scene->aabb.x.max, scene->aabb.y.max, scene->aabb.z.min}, // 110
-                Point{scene->aabb.x.min, scene->aabb.y.max, scene->aabb.z.min}, // 010
+        for (int i = 0; i < (int) scene->meshes.size(); i++) {
+            draw_aabb(wire_aabb, scene->meshes[i].tree[0].aabb, i);
+        }
+    }
 
-                Point{scene->aabb.x.min, scene->aabb.y.min, scene->aabb.z.max}, // 001
-                Point{scene->aabb.x.max, scene->aabb.y.min, scene->aabb.z.max}, // 101
-                Point{scene->aabb.x.max, scene->aabb.y.max, scene->aabb.z.max}, // 111
-                Point{scene->aabb.x.min, scene->aabb.y.max, scene->aabb.z.max}, // 011
+    void draw_aabb(sf::VertexArray &vertex_array, const AABB &aabb, int index = 0) const {
+        assert((index + 1) * 12 * 2 <= (int) vertex_array.getVertexCount());
+        Point points[]{
+                Point{aabb.x.min, aabb.y.min, aabb.z.min}, // 000
+                Point{aabb.x.max, aabb.y.min, aabb.z.min}, // 100
+                Point{aabb.x.max, aabb.y.max, aabb.z.min}, // 110
+                Point{aabb.x.min, aabb.y.max, aabb.z.min}, // 010
+
+                Point{aabb.x.min, aabb.y.min, aabb.z.max}, // 001
+                Point{aabb.x.max, aabb.y.min, aabb.z.max}, // 101
+                Point{aabb.x.max, aabb.y.max, aabb.z.max}, // 111
+                Point{aabb.x.min, aabb.y.max, aabb.z.max}, // 011
         };
         Real projected_ps[8 * 2];
 
@@ -417,91 +425,63 @@ public:
         }
 
         // Create the edges for 2 faces
+        auto offset = index * 12 * 2;
         for (int i = 0; i < 8; i++) {
             if (i % 4 == 3) {
-                wire_aabb[i * 2 + 0].position.x = (float) projected_ps[i * 2];
-                wire_aabb[i * 2 + 0].position.y = (float) projected_ps[i * 2 + 1];
-                wire_aabb[i * 2 + 1] = wire_aabb[(i - 3) * 2];
+                vertex_array[offset + i * 2 + 0].position.x = (float) projected_ps[(i + 0) * 2 + 0];
+                vertex_array[offset + i * 2 + 0].position.y = (float) projected_ps[(i + 0) * 2 + 1];
+                vertex_array[offset + i * 2 + 1] = vertex_array[offset + (i - 3) * 2];
             } else {
-                wire_aabb[i * 2 + 0].position.x = (float) projected_ps[i * 2];
-                wire_aabb[i * 2 + 0].position.y = (float) projected_ps[i * 2 + 1];
-                wire_aabb[i * 2 + 1].position.x = (float) projected_ps[(i + 1) * 2];
-                wire_aabb[i * 2 + 1].position.y = (float) projected_ps[(i + 1) * 2 + 1];
+                vertex_array[offset + i * 2 + 0].position.x = (float) projected_ps[(i + 0) * 2 + 0];
+                vertex_array[offset + i * 2 + 0].position.y = (float) projected_ps[(i + 0) * 2 + 1];
+                vertex_array[offset + i * 2 + 1].position.x = (float) projected_ps[(i + 1) * 2 + 0];
+                vertex_array[offset + i * 2 + 1].position.y = (float) projected_ps[(i + 1) * 2 + 1];
             }
         }
 
         // Join the 2 faces
         for (int i = 0; i < 4; i++) {
-            wire_aabb[8 * 2 + i * 2] = wire_aabb[i * 2];
-            wire_aabb[8 * 2 + i * 2 + 1] = wire_aabb[(i + 4) * 2];
+            vertex_array[offset + 8 * 2 + i * 2 + 0] = vertex_array[offset + (i + 0) * 2];
+            vertex_array[offset + 8 * 2 + i * 2 + 1] = vertex_array[offset + (i + 4) * 2];
         }
     }
 
     void update_aabb_wireframe_depth() {
-        if (scene->good_mesh == nullptr) {
-            wire_depth_aabb.clear();
-            return;
+        auto depth = aabb_depth - 1;
+
+        auto array_size = 0;
+        for (int i = 0; i < (int) scene->meshes.size(); i++) {
+            const auto tree = scene->meshes[i].tree;
+            int pow = std::min(1 << depth, (int) tree.size() / 2);
+            array_size += 12 * 2 * pow;
         }
 
-        int pow = 1 << (aabb_depth - 1);
-        wire_depth_aabb = sf::VertexArray(sf::PrimitiveType::Lines, 12 * 2 * pow);
-        auto j = 0;
-        for (int d = pow - 1; d < pow * 2 - 1; d++ | j++) {
-            auto aabb = scene->good_mesh->tree[d].aabb;
-            Point points[]{
-                    Point{aabb.x.min, aabb.y.min, aabb.z.min}, // 000
-                    Point{aabb.x.max, aabb.y.min, aabb.z.min}, // 100
-                    Point{aabb.x.max, aabb.y.max, aabb.z.min}, // 110
-                    Point{aabb.x.min, aabb.y.max, aabb.z.min}, // 010
+        wire_depth_aabb = sf::VertexArray(sf::PrimitiveType::Lines, array_size);
 
-                    Point{aabb.x.min, aabb.y.min, aabb.z.max}, // 001
-                    Point{aabb.x.max, aabb.y.min, aabb.z.max}, // 101
-                    Point{aabb.x.max, aabb.y.max, aabb.z.max}, // 111
-                    Point{aabb.x.min, aabb.y.max, aabb.z.max}, // 011
-            };
+        auto offset = 0;
+        for (int i = 0; i < (int) scene->meshes.size(); i++) {
+            const auto tree = scene->meshes[i].tree;
 
-            Real projected_ps[8 * 2];
+            int pow = std::min(1 << depth, (int) tree.size() / 2);
 
-            for (int i = 0; i < 8; i++) {
-                project(points[i], projected_ps[i * 2], projected_ps[i * 2 + 1]);
-            }
-
-            // Create the edges for 2 faces
-            for (int i = 0; i < 8; i++) {
-                if (i % 4 == 3) {
-                    wire_depth_aabb[j * 12 * 2 + i * 2 + 0].position.x = (float) projected_ps[i * 2];
-                    wire_depth_aabb[j * 12 * 2 + i * 2 + 0].position.y = (float) projected_ps[i * 2 + 1];
-                    wire_depth_aabb[j * 12 * 2 + i * 2 + 1] = wire_depth_aabb[(j * 12 * 2) + (i - 3) * 2];
-                } else {
-                    wire_depth_aabb[j * 12 * 2 + i * 2 + 0].position.x = (float) projected_ps[i * 2];
-                    wire_depth_aabb[j * 12 * 2 + i * 2 + 0].position.y = (float) projected_ps[i * 2 + 1];
-                    wire_depth_aabb[j * 12 * 2 + i * 2 + 1].position.x = (float) projected_ps[(i + 1) * 2];
-                    wire_depth_aabb[j * 12 * 2 + i * 2 + 1].position.y = (float) projected_ps[(i + 1) * 2 + 1];
-                }
-            }
-
-            // Join the 2 faces
-            for (int i = 0; i < 4; i++) {
-                wire_depth_aabb[j * 12 * 2 + 8 * 2 + i * 2] = wire_depth_aabb[j * 12 * 2 + i * 2];
-                wire_depth_aabb[j * 12 * 2 + 8 * 2 + i * 2 + 1] = wire_depth_aabb[j * 12 * 2 + (i + 4) * 2];
+            for (int d = pow - 1; d < pow * 2 - 1; d++) {
+                auto aabb = tree[d].aabb;
+                draw_aabb(wire_depth_aabb, aabb, offset++);
             }
         }
     }
 
     void update_scene() {
         stop_render_and_wait();
-        assert(scene != nullptr);
-        delete scene->camera;
-        delete[] scene->materials;
-        delete[] scene->mesh;
-        delete scene;
+        if (scene != nullptr) {
+            delete scene->camera;
+            delete scene;
+        }
+
         scene = scenes[selected_scene_idx](600, 400);
 
         assert(scene != nullptr);
-        assert(scene->materials != nullptr);
-        assert(scene->mesh != nullptr);
 
-        wire = sf::VertexArray(sf::PrimitiveType::Lines, 6 * scene->mesh_size);
         scene->camera->max_depth = max_depth;
         point_cloud = scene->camera->compute_point_cloud(*scene);
     }

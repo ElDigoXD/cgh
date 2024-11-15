@@ -26,7 +26,7 @@ struct Triangle {
         NO
     };
 
-    constexpr std::optional<HitData> intersect(const Ray &ray, CULL_BACKFACES cull_backfaces);
+    [[nodiscard]] constexpr std::optional<HitData> intersect(const Ray &ray, CULL_BACKFACES cull_backfaces) const;
 
     constexpr Vec operator[](Real vertex) const { return vertex == 0 ? a : (vertex == 1 ? b : c); }
 
@@ -43,7 +43,7 @@ struct HitData {
 };
 
 // https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
-constexpr std::optional<HitData> Triangle::intersect(const Ray &ray, CULL_BACKFACES cull_backfaces = CULL_BACKFACES::YES) {
+constexpr std::optional<HitData> Triangle::intersect(const Ray &ray, CULL_BACKFACES cull_backfaces = CULL_BACKFACES::YES) const {
     constexpr Real epsilon = std::numeric_limits<Real>::epsilon();
     Vec edge1 = b - a;
     Vec edge2 = c - a;

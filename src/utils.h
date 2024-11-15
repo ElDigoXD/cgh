@@ -7,6 +7,10 @@
 
 typedef double Real;
 
+enum class Axis {
+    X, Y, Z
+};
+
 constexpr Real degrees_to_radians(Real degrees) {
     return degrees * std::numbers::pi / 180.0;
 }

@@ -5,6 +5,7 @@
 
 #include "AABB.h"
 #include "Triangle.h"
+#include "utils.h"
 
 class Mesh {
 public:
@@ -21,10 +22,9 @@ public:
 
     std::vector<Node> tree;
     std::vector<Triangle> triangles;
-    std::vector<Material> materials;
 
-    Mesh(std::vector<Triangle> &triangles, std::vector<Material> &materials) :
-            tree((int) std::pow(2, (int) std::ceil(std::log2(triangles.size()) + 1))), triangles(triangles), materials(materials) {
+    explicit Mesh(const std::vector<Triangle> &triangles) :
+            tree((int) std::pow(2, (int) std::ceil(std::log2(triangles.size()) + 1))), triangles(triangles) {
         generate_bvh();
     }
 
@@ -70,7 +70,7 @@ public:
 
     }
 
-    std::optional<HitData> intersect(const Ray &ray) {
+    [[nodiscard]] std::optional<HitData> intersect(const Ray &ray, Triangle::CULL_BACKFACES cull_backfaces = Triangle::CULL_BACKFACES::YES) const {
 
         std::stack<int> stack;
         stack.push(0);
@@ -81,18 +81,19 @@ public:
             int i = stack.top();
             stack.pop();
 
-            if (!tree[i].aabb.intersect(ray)) {
-                continue;
-            }
-
             if (tree[i].is_leaf()) {
-                if (auto hit = triangles[tree[i].triangle_index()].intersect(ray)) {
+                if (auto hit = triangles[tree[i].triangle_index()].intersect(ray, cull_backfaces)) {
                     if (!closest_hit || hit->t < closest_hit->t) {
                         closest_hit = hit;
                     }
                 }
                 continue;
             }
+
+            if (!tree[i].aabb.intersect(ray)) {
+                continue;
+            }
+
             assert(i < (int) tree.size() / 2);
             if (i < (int) tree.size() / 2) {
                 stack.push(i * 2 + 2);
@@ -100,5 +101,72 @@ public:
             }
         }
         return closest_hit;
+    }
+
+    static void scale(std::vector<Triangle> &mesh, const Vector &factor) {
+        for (auto &i: mesh) {
+            i.a = i.a * factor;
+            i.b = i.b * factor;
+            i.c = i.c * factor;
+        }
+    }
+
+    static void scale(std::vector<Triangle> &mesh, const Real &factor) {
+        scale(mesh, {factor, factor, factor});
+    }
+
+    // Does not modify the aabb
+    static void normalize(std::vector<Triangle> &mesh, const AABB aabb) {
+        move(mesh, -aabb.center());
+        scale(mesh, 1 / aabb.max_dimension());
+    }
+
+    static void move(std::vector<Triangle> &mesh, const Vector &vec) {
+        for (auto &i: mesh) {
+            i.a += vec;
+            i.b += vec;
+            i.c += vec;
+        }
+    }
+
+    static AABB compute_aabb(const std::vector<Triangle> &mesh) {
+        assert(!mesh.empty());
+        AABB aabb{mesh[0].a, mesh[0].b};
+        for (auto &t: mesh) {
+            aabb.extend(t.a);
+            aabb.extend(t.b);
+            aabb.extend(t.c);
+        }
+        return aabb;
+    }
+
+    static void flip(std::vector<Triangle> &mesh, Axis axis) {
+        switch (axis) {
+            case Axis::X:
+                scale(mesh, {-1, 1, 1});
+                break;
+            case Axis::Y:
+                scale(mesh, {1, -1, 1});
+                break;
+            case Axis::Z:
+                scale(mesh, {1, 1, -1});
+                break;
+        }
+        flip_faces(mesh);
+    }
+
+    static void flip_faces(std::vector<Triangle> &mesh) {
+        for (auto &t: mesh) {
+            std::swap(t.a, t.c);
+        }
+    }
+
+    static void change_up_coord(std::vector<Triangle> &mesh) {
+        for (auto &t: mesh) {
+            std::swap(t.a.y, t.a.z);
+            std::swap(t.b.y, t.b.z);
+            std::swap(t.c.y, t.c.z);
+        }
+        scale(mesh, {1, -1, 1});
     }
 };

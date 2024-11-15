@@ -179,40 +179,13 @@ public:
 
     }
 
-
-
-    static constexpr std::optional<HitData> ray_mesh_intersection(const Ray &ray, const Scene &scene, Triangle::CULL_BACKFACES cull_backfaces = Triangle::CULL_BACKFACES::YES) {
-
-        if (scene.good_mesh != nullptr) {
-            return scene.good_mesh->intersect(ray);
-        }
-
-        if (scene.aabb.has_volume() && !scene.aabb.intersect(ray)) return {};
-
-        Real closest_t = std::numeric_limits<Real>::max();
-        std::optional<HitData> closest_hit_data = {};
-        for (int i = 0; i < scene.mesh_size; i++) {
-
-            auto hit_data = scene.mesh[i].intersect(ray, cull_backfaces);
-
-            if (hit_data.has_value()) {
-                if (hit_data.value().t < closest_t) {
-                    closest_t = hit_data.value().t;
-                    closest_hit_data = hit_data;
-                }
-            }
-        }
-        return closest_hit_data;
-    };
-
     static Color compute_ray_color(const Ray ray, const Scene &scene, int max_depth) {
 
         Ray current_ray = ray;
         int current_depth = max_depth;
         Color attenuation(1, 1, 1);
 
-        while (auto hit_data_opt = ray_mesh_intersection(current_ray, scene, Triangle::CULL_BACKFACES::YES)) {
-            auto hit_data = hit_data_opt.value();
+        while (auto hit_data = scene.intersect(current_ray, Triangle::CULL_BACKFACES::YES)) {
 
             // Ray does not find an ambient source of light (escapes the scene)
             if (current_depth-- == 0) {
@@ -220,22 +193,24 @@ public:
                 break;
             }
 
-            auto material = scene.materials[hit_data.triangle.material_idx];
+            assert(hit_data->triangle.material_idx < (int) scene.materials.size());
+            auto material = scene.materials[hit_data->triangle.material_idx];
 
             if (material.is_diffuse) {
-                auto scatter_direction = hit_data.triangle.normal().normalize() + Vec::random_unit_vector();
+                auto scatter_direction = hit_data->triangle.normal().normalize() + Vec::random_unit_vector();
                 attenuation *= material.albedo;
-                current_ray = Ray{current_ray.at(hit_data.t), scatter_direction};
+                current_ray = Ray{current_ray.at(hit_data->t), scatter_direction};
             } else {
                 printf("Not diffuse material is not yet implemented\n");
             }
 
             if constexpr (false) {
                 return material.albedo;
-                return Color{hit_data.u, hit_data.v, 1 - hit_data.u - hit_data.v};
+                return Color{hit_data->u, hit_data->v, 1 - hit_data->u - hit_data->v};
             }
         }
 
+        // Sky color
         if (current_depth == max_depth) {
             return Color::black();
         }
@@ -263,17 +238,16 @@ public:
         }
     }
 
-    [[nodiscard]] std::vector<std::tuple<Point, Real>> compute_point_cloud(const Scene &scene) const {
-        std::vector<std::tuple<Point, Real>> point_cloud;
+    [[nodiscard]] std::vector<std::tuple<Point, Color>> compute_point_cloud(const Scene &scene) const {
+        std::vector<std::tuple<Point, Color>> point_cloud;
 
         for (int y = 0; y < point_cloud_screen_height_in_px; y++) {
             for (int x = 0; x < point_cloud_screen_width_in_px; x++) {
                 auto ray = get_random_orthogonal_ray_at_screen(x, y);
 
-                auto hit_data = ray_mesh_intersection(ray, scene);
-                if (hit_data.has_value()) {
+                if (auto hit_data = scene.intersect(ray)) {
                     //point_cloud.emplace_back(std::pair{ray.at(hit_data.value().t), rand_real() * 2 * std::numbers::pi});
-                    point_cloud.emplace_back(std::pair{ray.at(hit_data.value().t), 1});
+                    point_cloud.emplace_back(std::pair{ray.at(hit_data.value().t), Color::black()});
                 }
             }
         }
@@ -283,7 +257,7 @@ public:
     }
 
     // __attribute__((flatten))
-    void render_cgh(unsigned char pixels[], const Scene &scene, const std::vector<std::tuple<Point, Real>> &point_cloud,
+    void render_cgh(unsigned char pixels[], const Scene &scene, const std::vector<std::tuple<Point, Color>> &point_cloud,
                     const std::stop_token &st = {}) const {
         printf("Rendering CGH of size = %dx%d\n", image_width, image_height);
 #pragma omp parallel for collapse(1) shared(pixels) default(none) firstprivate(point_cloud, scene, st) num_threads(omp_get_max_threads()*2)
@@ -292,11 +266,9 @@ public:
                 if (!st.stop_requested()) {
                     auto slm_pixel_center = slm_pixel_00_location + (slm_pixel_delta_x * x) + (slm_pixel_delta_y * y);
                     std::complex<Real> agg;
-                    for (const auto &pair: point_cloud) {
-                        auto point = std::get<0>(pair);
-                        auto phase = std::get<1>(pair);
+                    for (const auto &[point, color]: point_cloud) {
                         auto ray = Ray{slm_pixel_center, point - slm_pixel_center};
-                        auto wave = compute_wave(ray, scene, point, phase, max_depth);
+                        auto wave = compute_wave(ray, scene, point, color, max_depth);
                         agg += wave;
                     }
 
@@ -313,19 +285,16 @@ public:
     }
 
     //__attribute__((flatten))
-    static std::complex<Real>
-    compute_wave(Ray ray, const Scene &scene, const Point expected_point,
-                 [[maybe_unused]] const Real phase, int max_depth) {
+    static std::complex<Real> compute_wave(Ray ray, const Scene &scene, const Point expected_point, [[maybe_unused]] const Color color, int max_depth) {
         Ray current_ray = ray;
         int current_depth = max_depth;
         Color attenuation(1, 1, 1);
 
 
-        while (auto hit_data_opt = ray_mesh_intersection(current_ray, scene)) {
-            auto hit_data = hit_data_opt.value();
+        while (auto hit_data = scene.intersect(current_ray)) {
 
             // First iteration checks if the intersection point is the expected point
-            if (current_depth == max_depth && !(ray.at(hit_data.t) - expected_point).is_close_to_0()) {
+            if (current_depth == max_depth && !(ray.at(hit_data->t) - expected_point).is_close_to_0()) {
                 return {0};
             }
 
@@ -336,15 +305,15 @@ public:
             }
 
 
-            auto material = scene.materials[hit_data.triangle.material_idx];
+            auto material = scene.materials[hit_data->triangle.material_idx];
 
             if (material.is_diffuse) {
                 // N = edge1 x edge2
-                auto normal = cross(hit_data.triangle.b - hit_data.triangle.a,
-                                    hit_data.triangle.c - hit_data.triangle.a);
+                auto normal = cross(hit_data->triangle.b - hit_data->triangle.a,
+                                    hit_data->triangle.c - hit_data->triangle.a);
                 auto scatter_direction = normal + Vec::random_unit_vector();
                 attenuation *= material.albedo;
-                current_ray = Ray{current_ray.at(hit_data.t), scatter_direction};
+                current_ray = Ray{current_ray.at(hit_data->t), scatter_direction};
             }
 
             if constexpr (false) {
