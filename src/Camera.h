@@ -183,6 +183,7 @@ public:
 
         Ray current_ray = ray;
         int current_depth = max_depth;
+        Color diffuse_lighting(0, 0, 0);
         Color attenuation(1, 1, 1);
 
         while (auto hit_data = scene.intersect(current_ray, Triangle::CULL_BACKFACES::YES)) {
@@ -197,24 +198,38 @@ public:
             auto material = scene.materials[hit_data->triangle.material_idx];
 
             if (material.is_diffuse) {
-                auto scatter_direction = hit_data->triangle.normal().normalize() + Vec::random_unit_vector();
+                const auto normal = hit_data->triangle.normal().normalize();
+                const auto scatter_direction = normal + Vec::random_unit_vector();
                 attenuation *= material.albedo;
-                current_ray = Ray{current_ray.at(hit_data->t), scatter_direction};
-            } else {
-                printf("Not diffuse material is not yet implemented\n");
-            }
+                const Point p = current_ray.at(hit_data->t);
+                current_ray = Ray{p, scatter_direction};
+                if (attenuation.is_close_to_0()) {
+                    break;
+                }
+                for (const auto &[light_position, light_color]: scene.point_lights) {
+                    auto light_offset = light_position - p;
+                    auto light_distance = light_offset.length();
+                    auto light_direction = light_offset.normalize();
+                    auto dot_product = dot(light_direction, normal);
 
-            if constexpr (false) {
-                return material.albedo;
-                return Color{hit_data->u, hit_data->v, 1 - hit_data->u - hit_data->v};
+                    if (dot_product >= 0) {
+                        auto shadow_ray = Ray{p, light_direction};
+                        auto hit = scene.intersects(shadow_ray, light_distance);
+                        if (!hit) {
+                            diffuse_lighting += attenuation * light_color * dot_product;
+                        }
+                    }
+                }
+            } else {
+                assert(false && "Not diffuse material is not yet implemented\n");
             }
         }
 
-        // Sky color
+        // bg color
         if (current_depth == max_depth) {
             return Color::black();
         }
-        return attenuation;
+        return (attenuation * 0 + diffuse_lighting * 1).clamp(0, 1);
     }
 
     void render(unsigned char pixels[], const Scene &scene, const std::stop_token &st = {}) const {
@@ -238,8 +253,8 @@ public:
         }
     }
 
-    [[nodiscard]] std::vector<std::tuple<Point, Color>> compute_point_cloud(const Scene &scene) const {
-        std::vector<std::tuple<Point, Color>> point_cloud;
+    [[nodiscard]] std::vector<std::pair<Point, Color>> compute_point_cloud(const Scene &scene) const {
+        std::vector<std::pair<Point, Color>> point_cloud;
 
         for (int y = 0; y < point_cloud_screen_height_in_px; y++) {
             for (int x = 0; x < point_cloud_screen_width_in_px; x++) {
@@ -247,7 +262,7 @@ public:
 
                 if (auto hit_data = scene.intersect(ray)) {
                     //point_cloud.emplace_back(std::pair{ray.at(hit_data.value().t), rand_real() * 2 * std::numbers::pi});
-                    point_cloud.emplace_back(std::pair{ray.at(hit_data.value().t), Color::black()});
+                    point_cloud.emplace_back(ray.at(hit_data.value().t), Color::black());
                 }
             }
         }
@@ -256,24 +271,56 @@ public:
         return point_cloud;
     }
 
+    [[nodiscard]] std::pair<Real, Real> project(const Point &p) const {
+        auto o = look_from;
+        auto ax = (Real) (p - o).dot(u);
+        auto ay = (Real) (p - o).dot(-v);
+
+        ax = (Real) (ax / slm_pixel_size + slm_width_in_pixels / 2.0);
+        ay = (Real) (ay / slm_pixel_size + slm_height_in_pixels / 2.0);
+
+        return {ax, ay};
+    }
+
     // __attribute__((flatten))
-    void render_cgh(unsigned char pixels[], const Scene &scene, const std::vector<std::tuple<Point, Color>> &point_cloud,
+    void render_cgh(unsigned char pixels[], const Scene &scene, const std::vector<std::pair<Point, Color>> &point_cloud,
                     const std::stop_token &st = {}) const {
-        printf("Rendering CGH of size = %dx%d\n", image_width, image_height);
-#pragma omp parallel for collapse(1) shared(pixels) default(none) firstprivate(point_cloud, scene, st) num_threads(omp_get_max_threads()*2)
+        auto start = std::time(nullptr);
+        printf("[ INFO ] Starting color generation for the point cloud\n");
+
+        auto point_cloud_mut = point_cloud;
+#pragma omp parallel for collapse(1) shared(point_cloud_mut) default(none) firstprivate(scene) num_threads(omp_get_max_threads())
+        for (auto &[point, color]: point_cloud_mut) {
+            auto [x, y] = project(point);
+            auto origin = slm_pixel_00_location + (slm_pixel_delta_x * std::floor(x)) + (slm_pixel_delta_y * std::floor(y));
+            auto ray = Ray{origin, point - origin};
+            color = {0, 0, 0};
+            for (int j = 0; j < samples_per_pixel; j++) {
+                color += compute_ray_color(ray, scene, max_depth);
+            }
+            color /= samples_per_pixel;
+        }
+
+        printf("[ INFO ] Ended color generation for the point cloud in %ld seconds (%ld ms/point)\n", std::time(nullptr) - start, (std::time(nullptr) - start) * 1000 / point_cloud.size());
+        printf("[ INFO ] Starting wave computation (expected time = %ld s)\n", 222 * point_cloud.size() / 1000);
+
+        start = std::time(nullptr);
+
+#pragma omp parallel for collapse(2) shared(pixels) default(none) firstprivate(point_cloud_mut, scene, st) num_threads(omp_get_max_threads())
         for (int y = 0; y < slm_height_in_pixels; y++) {
             for (int x = 0; x < slm_width_in_pixels; x++) {
                 if (!st.stop_requested()) {
                     auto slm_pixel_center = slm_pixel_00_location + (slm_pixel_delta_x * x) + (slm_pixel_delta_y * y);
                     std::complex<Real> agg;
-                    for (const auto &[point, color]: point_cloud) {
+                    for (const auto &[point, color]: point_cloud_mut) {
                         auto ray = Ray{slm_pixel_center, point - slm_pixel_center};
-                        auto wave = compute_wave(ray, scene, point, color, max_depth);
+                        //auto wave = compute_wave(ray, scene, point, color, max_depth);
+                        auto wave = compute_wave_2(ray, scene, point, color);
                         agg += wave;
                     }
 
                     // Todo: divide by number of effective points
-                    agg /= (Real) point_cloud.size();
+                    agg /= (Real) point_cloud_mut.size();
                     auto a = static_cast<unsigned char>((arg(agg) + std::numbers::pi) / (2 * std::numbers::pi) * 255);
                     pixels[(y * slm_width_in_pixels + x) * 4 + 0] = a;
                     pixels[(y * slm_width_in_pixels + x) * 4 + 1] = a;
@@ -282,6 +329,31 @@ public:
                 }
             }
         }
+
+        printf("[ INFO ] Ended wave computation in %ld seconds (%ld ms/point)\n", std::time(nullptr) - start, (std::time(nullptr) - start) * 1000 / point_cloud.size());
+    }
+
+    static std::complex<Real> compute_wave_2(Ray ray, const Scene &scene, const Point expected_point, const Color color) {
+        if (auto hit_data = scene.intersect(ray)) {
+            if (!(ray.at(hit_data->t) - expected_point).is_close_to_0()) {
+                return {0};
+            }
+
+            auto material = scene.materials[hit_data->triangle.material_idx];
+
+            if (!material.is_diffuse) {
+                dprintf(STDERR_FILENO, "Not diffuse material is not yet implemented\n");
+                exit(1);
+            }
+
+            // TODO: Compute a more accurate intensity value
+            auto intensity = color.r + color.g + color.b / 3;
+            auto sub_phase = (2 * std::numbers::pi / wavelength) * ((ray.origin - expected_point).length());
+            auto sub_phase_c = std::polar(1.0, sub_phase);
+
+            return intensity * sub_phase_c;
+        }
+        return {0};
     }
 
     //__attribute__((flatten))
@@ -325,12 +397,14 @@ public:
 
         // Wave computation
         auto sub_image = attenuation;
+        auto intensity = attenuation.r + attenuation.g + attenuation.b / 3;
         auto sub_phase = (2 * std::numbers::pi / wavelength) * ((ray.origin - expected_point).length());
         //auto sub_phase_c = std::exp(std::complex<Real>(0, sub_phase));
         auto sub_phase_c = std::polar(1.0, sub_phase);
 
         //long double a = 0;
 
+        return intensity * sub_phase_c;
         return sub_image.r * sub_phase_c;
     }
 };

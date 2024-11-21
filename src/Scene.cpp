@@ -95,29 +95,46 @@ const Scene *teapot(int image_width, int image_height) {
 
 const Scene *multi_mesh(int image_width, int image_height) {
     auto *camera = new Camera(image_width, image_height);
-    camera->look_from = {50, 50, 290};
+    camera->look_from = {50, 0, 290};
     camera->update();
+
+    auto factor = 6.5 / 3.2;
+    factor = 1;
+    auto center = Point{0, 0, 0};
 
     auto [cornell_box_mesh, cornell_box_materials] = load("../resources/cornell_box_multimaterial.obj");
     auto [teapot_mesh, teapot_materials] = load("../resources/teapot.obj");
-    auto [dragon_mesh, dragon_materials] = load("../resources/dragon.obj");
+    auto [dragon_mesh, dragon_materials] = load("../resources/teapot.obj");
     Mesh::flip(cornell_box_mesh, Axis::Z);
     Mesh::normalize(cornell_box_mesh, Mesh::compute_aabb(cornell_box_mesh));
     Mesh::scale(cornell_box_mesh, 2.25);
+    Mesh::move(cornell_box_mesh, center);
+    Mesh::scale(cornell_box_mesh, factor);
 
     Mesh::normalize(teapot_mesh, Mesh::compute_aabb(teapot_mesh));
-    Mesh::move(teapot_mesh, {-0.4, -0.2, 0.4});
+    Mesh::move(teapot_mesh, {-0.4, -0.02, 0.4});
+    Mesh::move(teapot_mesh, center);
+    Mesh::scale(teapot_mesh, factor);
+
 
     teapot_materials[0] = Material{Color{1, .4, .0}};
 
     Mesh::normalize(dragon_mesh, Mesh::compute_aabb(dragon_mesh));
     Mesh::scale(dragon_mesh, 0.8);
-    Mesh::move(dragon_mesh, {0.35, 0.5, -0.35});
+    Mesh::flip(dragon_mesh, Axis::X);
+    Mesh::move(dragon_mesh, {0.35, 0.255, -0.35});
+    //Mesh::move(dragon_mesh, {0,0.1,0});
+    Mesh::move(dragon_mesh, center);
+    Mesh::scale(dragon_mesh, factor);
+
+    dragon_materials[0] = Material{Color::cyan()};
 
     auto scene = new Scene(camera);
     scene->add_mesh(cornell_box_mesh, cornell_box_materials);
     scene->add_mesh(teapot_mesh, teapot_materials);
     scene->add_mesh(dragon_mesh, dragon_materials);
+
+    scene->point_lights.emplace_back(Point{0, 0.7, 0} + center, Color{1, 1, 1});
     return scene;
 }
 
@@ -131,7 +148,29 @@ const Scene *dragon(int image_width, int image_height) {
     Mesh::normalize(mesh, Mesh::compute_aabb(mesh));
     Mesh::scale(mesh, 4);
 
+    materials[0] = Material{Color::cyan()};
+
     auto scene = new Scene(camera);
     scene->add_mesh(mesh, materials);
+
+    scene->point_lights.emplace_back(Point{0, 100, 0}, Color{1, 1, 1});
+    return scene;
+}
+
+const Scene *tree(int image_width, int image_height) {
+    auto *camera = new Camera(image_width, image_height);
+    camera->look_from = {50, 50, 290};
+    camera->update();
+
+    auto [mesh, materials] = load("../resources/tree.obj");
+
+    Mesh::normalize(mesh, Mesh::compute_aabb(mesh));
+    Mesh::change_up_coord(mesh);
+    Mesh::flip(mesh, Axis::Y);
+    Mesh::scale(mesh, 3);
+
+    auto scene = new Scene(camera);
+    scene->add_mesh(mesh, materials);
+    scene->point_lights.emplace_back(Point{0, 10, 10}, Color{1, 1, 1});
     return scene;
 }

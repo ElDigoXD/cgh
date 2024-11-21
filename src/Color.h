@@ -48,6 +48,10 @@ public:
         return Color{x * scalar, y * scalar, z * scalar};
     }
 
+    constexpr Color operator*(const Color &color) const {
+        return Color{x * color.x, y * color.y, z * color.z};
+    }
+
     constexpr Color operator/(const Real scalar) const {
         return Color{x / scalar, y / scalar, z / scalar};
     }
@@ -95,6 +99,10 @@ public:
     // Color specific stuff
     [[nodiscard]] constexpr Color clamp(Real min, Real max) const {
         return Color{std::clamp(r, min, max), std::clamp(g, min, max), std::clamp(b, min, max)};
+    }
+
+    [[nodiscard]] constexpr bool is_close_to_0() const {
+        return std::abs(x) < 0.00001 && std::abs(y) < 0.00001 && std::abs(z) < 0.00001;
     }
 
     static constexpr Color black() { return Color{0, 0, 0}; }

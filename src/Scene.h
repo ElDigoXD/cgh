@@ -18,8 +18,19 @@ public:
 
     std::vector<Material> materials;
 
+    std::vector<std::pair<Point, Color>> point_lights;
+
     explicit Scene(Camera *camera)
             : camera(camera) {
+    }
+
+    [[nodiscard]] constexpr bool intersects(const Ray &ray, Real max_t) const {
+        for (const auto &mesh: meshes) {
+            if (mesh.intersects(ray, max_t)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     [[nodiscard]] constexpr std::optional<HitData> intersect(const Ray &ray, Triangle::CULL_BACKFACES cull_backfaces = Triangle::CULL_BACKFACES::YES) const {
@@ -67,6 +78,8 @@ const Scene *multi_mesh(int image_width, int image_height);
 
 const Scene *dragon(int image_width, int image_height);
 
+const Scene *tree(int image_width, int image_height);
+
 static constexpr const char *scene_names[] = {
         "basic_triangle",
         "cornell_box",
@@ -75,6 +88,7 @@ static constexpr const char *scene_names[] = {
         "teapot",
         "multi_mesh",
         "dragon",
+        "tree",
 };
 
 static const std::function<const Scene *(int, int)> scenes[] = {
@@ -85,4 +99,5 @@ static const std::function<const Scene *(int, int)> scenes[] = {
         teapot,
         multi_mesh,
         dragon,
+        tree,
 };

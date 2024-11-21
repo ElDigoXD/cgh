@@ -32,7 +32,9 @@ public:
         struct NodeData {
             int index, start, end;
         };
-        std::stack<NodeData> stack;
+        std::vector<NodeData> vec;
+        vec.reserve(tree.size() / 2);
+        std::stack<NodeData, std::vector<NodeData>> stack(std::move(vec));
         stack.push({0, 0, (int) triangles.size()});
 
         while (!stack.empty()) {
@@ -70,9 +72,43 @@ public:
 
     }
 
+    [[nodiscard]] bool intersects(const Ray &ray, Real max_t) const {
+        std::vector<int> vec;
+        vec.reserve(tree.size() / 2);
+        std::stack<int, std::vector<int>> stack(std::move(vec));
+        stack.push(0);
+
+        while (!stack.empty()) {
+            int i = stack.top();
+            stack.pop();
+
+            if (tree[i].is_leaf()) {
+                if (auto hit = triangles[tree[i].triangle_index()].intersect(ray, Triangle::CULL_BACKFACES::NO)) {
+                    if (hit->t < max_t) {
+                        return true;
+                    }
+                }
+                continue;
+            }
+
+            if (!tree[i].aabb.intersect(ray)) {
+                continue;
+            }
+
+            assert(i < (int) tree.size() / 2);
+            if (i < (int) tree.size() / 2) {
+                stack.push(i * 2 + 2);
+                stack.push(i * 2 + 1);
+            }
+        }
+        return false;
+    }
+
     [[nodiscard]] std::optional<HitData> intersect(const Ray &ray, Triangle::CULL_BACKFACES cull_backfaces = Triangle::CULL_BACKFACES::YES) const {
 
-        std::stack<int> stack;
+        std::vector<int> vec;
+        vec.reserve(tree.size() / 2);
+        std::stack<int, std::vector<int>> stack(std::move(vec));
         stack.push(0);
 
         std::optional<HitData> closest_hit;

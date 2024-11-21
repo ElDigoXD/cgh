@@ -35,7 +35,7 @@ public:
     // Render data
     unsigned char *pixels = new unsigned char[max_window_size.x * max_window_size.y * 4];
     const Scene *scene = nullptr;
-    std::vector<std::tuple<Point, Color>> point_cloud;
+    std::vector<std::pair<Point, Color>> point_cloud;
     sf::Vector2u camera_image_size;
     int max_depth = 10;
     int samples_per_pixel = 100;
@@ -44,6 +44,7 @@ public:
     sf::VertexArray wire_aabb;
     sf::VertexArray wire_depth_aabb;
     int aabb_depth = 1;
+    sf::CircleShape light_circle;
     std::jthread render_thread;
 
 
@@ -51,6 +52,7 @@ public:
     bool enable_wireframe = true;
     bool enable_only_visible_wireframe = true;
     bool enable_aabb = true;
+    bool enable_lights = true;
     bool enable_render = false;
     bool enable_render_cgh = false;
 
@@ -64,6 +66,13 @@ public:
         // scene = basic_triangle(600, 400);
         // scene->camera->max_depth = max_depth;
         // scene->camera->samples_per_pixel = samples_per_pixel;
+
+        enable_render = true;
+        enable_wireframe = false;
+        enable_aabb = false;
+        samples_per_pixel = 100;
+        max_depth = 1000;
+
 
         for (uint i = 0; i < sizeof(scene_names) / sizeof(char *); i++) {
             if (strcmp(scene_names[i], "multi_mesh") == 0) {
@@ -80,7 +89,7 @@ public:
 
         update_wireframe();
         update_aabb_wireframe();
-
+        update_lights();
         update_render();
 
 
@@ -119,6 +128,9 @@ public:
 
             window.clear(sf::Color(3, 62, 114));
 
+            auto render_states = sf::RenderStates::Default;
+            render_states.transform.scale({image_size.x / (float) camera_image_size.x, image_size.y / (float) camera_image_size.y});
+
             if (enable_render) {
                 if (rendering && update_texture_clock.getElapsedTime().asSeconds() > 0.05) {
                     texture.update(pixels, camera_image_size, {0, 0});
@@ -127,12 +139,17 @@ public:
                 window.draw(sprite);
             }
             if (enable_wireframe) {
-                window.draw(wire);
+                window.draw(wire, render_states);
             }
 
             if (enable_aabb) {
-                window.draw(wire_depth_aabb);
+                window.draw(wire_depth_aabb, render_states);
             }
+
+            if (enable_lights) {
+                window.draw(light_circle, render_states);
+            }
+
             ImGui::SFML::Render(window);
             window.display();
         }
@@ -181,6 +198,8 @@ public:
                 im::Unindent(5);
 
             }
+            ImGui::Checkbox("Enable lights", &enable_lights);
+
             if (ImGui::Checkbox("Enable render", &enable_render)) {
                 update_render();
             }
@@ -208,12 +227,14 @@ public:
                 update_render();
                 update_wireframe();
                 update_aabb_wireframe();
+                update_lights();
             }
             ImGui::Text("Look At:");
             if (im::DragDouble3("##Look At", scene->camera->look_at.data, 0.01, -100, 100)) {
                 update_render();
                 update_wireframe();
                 update_aabb_wireframe();
+                update_lights();
             }
             ImGui::PopItemWidth();
             ImGui::EndTabItem();
@@ -227,6 +248,7 @@ public:
                 update_render();
                 update_wireframe();
                 update_aabb_wireframe();
+                update_lights();
             }
 
             ImGui::Text("Point Cloud Size:");
@@ -234,6 +256,14 @@ public:
                 scene->camera->update();
                 point_cloud = scene->camera->compute_point_cloud(*scene);
                 update_render();
+            }
+
+            if (!scene->point_lights.empty()) {
+                ImGui::Text("First light:");
+                if (ImGui::DragDouble3("##First light", const_cast<double *>(scene->point_lights[0].first.data), -0.01, -10, 10)) {
+                    update_render();
+                    update_lights();
+                }
             }
 
             ImGui::PopItemWidth();
@@ -296,24 +326,13 @@ public:
         });
     }
 
-    void project(const Point &p, Real &ax, Real &ay) const {
-        auto o = scene->camera->look_from;
-
-        ax = (Real) (p - o).dot(scene->camera->u);
-        ay = (Real) (p - o).dot(-scene->camera->v);
-
-        ax = (Real) (ax / Camera::slm_pixel_size + image_size.x / 2.0);
-        ay = (Real) (ay / Camera::slm_pixel_size + image_size.y / 2.0);
-    }
-
     void test_wireframe_visible() {
         std::vector<Triangle> visible_triangles = {};
         auto camera = scene->camera;
         camera->update();
         for (const auto &m: scene->meshes) {
             for (const auto &t: m.triangles) {
-                Real px, py;
-                project(t.center(), px, py);
+                auto [px, py] = camera->project(t.center());
                 Ray ray = camera->get_orthogonal_ray_at(std::floor(px), std::floor(py));
                 if (auto hit = t.intersect(ray, Triangle::CULL_BACKFACES::YES)) {
                     if (hit->triangle == t) {
@@ -326,10 +345,9 @@ public:
         wire = sf::VertexArray(sf::PrimitiveType::Lines, visible_triangles.size() * 6);
         int i = 0;
         for (auto &t: visible_triangles) {
-            Real ax, ay, bx, by, cx, cy;
-            project(t.a, ax, ay);
-            project(t.b, bx, by);
-            project(t.c, cx, cy);
+            auto [ax, ay] = camera->project(t.a);
+            auto [bx, by] = camera->project(t.b);
+            auto [cx, cy] = camera->project(t.c);
 
             wire[i * 6 + 0].position.x = (float) ax;
             wire[i * 6 + 0].position.y = (float) ay;
@@ -364,11 +382,9 @@ public:
         for (const auto &mesh: scene->meshes) {
             for (size_t j = 0; j < mesh.triangles.size(); j++) {
                 const auto &t = mesh.triangles[j];
-
-                Real ax, ay, bx, by, cx, cy;
-                project(t.a, ax, ay);
-                project(t.b, bx, by);
-                project(t.c, cx, cy);
+                auto [ax, ay] = scene->camera->project(t.a);
+                auto [bx, by] = scene->camera->project(t.b);
+                auto [cx, cy] = scene->camera->project(t.c);
 
                 wire[offset + j * 6 + 0].position.x = (float) ax;
                 wire[offset + j * 6 + 0].position.y = (float) ay;
@@ -421,7 +437,7 @@ public:
         Real projected_ps[8 * 2];
 
         for (int i = 0; i < 8; i++) {
-            project(points[i], projected_ps[i * 2], projected_ps[i * 2 + 1]);
+            std::tie(projected_ps[i * 2], projected_ps[i * 2 + 1]) = scene->camera->project(points[i]);
         }
 
         // Create the edges for 2 faces
@@ -484,6 +500,20 @@ public:
 
         scene->camera->max_depth = max_depth;
         point_cloud = scene->camera->compute_point_cloud(*scene);
+    }
+
+    void update_lights() {
+        if (scene->point_lights.empty()) {
+            light_circle.setRadius(0);
+            return;
+        }
+
+        auto [px, py] = scene->camera->project(scene->point_lights[0].first);
+        light_circle.setPosition({(float) px, (float) py});
+        light_circle.setOrigin(light_circle.getGeometricCenter());
+        light_circle.setRadius(1000 / (float) (scene->camera->look_from - scene->point_lights[0].first).length());
+        light_circle.setPointCount(100);
+        light_circle.setFillColor(sf::Color::Yellow);
     }
 };
 
