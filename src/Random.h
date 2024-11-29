@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cassert>
-#include <cstdio>
 #include <cstdlib>
 #include <limits>
 
@@ -9,14 +7,14 @@ typedef double Real;
 
 static thread_local unsigned int rng_state = rand();
 
-[[maybe_unused]] static inline unsigned int rand_pcg() {
-    unsigned int state = rng_state;
+[[maybe_unused]] static unsigned int rand_pcg() {
+    const unsigned int state = rng_state;
     rng_state = rng_state * 747796405u + 2891336453u;
-    unsigned int word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    const unsigned int word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
     return (word >> 22u) ^ word;
 }
 
-static inline unsigned int XOrShift32() {
+static unsigned int XOrShift32() {
     unsigned int x = rng_state;
     x ^= x << 13;
     x ^= x >> 17;
@@ -25,8 +23,6 @@ static inline unsigned int XOrShift32() {
     return x;
 }
 
-static inline Real rand_real() {
-    auto a = (Real) XOrShift32() / ((Real) std::numeric_limits<unsigned int>::max() + 1);
-    assert(0 <= a && a <= 1);
-    return a;
+static Real rand_real() {
+    return  static_cast<Real>(XOrShift32()) / (static_cast<Real>(std::numeric_limits<unsigned int>::max()) + 1);
 }

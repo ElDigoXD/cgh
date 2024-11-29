@@ -15,7 +15,7 @@ public:
 
     constexpr Interval() = default;
 
-    constexpr Interval(Real min, Real max) : min(min), max(max) {}
+    constexpr Interval(const Real min, const Real max) : min(min), max(max) {}
 
     constexpr Interval(const Interval &a, const Interval &b) : min(std::min(a.min, b.min)),
                                                                max(std::max(a.max, b.max)) {}
@@ -77,12 +77,12 @@ public:
         for (int axis = 0; axis < 3; axis++) {
             if (ray.direction.data[axis] == 0) continue;
 
-            auto inverse_direction = 1 / ray.direction.data[axis];
-            auto t0 = std::min(
+            const auto inverse_direction = 1 / ray.direction.data[axis];
+            const auto t0 = std::min(
                     ((*this)[axis].min - ray.origin.data[axis]) * inverse_direction,
                     ((*this)[axis].max - ray.origin.data[axis]) * inverse_direction);
 
-            auto t1 = std::max(
+            const auto t1 = std::max(
                     ((*this)[axis].min - ray.origin.data[axis]) * inverse_direction,
                     ((*this)[axis].max - ray.origin.data[axis]) * inverse_direction);
 
@@ -105,6 +105,14 @@ public:
     [[nodiscard]] constexpr bool has_volume() const {
         return x.has_length() && y.has_length() && z.has_length();
     }
+
+    [[nodiscard]] constexpr Real volume() const {
+        return (x.max - x.min) * (y.max - y.min) * (z.max - z.min);
+    }
+    [[nodiscard]] constexpr Real area() const {
+        return (x.max - x.min) * (y.max - y.min) + (x.max - x.min) * (z.max - z.min) + (y.max - y.min) * (z.max - z.min);
+    }
+
 
     constexpr void move(const Vector &vec) {
         x.min += vec.x;

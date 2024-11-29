@@ -3,29 +3,25 @@
 #include "Camera.h"
 #include "ObjReader.h"
 
-const Scene *basic_triangle(int image_width, int image_height) {
+const Scene *basic_triangle(const int image_width, const int image_height) {
     auto *camera = new Camera(image_width, image_height);
     camera->look_from = {0, 1, 300};
     camera->update();
-    auto materials = std::vector<Material>{Material{Color{0.1, 0.1, 0.1}}};
+    const auto materials = std::vector{Material{Color{0.1, 0.1, 0.1}}};
 
-    auto mesh = std::vector<Triangle>{
-            Triangle(Vec{-1, -.5, -1} * 1.5,
-                     Vec{1, -.5, -1} * 1.5,
-                     Vec{0, .8, -1} * 1.5,
-                     0),
-            // Triangle(-Vec{0.5, 0.5, 0} + Vec{-1, -.5, -1} * 1.5,
-            //          -Vec{0.5, 0.5, 0} + Vec{1, -.5, -1} * 1.5,
-            //          -Vec{0.5, 0.5, 0} + Vec{0, .8, -1} * 1.5,
-            //          0)
+    auto mesh = std::vector{
+        Triangle(Vec{-1, -.5, -1} * 1.5,
+                 Vec{1, -.5, -1} * 1.5,
+                 Vec{0, .8, -1} * 1.5,
+                 0),
     };
-    auto scene = new Scene(camera);
+    const auto scene = new Scene(camera);
     scene->add_mesh(mesh, materials);
     return scene;
 }
 
 
-const Scene *cornell_box(int image_width, int image_height) {
+const Scene *cornell_box(const int image_width, const int image_height) {
     auto *camera = new Camera(image_width, image_height);
     camera->look_from = {50, 50, 290};
     camera->update();
@@ -35,12 +31,12 @@ const Scene *cornell_box(int image_width, int image_height) {
     Mesh::normalize(mesh, Mesh::compute_aabb(mesh));
     Mesh::scale(mesh, 2.25);
 
-    auto scene = new Scene(camera);
+    const auto scene = new Scene(camera);
     scene->add_mesh(mesh, materials);
     return scene;
 }
 
-const Scene *sphere_mesh(int image_width, int image_height) {
+const Scene *sphere_mesh(const int image_width, const int image_height) {
     auto *camera = new Camera(image_width, image_height);
     camera->look_from = {0, 0, 300};
     camera->update();
@@ -49,12 +45,12 @@ const Scene *sphere_mesh(int image_width, int image_height) {
     Mesh::normalize(mesh, Mesh::compute_aabb(mesh));
     Mesh::scale(mesh, 2.25);
 
-    auto scene = new Scene(camera);
+    const auto scene = new Scene(camera);
     scene->add_mesh(mesh, materials);
     return scene;
 }
 
-const Scene *pumpkin(int image_width, int image_height) {
+const Scene *pumpkin(const int image_width, const int image_height) {
     auto *camera = new Camera(image_width, image_height);
     camera->look_from = {40, 200, 300};
     camera->update();
@@ -67,40 +63,35 @@ const Scene *pumpkin(int image_width, int image_height) {
 
     materials[0] = Material{Color{1, .4, .0} * .5};
 
-    auto scene = new Scene(camera);
+    const auto scene = new Scene(camera);
     scene->add_mesh(mesh, materials);
     return scene;
 }
 
-const Scene *teapot(int image_width, int image_height) {
+const Scene *teapot(const int image_width, const int image_height) {
     auto *camera = new Camera(image_width, image_height);
     camera->look_from = {50, 50, 290};
     camera->update();
     auto [mesh, materials] = load("../resources/teapot.obj");
-    //scene->compute_aabb();
-    //scene->center_mesh();
-    //scene->normalize_mesh();
-    //scene->scale_mesh(4);
-    //scene->compute_aabb();
 
     Mesh::normalize(mesh, Mesh::compute_aabb(mesh));
     Mesh::scale(mesh, 4);
 
     materials[0] = Material{Color{1, .4, .0} * .5};
 
-    auto scene = new Scene(camera);
+    const auto scene = new Scene(camera);
     scene->add_mesh(mesh, materials);
     return scene;
 }
 
-const Scene *multi_mesh(int image_width, int image_height) {
+const Scene *multi_mesh(const int image_width, const int image_height) {
     auto *camera = new Camera(image_width, image_height);
     camera->look_from = {50, 0, 290};
     camera->update();
 
     auto factor = 6.5 / 3.2;
     factor = 1;
-    auto center = Point{0, 0, 0};
+    constexpr auto center = Point{0, 0, 0};
 
     auto [cornell_box_mesh, cornell_box_materials] = load("../resources/cornell_box_multimaterial.obj");
     auto [teapot_mesh, teapot_materials] = load("../resources/teapot.obj");
@@ -129,7 +120,7 @@ const Scene *multi_mesh(int image_width, int image_height) {
 
     dragon_materials[0] = Material{Color::cyan()};
 
-    auto scene = new Scene(camera);
+    const auto scene = new Scene(camera);
     scene->add_mesh(cornell_box_mesh, cornell_box_materials);
     scene->add_mesh(teapot_mesh, teapot_materials);
     scene->add_mesh(dragon_mesh, dragon_materials);
@@ -138,7 +129,7 @@ const Scene *multi_mesh(int image_width, int image_height) {
     return scene;
 }
 
-const Scene *dragon(int image_width, int image_height) {
+const Scene *dragon(const int image_width, const int image_height) {
     auto *camera = new Camera(image_width, image_height);
     camera->look_from = {50, 50, 290};
     camera->update();
@@ -146,18 +137,18 @@ const Scene *dragon(int image_width, int image_height) {
     auto [mesh, materials] = load("../resources/dragon.obj");
 
     Mesh::normalize(mesh, Mesh::compute_aabb(mesh));
-    Mesh::scale(mesh, 4);
+    Mesh::scale(mesh, 3);
 
     materials[0] = Material{Color::cyan()};
 
-    auto scene = new Scene(camera);
+    const auto scene = new Scene(camera);
     scene->add_mesh(mesh, materials);
 
     scene->point_lights.emplace_back(Point{0, 100, 0}, Color{1, 1, 1});
     return scene;
 }
 
-const Scene *tree(int image_width, int image_height) {
+const Scene *tree(const int image_width, const int image_height) {
     auto *camera = new Camera(image_width, image_height);
     camera->look_from = {50, 50, 290};
     camera->update();
@@ -169,7 +160,7 @@ const Scene *tree(int image_width, int image_height) {
     Mesh::flip(mesh, Axis::Y);
     Mesh::scale(mesh, 3);
 
-    auto scene = new Scene(camera);
+    const auto scene = new Scene(camera);
     scene->add_mesh(mesh, materials);
     scene->point_lights.emplace_back(Point{0, 10, 10}, Color{1, 1, 1});
     return scene;

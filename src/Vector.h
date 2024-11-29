@@ -26,7 +26,7 @@ public:
 
     constexpr Vector() {}; // NOLINT(*-pro-type-member-init)
 
-    constexpr Vector(Real x, Real y, Real z) : x{x}, y{y}, z{z} {} // NOLINT(*-pro-type-member-init)
+    constexpr Vector(const Real x, const Real y, const Real z) : x{x}, y{y}, z{z} {} // NOLINT(*-pro-type-member-init)
 
     constexpr Vector operator+(Vector const other) const {
         return Vector{x + other.x, y + other.y, z + other.z};
@@ -38,7 +38,7 @@ public:
     }
 
 
-    constexpr Vector operator-(const Vector other) const {
+    constexpr Vector operator-(const Vector &other) const {
         return Vector{x - other.x, y - other.y, z - other.z};
     }
 
@@ -47,7 +47,7 @@ public:
         return Vector{x * scalar, y * scalar, z * scalar};
     }
 
-    constexpr Vector operator*(const Vector other) const {
+    constexpr Vector operator*(const Vector &other) const {
         return Vector{x * other.x, y * other.y, z * other.z};
     }
 
@@ -57,25 +57,24 @@ public:
     }
 
 
-    constexpr bool operator==(const Vector other) const {
+    constexpr bool operator==(const Vector &other) const {
         return x == other.x && y == other.y && z == other.z;
     }
 
 
-    constexpr bool operator!=(const Vector other) const {
+    constexpr bool operator!=(const Vector &other) const {
         return x != other.x || y != other.y || z != other.z;
     }
 
 
-    constexpr void operator+=(const Vector other) {
+    constexpr void operator+=(const Vector &other) {
         x += other.x;
         y += other.y;
         z += other.z;
     }
 
 
-    constexpr void operator-=(const Vector other) {
-
+    constexpr void operator-=(const Vector &other) {
         x -= other.x;
         y -= other.y;
         z -= other.z;
@@ -112,12 +111,12 @@ public:
     }
 
 
-    [[nodiscard]] constexpr Real dot(const Vector other) const {
+    [[nodiscard]] constexpr Real dot(const Vector &other) const {
         return x * other.x + y * other.y + z * other.z;
     }
 
 
-    [[nodiscard]] constexpr Vector cross(const Vector other) const {
+    [[nodiscard]] constexpr Vector cross(const Vector &other) const {
         return Vector{y * other.z - z * other.y,
                       z * other.x - x * other.z,
                       x * other.y - y * other.x};
@@ -126,7 +125,7 @@ public:
     static Vector random_in_unit_sphere() {
         Vector p;
         do {
-            p = Vector::random() * 2 - Vector{1, 1, 1};
+            p = random() * 2 - Vector{1, 1, 1};
         } while (p.length_squared() >= 1);
         return p;
     }
@@ -148,20 +147,20 @@ public:
     }
 };
 
-constexpr Real dot(const Vector a, const Vector b) {
+constexpr Real dot(const Vector &a, const Vector &b) {
     return a.dot(b);
 }
 
-constexpr Vector cross(const Vector a, const Vector b) {
+constexpr Vector cross(const Vector &a, const Vector &b) {
     return a.cross(b);
 }
 
-constexpr Vector normalize(const Vector a) {
+constexpr Vector normalize(const Vector &a) {
     return a.normalize();
 }
 
 template <> struct std::hash<Vector> {
-    std::size_t operator()(const Vector& v) const {
+    std::size_t operator()(const Vector& v) const noexcept {
         return std::hash<Real>()(v.x) ^ (std::hash<Real>()(v.y) << 1) ^ (std::hash<Real>()(v.z) << 2);
     }
 };

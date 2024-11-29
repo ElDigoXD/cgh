@@ -18,22 +18,19 @@ public:
 
     std::vector<Material> materials;
 
-    std::vector<std::pair<Point, Color>> point_lights;
+    std::vector<std::pair<Point, Color> > point_lights;
 
     explicit Scene(Camera *camera)
-            : camera(camera) {
+        : camera(camera) {
     }
 
-    [[nodiscard]] constexpr bool intersects(const Ray &ray, Real max_t) const {
-        for (const auto &mesh: meshes) {
-            if (mesh.intersects(ray, max_t)) {
-                return true;
-            }
-        }
-        return false;
+    [[nodiscard]] constexpr bool intersects(const Ray &ray, const Real max_t) const {
+        return std::ranges::any_of(meshes, [&](const Mesh &mesh) { return mesh.intersects(ray, max_t); });
     }
 
-    [[nodiscard]] constexpr std::optional<HitData> intersect(const Ray &ray, Triangle::CULL_BACKFACES cull_backfaces = Triangle::CULL_BACKFACES::YES) const {
+    [[nodiscard]] constexpr std::optional<HitData> intersect(const Ray &ray,
+                                                             const Triangle::CullBackfaces cull_backfaces =
+                                                                     Triangle::CullBackfaces::YES) const {
         std::optional<HitData> closest_hit;
         for (const auto &mesh: meshes) {
             if (const auto hit = mesh.intersect(ray, cull_backfaces)) {
@@ -47,7 +44,7 @@ public:
 
     void add_mesh(std::vector<Triangle> &mesh, const std::vector<Material> &new_materials) {
         for (auto &t: mesh) {
-            t.material_idx += (int) this->materials.size();
+            t.material_idx += static_cast<int>(this->materials.size());
         }
 
         meshes.emplace_back(mesh);
@@ -58,7 +55,7 @@ public:
     [[nodiscard]] constexpr int get_triangle_count() const {
         int count = 0;
         for (const auto &mesh: meshes) {
-            count += (int) mesh.triangles.size();
+            count += static_cast<int>(mesh.triangles.size());
         }
         return count;
     }
@@ -81,23 +78,23 @@ const Scene *dragon(int image_width, int image_height);
 const Scene *tree(int image_width, int image_height);
 
 static constexpr const char *scene_names[] = {
-        "basic_triangle",
-        "cornell_box",
-        "sphere_mesh",
-        "pumpkin",
-        "teapot",
-        "multi_mesh",
-        "dragon",
-        "tree",
+    "basic_triangle",
+    "cornell_box",
+    "sphere_mesh",
+    "pumpkin",
+    "teapot",
+    "multi_mesh",
+    "dragon",
+    "tree",
 };
 
 static const std::function<const Scene *(int, int)> scenes[] = {
-        basic_triangle,
-        cornell_box,
-        sphere_mesh,
-        pumpkin,
-        teapot,
-        multi_mesh,
-        dragon,
-        tree,
+    basic_triangle,
+    cornell_box,
+    sphere_mesh,
+    pumpkin,
+    teapot,
+    multi_mesh,
+    dragon,
+    tree,
 };

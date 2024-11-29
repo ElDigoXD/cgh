@@ -7,10 +7,10 @@ public:
     Point origin;
     Vec direction;
 
-    constexpr Ray(Point origin, Vec direction)
+    constexpr Ray(const Point &origin, const Vec &direction)
             : origin{origin}, direction{direction} {}
 
-    [[nodiscard]] constexpr Point at(Real t) const {
+    [[nodiscard]] constexpr Point at(const Real t) const {
         return origin + direction * t;
     }
 };

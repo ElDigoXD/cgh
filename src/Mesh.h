@@ -17,34 +17,37 @@ public:
 
         [[nodiscard]] constexpr uint32_t triangle_index() const { return data >> 1; }
 
-        void set_triangle_index(uint32_t idx) { data = (idx << 1) | 1; }
+        void set_triangle_index(const uint32_t idx) { data = (idx << 1) | 1; }
     };
 
     std::vector<Node> tree;
     std::vector<Triangle> triangles;
 
     explicit Mesh(const std::vector<Triangle> &triangles) :
-            tree((int) std::pow(2, (int) std::ceil(std::log2(triangles.size()) + 1))), triangles(triangles) {
+            tree(static_cast<int>(std::pow(2, static_cast<int>(std::ceil(std::log2(triangles.size()) + 1))))), triangles(triangles) {
         generate_bvh();
     }
 
-    void generate_bvh() {
+    enum class Heuristic : int {
+        BIGGEST_AXIS,
+        BOX_AREA,
+        BOX_VOLUME,
+        TRIANGLE_AREA,
+    };
+
+    void generate_bvh(const Heuristic heuristic = Heuristic::BIGGEST_AXIS) {
+        printf("heuristic: %d\n", static_cast<int>(heuristic));
         struct NodeData {
             int index, start, end;
         };
         std::vector<NodeData> vec;
         vec.reserve(tree.size() / 2);
-        std::stack<NodeData, std::vector<NodeData>> stack(std::move(vec));
-        stack.push({0, 0, (int) triangles.size()});
+        std::stack stack(std::move(vec));
+        stack.push({0, 0, static_cast<int>(triangles.size())});
 
         while (!stack.empty()) {
-            auto node_data = stack.top();
+            auto [index, start, end] = stack.top();
             stack.pop();
-
-            int index = node_data.index;
-            int start = node_data.start;
-            int end = node_data.end;
-
             tree[index].aabb = AABB(triangles[start].a, triangles[start].b);
             for (int i = start; i < end; i++) {
                 tree[index].aabb.extend(triangles[i].a);
@@ -52,18 +55,102 @@ public:
                 tree[index].aabb.extend(triangles[i].c);
             }
 
-            auto span = end - start;
+            const auto span = end - start;
 
             if (span <= 1) {
                 tree[index].data = 1;
                 tree[index].set_triangle_index(start);
             } else {
-                std::sort(triangles.begin() + start, triangles.begin() + end, [this, index](const Triangle &a, const Triangle &b) {
-                    auto axis = tree[index].aabb.longest_axis();
-                    return a.a.data[axis] < b.a.data[axis];
+                int mid = (start + end) / 2;
+                int best_axis = 0;
+                if (heuristic == Heuristic::BIGGEST_AXIS) {
+                    best_axis = tree[index].aabb.longest_axis();
+                } else if (heuristic == Heuristic::TRIANGLE_AREA) {
+                    Real smallest_area = std::numeric_limits<Real>::max();
+                    for (int axis = 0; axis < 3; axis++) {
+                        auto aabb1 = AABB(triangles[start].a, triangles[start].b);
+                        auto aabb2 = AABB(triangles[mid].a, triangles[mid].b);
+                        std::sort(triangles.begin() + start, triangles.begin() + end, [axis](const Triangle &a, const Triangle &b) {
+                            return a.a.data[axis] < b.a.data[axis];
+                        });
+                        for (int i = start; i < mid; i++) {
+                            aabb1.extend(triangles[i].a);
+                            aabb1.extend(triangles[i].b);
+                            aabb1.extend(triangles[i].c);
+                        }
+                        for (int i = mid; i < end; i++) {
+                            aabb2.extend(triangles[i].a);
+                            aabb2.extend(triangles[i].b);
+                            aabb2.extend(triangles[i].c);
+                        }
+                        auto area1 = .0;
+                        auto area2 = .0;
+                        for (int i = start; i < mid; i++) {
+                            area1 += triangles[i].area();
+                        }
+                        for (int i = mid; i < end; i++) {
+                            area2 += triangles[i].area();
+                        }
+                        auto area = std::min(area1, area2) / std::max(area1, area2);
+                        if (area < smallest_area) {
+                            smallest_area = area;
+                            best_axis = axis;
+                        }
+                    }
+                } else if (heuristic == Heuristic::BOX_AREA) {
+                    Real smallest_area = std::numeric_limits<Real>::max();
+                    for (int axis = 0; axis < 3; axis++) {
+                        auto aabb1 = AABB(triangles[start].a, triangles[start].b);
+                        auto aabb2 = AABB(triangles[mid].a, triangles[mid].b);
+                        std::sort(triangles.begin() + start, triangles.begin() + end, [axis](const Triangle &a, const Triangle &b) {
+                            return a.a.data[axis] < b.a.data[axis];
+                        });
+                        for (int i = start; i < mid; i++) {
+                            aabb1.extend(triangles[i].a);
+                            aabb1.extend(triangles[i].b);
+                            aabb1.extend(triangles[i].c);
+                        }
+                        for (int i = mid; i < end; i++) {
+                            aabb2.extend(triangles[i].a);
+                            aabb2.extend(triangles[i].b);
+                            aabb2.extend(triangles[i].c);
+                        }
+                        auto area = aabb1.area() + aabb2.area();
+                        if (area < smallest_area) {
+                            smallest_area = area;
+                            best_axis = axis;
+                        }
+                    }
+                } else if (heuristic == Heuristic::BOX_VOLUME) {
+                    Real smallest_volume = std::numeric_limits<Real>::max();
+                    for (int axis = 0; axis < 3; axis++) {
+                        auto aabb1 = AABB(triangles[start].a, triangles[start].b);
+                        auto aabb2 = AABB(triangles[mid].a, triangles[mid].b);
+                        std::sort(triangles.begin() + start, triangles.begin() + end, [axis](const Triangle &a, const Triangle &b) {
+                            return a.a.data[axis] < b.a.data[axis];
+                        });
+                        for (int i = start; i < mid; i++) {
+                            aabb1.extend(triangles[i].a);
+                            aabb1.extend(triangles[i].b);
+                            aabb1.extend(triangles[i].c);
+                        }
+                        for (int i = mid; i < end; i++) {
+                            aabb2.extend(triangles[i].a);
+                            aabb2.extend(triangles[i].b);
+                            aabb2.extend(triangles[i].c);
+                        }
+                        auto area = aabb1.volume() + aabb2.volume();
+                        if (area < smallest_volume) {
+                            smallest_volume = area;
+                            best_axis = axis;
+                        }
+                    }
+                }
+
+                std::sort(triangles.begin() + start, triangles.begin() + end, [best_axis](const Triangle &a, const Triangle &b) {
+                    return a.a.data[best_axis] < b.a.data[best_axis];
                 });
 
-                int mid = (start + end) / 2;
                 tree[index].data = 0;
                 stack.push({2 * index + 1, start, mid});
                 stack.push({2 * index + 2, mid, end});
@@ -72,18 +159,18 @@ public:
 
     }
 
-    [[nodiscard]] bool intersects(const Ray &ray, Real max_t) const {
+    [[nodiscard]] bool intersects(const Ray &ray, const Real max_t) const {
         std::vector<int> vec;
         vec.reserve(tree.size() / 2);
-        std::stack<int, std::vector<int>> stack(std::move(vec));
+        std::stack stack(std::move(vec));
         stack.push(0);
 
         while (!stack.empty()) {
-            int i = stack.top();
+            const int i = stack.top();
             stack.pop();
 
             if (tree[i].is_leaf()) {
-                if (auto hit = triangles[tree[i].triangle_index()].intersect(ray, Triangle::CULL_BACKFACES::NO)) {
+                if (const auto hit = triangles[tree[i].triangle_index()].intersect(ray, Triangle::CullBackfaces::NO)) {
                     if (hit->t < max_t) {
                         return true;
                     }
@@ -95,8 +182,8 @@ public:
                 continue;
             }
 
-            assert(i < (int) tree.size() / 2);
-            if (i < (int) tree.size() / 2) {
+            assert(i < static_cast<int>(tree.size()) / 2);
+            if (i < static_cast<int>(tree.size()) / 2) {
                 stack.push(i * 2 + 2);
                 stack.push(i * 2 + 1);
             }
@@ -104,11 +191,11 @@ public:
         return false;
     }
 
-    [[nodiscard]] std::optional<HitData> intersect(const Ray &ray, Triangle::CULL_BACKFACES cull_backfaces = Triangle::CULL_BACKFACES::YES) const {
+    [[nodiscard]] std::optional<HitData> intersect(const Ray &ray, Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
 
         std::vector<int> vec;
         vec.reserve(tree.size() / 2);
-        std::stack<int, std::vector<int>> stack(std::move(vec));
+        std::stack stack(std::move(vec));
         stack.push(0);
 
         std::optional<HitData> closest_hit;
@@ -130,8 +217,8 @@ public:
                 continue;
             }
 
-            assert(i < (int) tree.size() / 2);
-            if (i < (int) tree.size() / 2) {
+            assert(i < static_cast<int>(tree.size()) / 2);
+            if (i < static_cast<int>(tree.size()) / 2) {
                 stack.push(i * 2 + 2);
                 stack.push(i * 2 + 1);
             }
@@ -152,7 +239,7 @@ public:
     }
 
     // Does not modify the aabb
-    static void normalize(std::vector<Triangle> &mesh, const AABB aabb) {
+    static void normalize(std::vector<Triangle> &mesh, const AABB &aabb) {
         move(mesh, -aabb.center());
         scale(mesh, 1 / aabb.max_dimension());
     }
@@ -176,7 +263,7 @@ public:
         return aabb;
     }
 
-    static void flip(std::vector<Triangle> &mesh, Axis axis) {
+    static void flip(std::vector<Triangle> &mesh, const Axis axis) {
         switch (axis) {
             case Axis::X:
                 scale(mesh, {-1, 1, 1});

@@ -34,8 +34,8 @@ public:
 
     // Render data
     unsigned char *pixels = new unsigned char[max_window_size.x * max_window_size.y * 4];
-    const Scene *scene = nullptr;
-    std::vector<std::pair<Point, Color>> point_cloud;
+    Scene *scene = nullptr;
+    std::vector<std::pair<Point, Color> > point_cloud;
     sf::Vector2u camera_image_size;
     int max_depth = 10;
     int samples_per_pixel = 100;
@@ -55,6 +55,7 @@ public:
     bool enable_lights = true;
     bool enable_render = false;
     bool enable_render_cgh = false;
+    int selected_heuristic = 0;
 
     bool rendering = false;
     double render_time = 0;
@@ -67,16 +68,17 @@ public:
         // scene->camera->max_depth = max_depth;
         // scene->camera->samples_per_pixel = samples_per_pixel;
 
-        enable_render = true;
+        enable_render = false;
         enable_wireframe = false;
-        enable_aabb = false;
+        enable_aabb = true;
+        aabb_depth = 3;
         samples_per_pixel = 100;
         max_depth = 1000;
 
 
         for (uint i = 0; i < sizeof(scene_names) / sizeof(char *); i++) {
-            if (strcmp(scene_names[i], "multi_mesh") == 0) {
-                selected_scene_idx = (int) i;
+            if (strcmp(scene_names[i], "dragon") == 0) {
+                selected_scene_idx = static_cast<int>(i);
                 break;
             }
         }
@@ -93,8 +95,10 @@ public:
         update_render();
 
 
-        camera_image_size = sf::Vector2u{(unsigned int) scene->camera->image_width,
-                                         (unsigned int) scene->camera->image_height};
+        camera_image_size = sf::Vector2u{
+            static_cast<unsigned int>(scene->camera->image_width),
+            static_cast<unsigned int>(scene->camera->image_height)
+        };
 
         texture.update(pixels, camera_image_size, {0, 0});
         // sprite.setScale({(float) image_size.x / (float) camera_image_size.x,
@@ -116,11 +120,13 @@ public:
                 if (event->is<sf::Event::Closed>()) {
                     window.close();
                     return;
-                } else if ([[maybe_unused]]auto *resized = event->getIf<sf::Event::Resized>()) {
+                } else if ([[maybe_unused]] auto *resized = event->getIf<sf::Event::Resized>()) {
                     image_size = window.getSize() - sf::Vector2u{200, 0};
                     window.setView(sf::View(sf::FloatRect{{0, 0}, sf::to_vector2f(window.getSize())}));
-                    sprite.setScale({(float) image_size.x / (float) camera_image_size.x,
-                                     (float) image_size.y / (float) camera_image_size.y});
+                    sprite.setScale({
+                        static_cast<float>(image_size.x) / static_cast<float>(camera_image_size.x),
+                        static_cast<float>(image_size.y) / static_cast<float>(camera_image_size.y)
+                    });
                 }
             }
 
@@ -129,9 +135,12 @@ public:
             window.clear(sf::Color(3, 62, 114));
 
             auto render_states = sf::RenderStates::Default;
-            render_states.transform.scale({image_size.x / (float) camera_image_size.x, image_size.y / (float) camera_image_size.y});
+            render_states.transform.scale({
+                image_size.x / (float) camera_image_size.x, image_size.y / (float) camera_image_size.y
+            });
 
             if (enable_render) {
+                // ReSharper disable once CppDFAConstantConditions
                 if (rendering && update_texture_clock.getElapsedTime().asSeconds() > 0.05) {
                     texture.update(pixels, camera_image_size, {0, 0});
                     update_texture_clock.restart();
@@ -184,19 +193,20 @@ public:
                     update_wireframe();
                 }
                 im::Unindent(5);
-
             }
             ImGui::Checkbox("Enable aabb", &enable_aabb);
             if (enable_aabb) {
                 im::Indent(5);
                 if (ImGui::SliderInt("##AABB Depth", &aabb_depth, 1,
                                      std::ceil(std::log2(
-                                             std::max_element(scene->meshes.begin(), scene->meshes.end(), [](const Mesh &a, const Mesh &b) { return a.tree.size() < b.tree.size(); })->tree.size())),
+                                         std::max_element(scene->meshes.begin(), scene->meshes.end(),
+                                                          [](const Mesh &a, const Mesh &b) {
+                                                              return a.tree.size() < b.tree.size();
+                                                          })->tree.size())),
                                      "%d", ImGuiSliderFlags_AlwaysClamp)) {
                     update_aabb_wireframe();
                 }
                 im::Unindent(5);
-
             }
             ImGui::Checkbox("Enable lights", &enable_lights);
 
@@ -243,13 +253,21 @@ public:
             ImGui::PushItemWidth(-1);
 
             if (ImGui::Combo("##Scene", &selected_scene_idx, scene_names, IM_ARRAYSIZE(scene_names))) {
-
                 update_scene();
                 update_render();
                 update_wireframe();
                 update_aabb_wireframe();
                 update_lights();
             }
+            if (ImGui::Combo("##heuristic", &selected_heuristic,
+                             "biggest axis\0box area\0box volume\0triangle area\0")) {
+                for (auto &mesh: scene->meshes) {
+                    mesh.generate_bvh(static_cast<Mesh::Heuristic>(selected_heuristic));
+                }
+                update_render();
+                update_aabb_wireframe();
+            }
+
 
             ImGui::Text("Point Cloud Size:");
             if (ImGui::DragInt2("##Point Cloud Size", &scene->camera->point_cloud_screen_height_in_px, 10, 40, 1000)) {
@@ -260,7 +278,8 @@ public:
 
             if (!scene->point_lights.empty()) {
                 ImGui::Text("First light:");
-                if (ImGui::DragDouble3("##First light", const_cast<double *>(scene->point_lights[0].first.data), -0.01, -10, 10)) {
+                if (ImGui::DragDouble3("##First light", const_cast<double *>(scene->point_lights[0].first.data), -0.01,
+                                       -10, 10)) {
                     update_render();
                     update_lights();
                 }
@@ -271,7 +290,7 @@ public:
         }
         im::EndTabBar();
         if (im::Button("Save")) {
-            auto image = sf::Image(camera_image_size, pixels);
+            const auto image = sf::Image(camera_image_size, pixels);
             [[maybe_unused]] auto _ = image.saveToFile("../output.png");
         }
 
@@ -328,13 +347,13 @@ public:
 
     void test_wireframe_visible() {
         std::vector<Triangle> visible_triangles = {};
-        auto camera = scene->camera;
+        const auto camera = scene->camera;
         camera->update();
         for (const auto &m: scene->meshes) {
             for (const auto &t: m.triangles) {
                 auto [px, py] = camera->project(t.center());
                 Ray ray = camera->get_orthogonal_ray_at(std::floor(px), std::floor(py));
-                if (auto hit = t.intersect(ray, Triangle::CULL_BACKFACES::YES)) {
+                if (auto hit = t.intersect(ray, Triangle::CullBackfaces::YES)) {
                     if (hit->triangle == t) {
                         visible_triangles.emplace_back(t);
                     }
@@ -349,24 +368,22 @@ public:
             auto [bx, by] = camera->project(t.b);
             auto [cx, cy] = camera->project(t.c);
 
-            wire[i * 6 + 0].position.x = (float) ax;
-            wire[i * 6 + 0].position.y = (float) ay;
-            wire[i * 6 + 1].position.x = (float) bx;
-            wire[i * 6 + 1].position.y = (float) by;
+            wire[i * 6 + 0].position.x = static_cast<float>(ax);
+            wire[i * 6 + 0].position.y = static_cast<float>(ay);
+            wire[i * 6 + 1].position.x = static_cast<float>(bx);
+            wire[i * 6 + 1].position.y = static_cast<float>(by);
 
-            wire[i * 6 + 2].position.x = (float) ax;
-            wire[i * 6 + 2].position.y = (float) ay;
-            wire[i * 6 + 3].position.x = (float) cx;
-            wire[i * 6 + 3].position.y = (float) cy;
+            wire[i * 6 + 2].position.x = static_cast<float>(ax);
+            wire[i * 6 + 2].position.y = static_cast<float>(ay);
+            wire[i * 6 + 3].position.x = static_cast<float>(cx);
+            wire[i * 6 + 3].position.y = static_cast<float>(cy);
 
-            wire[i * 6 + 4].position.x = (float) bx;
-            wire[i * 6 + 4].position.y = (float) by;
-            wire[i * 6 + 5].position.x = (float) cx;
-            wire[i * 6 + 5].position.y = (float) cy;
+            wire[i * 6 + 4].position.x = static_cast<float>(bx);
+            wire[i * 6 + 4].position.y = static_cast<float>(by);
+            wire[i * 6 + 5].position.x = static_cast<float>(cx);
+            wire[i * 6 + 5].position.y = static_cast<float>(cy);
             ++i;
         }
-
-
     }
 
     void update_wireframe() {
@@ -386,53 +403,37 @@ public:
                 auto [bx, by] = scene->camera->project(t.b);
                 auto [cx, cy] = scene->camera->project(t.c);
 
-                wire[offset + j * 6 + 0].position.x = (float) ax;
-                wire[offset + j * 6 + 0].position.y = (float) ay;
-                wire[offset + j * 6 + 1].position.x = (float) bx;
-                wire[offset + j * 6 + 1].position.y = (float) by;
+                wire[offset + j * 6 + 0].position.x = static_cast<float>(ax);
+                wire[offset + j * 6 + 0].position.y = static_cast<float>(ay);
+                wire[offset + j * 6 + 1].position.x = static_cast<float>(bx);
+                wire[offset + j * 6 + 1].position.y = static_cast<float>(by);
 
-                wire[offset + j * 6 + 2].position.x = (float) ax;
-                wire[offset + j * 6 + 2].position.y = (float) ay;
-                wire[offset + j * 6 + 3].position.x = (float) cx;
-                wire[offset + j * 6 + 3].position.y = (float) cy;
+                wire[offset + j * 6 + 2].position.x = static_cast<float>(ax);
+                wire[offset + j * 6 + 2].position.y = static_cast<float>(ay);
+                wire[offset + j * 6 + 3].position.x = static_cast<float>(cx);
+                wire[offset + j * 6 + 3].position.y = static_cast<float>(cy);
 
-                wire[offset + j * 6 + 4].position.x = (float) bx;
-                wire[offset + j * 6 + 4].position.y = (float) by;
-                wire[offset + j * 6 + 5].position.x = (float) cx;
-                wire[offset + j * 6 + 5].position.y = (float) cy;
+                wire[offset + j * 6 + 4].position.x = static_cast<float>(bx);
+                wire[offset + j * 6 + 4].position.y = static_cast<float>(by);
+                wire[offset + j * 6 + 5].position.x = static_cast<float>(cx);
+                wire[offset + j * 6 + 5].position.y = static_cast<float>(cy);
             }
-            offset += (int) mesh.triangles.size() * 6;
+            offset += static_cast<int>(mesh.triangles.size()) * 6;
         }
     }
 
-    void update_aabb_wireframe() {
-        update_aabb_wireframe_depth();
-        return;
-        if (scene->meshes.empty()) {
-            wire_aabb.clear();
-            return;
-        }
+    void draw_aabb(sf::VertexArray &vertex_array, const AABB &aabb, const int index = 0) const {
+        assert((index + 1) * 12 * 2 <= static_cast<int>(vertex_array.getVertexCount()));
+        const Point points[]{
+            Point{aabb.x.min, aabb.y.min, aabb.z.min}, // 000
+            Point{aabb.x.max, aabb.y.min, aabb.z.min}, // 100
+            Point{aabb.x.max, aabb.y.max, aabb.z.min}, // 110
+            Point{aabb.x.min, aabb.y.max, aabb.z.min}, // 010
 
-        wire_aabb = sf::VertexArray(sf::PrimitiveType::Lines, 12 * 2 * scene->meshes.size());
-        scene->camera->update();
-
-        for (int i = 0; i < (int) scene->meshes.size(); i++) {
-            draw_aabb(wire_aabb, scene->meshes[i].tree[0].aabb, i);
-        }
-    }
-
-    void draw_aabb(sf::VertexArray &vertex_array, const AABB &aabb, int index = 0) const {
-        assert((index + 1) * 12 * 2 <= (int) vertex_array.getVertexCount());
-        Point points[]{
-                Point{aabb.x.min, aabb.y.min, aabb.z.min}, // 000
-                Point{aabb.x.max, aabb.y.min, aabb.z.min}, // 100
-                Point{aabb.x.max, aabb.y.max, aabb.z.min}, // 110
-                Point{aabb.x.min, aabb.y.max, aabb.z.min}, // 010
-
-                Point{aabb.x.min, aabb.y.min, aabb.z.max}, // 001
-                Point{aabb.x.max, aabb.y.min, aabb.z.max}, // 101
-                Point{aabb.x.max, aabb.y.max, aabb.z.max}, // 111
-                Point{aabb.x.min, aabb.y.max, aabb.z.max}, // 011
+            Point{aabb.x.min, aabb.y.min, aabb.z.max}, // 001
+            Point{aabb.x.max, aabb.y.min, aabb.z.max}, // 101
+            Point{aabb.x.max, aabb.y.max, aabb.z.max}, // 111
+            Point{aabb.x.min, aabb.y.max, aabb.z.max}, // 011
         };
         Real projected_ps[8 * 2];
 
@@ -441,17 +442,17 @@ public:
         }
 
         // Create the edges for 2 faces
-        auto offset = index * 12 * 2;
+        const auto offset = index * 12 * 2;
         for (int i = 0; i < 8; i++) {
             if (i % 4 == 3) {
-                vertex_array[offset + i * 2 + 0].position.x = (float) projected_ps[(i + 0) * 2 + 0];
-                vertex_array[offset + i * 2 + 0].position.y = (float) projected_ps[(i + 0) * 2 + 1];
+                vertex_array[offset + i * 2 + 0].position.x = static_cast<float>(projected_ps[(i + 0) * 2 + 0]);
+                vertex_array[offset + i * 2 + 0].position.y = static_cast<float>(projected_ps[(i + 0) * 2 + 1]);
                 vertex_array[offset + i * 2 + 1] = vertex_array[offset + (i - 3) * 2];
             } else {
-                vertex_array[offset + i * 2 + 0].position.x = (float) projected_ps[(i + 0) * 2 + 0];
-                vertex_array[offset + i * 2 + 0].position.y = (float) projected_ps[(i + 0) * 2 + 1];
-                vertex_array[offset + i * 2 + 1].position.x = (float) projected_ps[(i + 1) * 2 + 0];
-                vertex_array[offset + i * 2 + 1].position.y = (float) projected_ps[(i + 1) * 2 + 1];
+                vertex_array[offset + i * 2 + 0].position.x = static_cast<float>(projected_ps[(i + 0) * 2 + 0]);
+                vertex_array[offset + i * 2 + 0].position.y = static_cast<float>(projected_ps[(i + 0) * 2 + 1]);
+                vertex_array[offset + i * 2 + 1].position.x = static_cast<float>(projected_ps[(i + 1) * 2 + 0]);
+                vertex_array[offset + i * 2 + 1].position.y = static_cast<float>(projected_ps[(i + 1) * 2 + 1]);
             }
         }
 
@@ -462,26 +463,26 @@ public:
         }
     }
 
-    void update_aabb_wireframe_depth() {
-        auto depth = aabb_depth - 1;
+    void update_aabb_wireframe() {
+        const auto depth = aabb_depth - 1;
 
         auto array_size = 0;
-        for (int i = 0; i < (int) scene->meshes.size(); i++) {
-            const auto tree = scene->meshes[i].tree;
-            int pow = std::min(1 << depth, (int) tree.size() / 2);
+        for (const auto &mesh: scene->meshes) {
+            const auto tree = mesh.tree;
+            const int pow = std::min(1 << depth, static_cast<int>(tree.size()) / 2);
             array_size += 12 * 2 * pow;
         }
 
         wire_depth_aabb = sf::VertexArray(sf::PrimitiveType::Lines, array_size);
 
         auto offset = 0;
-        for (int i = 0; i < (int) scene->meshes.size(); i++) {
-            const auto tree = scene->meshes[i].tree;
+        for (const auto &mesh: scene->meshes) {
+            const auto tree = mesh.tree;
 
-            int pow = std::min(1 << depth, (int) tree.size() / 2);
+            const int pow = std::min(1 << depth, static_cast<int>(tree.size()) / 2);
 
             for (int d = pow - 1; d < pow * 2 - 1; d++) {
-                auto aabb = tree[d].aabb;
+                const auto aabb = tree[d].aabb;
                 draw_aabb(wire_depth_aabb, aabb, offset++);
             }
         }
@@ -494,7 +495,7 @@ public:
             delete scene;
         }
 
-        scene = scenes[selected_scene_idx](600, 400);
+        scene = const_cast<Scene *>(scenes[selected_scene_idx](600, 400));
 
         assert(scene != nullptr);
 
@@ -509,9 +510,10 @@ public:
         }
 
         auto [px, py] = scene->camera->project(scene->point_lights[0].first);
-        light_circle.setPosition({(float) px, (float) py});
+        light_circle.setPosition({static_cast<float>(px), static_cast<float>(py)});
         light_circle.setOrigin(light_circle.getGeometricCenter());
-        light_circle.setRadius(1000 / (float) (scene->camera->look_from - scene->point_lights[0].first).length());
+        light_circle.setRadius(
+            1000 / static_cast<float>((scene->camera->look_from - scene->point_lights[0].first).length()));
         light_circle.setPointCount(100);
         light_circle.setFillColor(sf::Color::Yellow);
     }

@@ -30,13 +30,13 @@ public:
 
     constexpr Color() {}; // NOLINT(*-pro-type-member-init)
 
-    constexpr Color(Real x, Real y, Real z) : x{x}, y{y}, z{z} {} // NOLINT(*-pro-type-member-init)
+    constexpr Color(const Real x, const Real y, const Real z) : x{x}, y{y}, z{z} {} // NOLINT(*-pro-type-member-init)
 
     constexpr Color operator+(Color const other) const {
         return Color{x + other.x, y + other.y, z + other.z};
     }
 
-    inline constexpr Color operator-() const {
+    constexpr Color operator-() const {
         return Color{-x, -y, -z};
     }
 
@@ -97,7 +97,7 @@ public:
     }
 
     // Color specific stuff
-    [[nodiscard]] constexpr Color clamp(Real min, Real max) const {
+    [[nodiscard]] constexpr Color clamp(const Real min, const Real max) const {
         return Color{std::clamp(r, min, max), std::clamp(g, min, max), std::clamp(b, min, max)};
     }
 
