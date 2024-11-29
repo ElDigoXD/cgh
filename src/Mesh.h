@@ -34,7 +34,7 @@ public:
         TRIANGLE_AREA,
     };
 
-    void generate_bvh(const Heuristic heuristic = Heuristic::BIGGEST_AXIS) {
+    void generate_bvh(const Heuristic heuristic = Heuristic::BOX_AREA) {
         const auto start = now();
         printf("[ INFO ] Starting BVH generation with heuristic %s\n", heuristic == Heuristic::BIGGEST_AXIS ? "BIGGEST_AXIS" : heuristic == Heuristic::BOX_AREA ? "BOX_AREA" : heuristic == Heuristic::BOX_VOLUME ? "BOX_VOLUME" : "TRIANGLE_AREA\n");
 

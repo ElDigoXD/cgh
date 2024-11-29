@@ -55,7 +55,7 @@ public:
     bool enable_lights = true;
     bool enable_render = false;
     bool enable_render_cgh = false;
-    int selected_heuristic = 0;
+    int selected_heuristic = 1;
 
     bool rendering = false;
     double render_time = 0;

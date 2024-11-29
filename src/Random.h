@@ -5,7 +5,7 @@
 
 typedef double Real;
 
-static thread_local unsigned int rng_state = rand();
+static thread_local unsigned int rng_state = 8917264;
 
 [[maybe_unused]] static unsigned int rand_pcg() {
     const unsigned int state = rng_state;

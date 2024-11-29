@@ -9,13 +9,12 @@
 struct HitData;
 
 struct Triangle {
-
     Triangle() = default;
 
-    Vec a, b, c;
+    Point a, b, c;
     int material_idx{};
 
-    constexpr Triangle(const Vec &a, const Vec &b, const Vec &c, const int material_idx) : a(a), b(b), c(c), material_idx(material_idx) {}
+    constexpr Triangle(const Point &a, const Point &b, const Point &c, const int material_idx) : a(a), b(b), c(c), material_idx(material_idx) {}
 
     [[nodiscard]] constexpr Vec normal() const { return cross(b - a, c - a); }
 
@@ -28,7 +27,7 @@ struct Triangle {
 
     [[nodiscard]] constexpr std::optional<HitData> intersect(const Ray &ray, CullBackfaces cull_backfaces) const;
 
-    constexpr Vec operator[](const Real vertex) const { return vertex == 0 ? a : (vertex == 1 ? b : c); }
+    constexpr Point operator[](const Real vertex) const { return vertex == 0 ? a : vertex == 1 ? b : c; }
 
     [[nodiscard]] constexpr Point center() const { return (a + b + c) / 3; }
 
@@ -38,7 +37,8 @@ struct Triangle {
 };
 
 struct HitData {
-    constexpr HitData(const Triangle &triangle, const Real t, const Real u, const Real v) : triangle(triangle), t(t), u(u), v(v) {}
+    constexpr HitData(const Triangle &triangle, const Real t, const Real u, const Real v) : triangle(triangle), t(t), u(u), v(v) {
+    }
 
     Triangle triangle;
     Real t;
