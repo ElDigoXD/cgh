@@ -68,16 +68,16 @@ public:
         // scene->camera->max_depth = max_depth;
         // scene->camera->samples_per_pixel = samples_per_pixel;
 
-        enable_render = false;
+        enable_render = true;
         enable_wireframe = false;
-        enable_aabb = true;
+        enable_aabb = false;
         aabb_depth = 3;
         samples_per_pixel = 100;
         max_depth = 1000;
 
 
         for (uint i = 0; i < sizeof(scene_names) / sizeof(char *); i++) {
-            if (strcmp(scene_names[i], "dragon") == 0) {
+            if (strcmp(scene_names[i], "tree") == 0) {
                 selected_scene_idx = static_cast<int>(i);
                 break;
             }
@@ -177,8 +177,8 @@ public:
         im::GetStyle().WindowBorderSize = 0;
         //ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
         ImGui::PushItemWidth(-1);
-        im::SetNextWindowPos({(float) (window.getSize().x - 200), 0});
-        im::SetNextWindowSize({200, (float) window.getSize().y});
+        im::SetNextWindowPos({static_cast<float>(window.getSize().x - 200), 0});
+        im::SetNextWindowSize({200, static_cast<float>(window.getSize().y)});
 
 
         im::Begin("GUI", nullptr, window_flags);

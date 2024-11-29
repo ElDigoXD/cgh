@@ -62,14 +62,15 @@ public:
     Point point_cloud_screen_pixel_00_position;
 
 
-    Camera(const int image_width, const int image_height) : Camera(image_width, image_height, 10, 10, 90) {}
+    Camera(const int image_width, const int image_height) : Camera(image_width, image_height, 10, 10, 90) {
+    }
 
 
     Camera(const int image_width, const int image_height, const int samples_per_pixel, const int max_depth, const Real fov)
-            : image_width{image_width},
-              image_height{image_height},
-              samples_per_pixel{samples_per_pixel},
-              max_depth{max_depth}, fov{fov} {
+        : image_width{image_width},
+          image_height{image_height},
+          samples_per_pixel{samples_per_pixel},
+          max_depth{max_depth}, fov{fov} {
         update();
     }
 
@@ -138,7 +139,6 @@ public:
         point_cloud_screen_pixel_00_position = point_cloud_screen_upper_left +
                                                (point_cloud_screen_pixel_delta_x + point_cloud_screen_pixel_delta_y) /
                                                2;
-
     }
 
     [[nodiscard]] constexpr Ray get_ray_at(const int x, const int y) const {
@@ -152,41 +152,49 @@ public:
     [[nodiscard]] Ray get_random_orthogonal_ray_at(int x, int y) const {
         const auto pixel_center = pixel_00_position + pixel_delta_x * x + pixel_delta_y * y;
 
-        return Ray{pixel_center
-                   + pixel_delta_x * (rand_real() - 0.5)
-                   + pixel_delta_y * (rand_real() - 0.5), -w};
+        return Ray{
+            pixel_center
+            + pixel_delta_x * (rand_real() - 0.5)
+            + pixel_delta_y * (rand_real() - 0.5),
+            -w
+        };
     }
 
     [[nodiscard]] Ray get_random_orthogonal_ray_at_screen(const int x, const int y) const {
         const auto pixel_center = point_cloud_screen_pixel_00_position
-                            + point_cloud_screen_pixel_delta_x * x
-                            + point_cloud_screen_pixel_delta_y * y;
+                                  + point_cloud_screen_pixel_delta_x * x
+                                  + point_cloud_screen_pixel_delta_y * y;
 
-        return Ray{pixel_center
-                   + point_cloud_screen_pixel_delta_x * (rand_real() - 0.5)
-                   + point_cloud_screen_pixel_delta_y * (rand_real() - 0.5), -w};
+        return Ray{
+            pixel_center
+            + point_cloud_screen_pixel_delta_x * (rand_real() - 0.5)
+            + point_cloud_screen_pixel_delta_y * (rand_real() - 0.5),
+            -w
+        };
     }
 
     [[nodiscard]] constexpr Ray get_ray_at_screen(const int x, const int y) const {
-        return Ray{look_from, (point_cloud_screen_pixel_00_position + point_cloud_screen_pixel_delta_x * x +
-                               point_cloud_screen_pixel_delta_y * y) - look_from};
+        return Ray{
+            look_from, (point_cloud_screen_pixel_00_position + point_cloud_screen_pixel_delta_x * x +
+                        point_cloud_screen_pixel_delta_y * y) - look_from
+        };
     }
 
     [[nodiscard]] constexpr Ray get_orthogonal_ray_at_screen(const int x, const int y) const {
-        return {point_cloud_screen_pixel_00_position + (point_cloud_screen_pixel_delta_x * x) +
-                (point_cloud_screen_pixel_delta_y * y), {0, 0, -1}};
-
+        return {
+            point_cloud_screen_pixel_00_position + (point_cloud_screen_pixel_delta_x * x) +
+            (point_cloud_screen_pixel_delta_y * y),
+            {0, 0, -1}
+        };
     }
 
     static Color compute_ray_color(const Ray &ray, const Scene &scene, int max_depth) {
-
         Ray current_ray = ray;
         int current_depth = max_depth;
         Color diffuse_lighting(0, 0, 0);
         Color attenuation(1, 1, 1);
 
         while (auto hit_data = scene.intersect(current_ray, Triangle::CullBackfaces::YES)) {
-
             // Ray does not find an ambient source of light (escapes the scene)
             if (current_depth-- == 0) {
                 attenuation = Color::black();
@@ -231,6 +239,8 @@ public:
     }
 
     void render(unsigned char pixels[], const Scene &scene, const std::stop_token &st = {}) const {
+        const auto start = now();
+        printf("[ INFO ] Starting cgi render with %dx%d pixels, %d spp, %d max depth, %d threads\n", image_width, image_height, samples_per_pixel, max_depth, omp_get_max_threads() * 2);
 #pragma omp parallel for collapse(1) shared(pixels) default(none) firstprivate(scene, st) num_threads(omp_get_max_threads()*2)
         for (int y = 0; y < image_height; y++) {
             if (!st.stop_requested()) {
@@ -249,10 +259,11 @@ public:
                 }
             }
         }
+        printf("[ INFO ] Finished cgi render in %.1f seconds\n", (now() - start) / 1000.0);
     }
 
-    [[nodiscard]] std::vector<std::pair<Point, Color>> compute_point_cloud(const Scene &scene) const {
-        std::vector<std::pair<Point, Color>> point_cloud;
+    [[nodiscard]] std::vector<std::pair<Point, Color> > compute_point_cloud(const Scene &scene) const {
+        std::vector<std::pair<Point, Color> > point_cloud;
 
         for (int y = 0; y < point_cloud_screen_height_in_px; y++) {
             for (int x = 0; x < point_cloud_screen_width_in_px; x++) {
@@ -271,19 +282,19 @@ public:
 
     [[nodiscard]] std::pair<Real, Real> project(const Point &p) const {
         const auto o = look_from;
-        auto ax = (Real) (p - o).dot(u);
-        auto ay = (Real) (p - o).dot(-v);
+        auto ax = (p - o).dot(u);
+        auto ay = (p - o).dot(-v);
 
-        ax = (Real) (ax / slm_pixel_size + slm_width_in_pixels / 2.0);
-        ay = (Real) (ay / slm_pixel_size + slm_height_in_pixels / 2.0);
+        ax = ax / slm_pixel_size + slm_width_in_pixels / 2.0;
+        ay = ay / slm_pixel_size + slm_height_in_pixels / 2.0;
 
         return {ax, ay};
     }
 
     // __attribute__((flatten))
-    void render_cgh(unsigned char pixels[], const Scene &scene, const std::vector<std::pair<Point, Color>> &point_cloud,
+    void render_cgh(unsigned char pixels[], const Scene &scene, const std::vector<std::pair<Point, Color> > &point_cloud,
                     const std::stop_token &st = {}) const {
-        auto start = std::time(nullptr);
+        auto start = now();
         printf("[ INFO ] Starting color generation for the point cloud\n");
 
         auto point_cloud_mut = point_cloud;
@@ -299,10 +310,10 @@ public:
             color /= samples_per_pixel;
         }
 
-        printf("[ INFO ] Ended color generation for the point cloud in %ld seconds (%ld ms/point)\n", std::time(nullptr) - start, (std::time(nullptr) - start) * 1000 / point_cloud.size());
+        printf("[ INFO ] Ended color generation for the point cloud in %.1f seconds (%ld ms/point)\n", (now() - start) / 1000.0, (now() - start) / point_cloud.size());
         printf("[ INFO ] Starting wave computation (expected time = %ld s)\n", 222 * point_cloud.size() / 1000);
 
-        start = std::time(nullptr);
+        start = now();
 
 #pragma omp parallel for collapse(2) shared(pixels) default(none) firstprivate(point_cloud_mut, scene, st) num_threads(omp_get_max_threads())
         for (int y = 0; y < slm_height_in_pixels; y++) {
@@ -328,7 +339,7 @@ public:
             }
         }
 
-        printf("[ INFO ] Ended wave computation in %ld seconds (%ld ms/point)\n", std::time(nullptr) - start, (std::time(nullptr) - start) * 1000 / point_cloud.size());
+        printf("[ INFO ] Ended wave computation in %.1f seconds (%ld ms/point)\n", (now() - start) / 1000.0, (now() - start) / point_cloud.size());
     }
 
     static std::complex<Real> compute_wave_2(Ray ray, const Scene &scene, const Point expected_point, const Color color) {
@@ -362,7 +373,6 @@ public:
 
 
         while (auto hit_data = scene.intersect(current_ray)) {
-
             // First iteration checks if the intersection point is the expected point
             if (current_depth == max_depth && !(ray.at(hit_data->t) - expected_point).is_close_to_0()) {
                 return {0, 0};

@@ -23,8 +23,7 @@ public:
     std::vector<Node> tree;
     std::vector<Triangle> triangles;
 
-    explicit Mesh(const std::vector<Triangle> &triangles) :
-            tree(static_cast<int>(std::pow(2, static_cast<int>(std::ceil(std::log2(triangles.size()) + 1))))), triangles(triangles) {
+    explicit Mesh(const std::vector<Triangle> &triangles) : tree(static_cast<int>(std::pow(2, static_cast<int>(std::ceil(std::log2(triangles.size()) + 1))))), triangles(triangles) {
         generate_bvh();
     }
 
@@ -36,7 +35,9 @@ public:
     };
 
     void generate_bvh(const Heuristic heuristic = Heuristic::BIGGEST_AXIS) {
-        printf("heuristic: %d\n", static_cast<int>(heuristic));
+        const auto start = now();
+        printf("[ INFO ] Starting BVH generation with heuristic %s\n", heuristic == Heuristic::BIGGEST_AXIS ? "BIGGEST_AXIS" : heuristic == Heuristic::BOX_AREA ? "BOX_AREA" : heuristic == Heuristic::BOX_VOLUME ? "BOX_VOLUME" : "TRIANGLE_AREA\n");
+
         struct NodeData {
             int index, start, end;
         };
@@ -157,6 +158,7 @@ public:
             }
         }
 
+        printf("[ INFO ] Ended BVH generation in %.1f seconds\n", (now() - start) / 1000.0);
     }
 
     [[nodiscard]] bool intersects(const Ray &ray, const Real max_t) const {
@@ -192,7 +194,6 @@ public:
     }
 
     [[nodiscard]] std::optional<HitData> intersect(const Ray &ray, Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
-
         std::vector<int> vec;
         vec.reserve(tree.size() / 2);
         std::stack stack(std::move(vec));
