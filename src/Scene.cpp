@@ -158,7 +158,7 @@ const Scene *tree(const int image_width, const int image_height) {
     Mesh::normalize(mesh, Mesh::compute_aabb(mesh));
     Mesh::change_up_coord(mesh);
     Mesh::flip(mesh, Axis::Y);
-    Mesh::scale(mesh, 3);
+    Mesh::scale(mesh, 3 * image_height / 400);
 
     const auto scene = new Scene(camera);
     scene->add_mesh(mesh, materials);

@@ -28,4 +28,8 @@ namespace ImGui {
                                              const char *format = "%.3f", const ImGuiSliderFlags flags = 0) {
         return DragScalarN(label, ImGuiDataType_Double, v, 3, speed, &v_min, &v_max, format, flags);
     }
+
+    [[maybe_unused]] static bool SliderDouble(const char *label, double *v, const double v_min, const double v_max, const char *format = "%.3f", const ImGuiSliderFlags flags = 0) {
+        return SliderScalar(label, ImGuiDataType_Double, v, &v_min, &v_max, format, flags);
+    }
 }

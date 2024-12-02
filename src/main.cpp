@@ -39,6 +39,9 @@ public:
     sf::Vector2u camera_image_size;
     int max_depth = 10;
     int samples_per_pixel = 100;
+    int width = 600;
+    int height = 400;
+
 
     sf::VertexArray wire;
     sf::VertexArray wire_aabb;
@@ -59,6 +62,7 @@ public:
 
     bool rendering = false;
     double render_time = 0;
+    double expected_time = 0;
     bool render_has_finished = false;
 
     int selected_scene_idx = 0;
@@ -74,6 +78,8 @@ public:
         aabb_depth = 3;
         samples_per_pixel = 100;
         max_depth = 1000;
+        width = 1920;
+        height = 1080;
 
 
         for (uint i = 0; i < sizeof(scene_names) / sizeof(char *); i++) {
@@ -221,7 +227,7 @@ public:
                 im::Unindent(5);
             }
 
-            ImGui::PopItemWidth();
+            ImGui::PushItemWidth(ImGui::GetWindowWidth() / 2);
             if (ImGui::SliderInt("Max Depth", &max_depth, 1, 1000, "%d", ImGuiSliderFlags_Logarithmic)) {
                 scene->camera->max_depth = max_depth;
                 update_render();
@@ -230,7 +236,7 @@ public:
                 scene->camera->samples_per_pixel = samples_per_pixel;
                 update_render();
             }
-            ImGui::PushItemWidth(-1);
+            ImGui::PopItemWidth();
 
             ImGui::Text("Look From:");
             if (im::DragDouble3("##Look From", scene->camera->look_from.data, 1, -300, 300)) {
@@ -284,6 +290,14 @@ public:
                     update_lights();
                 }
             }
+            ImGui::PushItemWidth(ImGui::GetWindowWidth() / 2);
+            if (ImGui::SliderDouble("Sky##Sky factor", &scene->camera->sky_lighting_factor, 0, 1)) {
+                update_render();
+            }
+            if (ImGui::SliderDouble("Diffuse##diffuse factor", &scene->camera->diffuse_lighting_factor, 0, 1)) {
+                update_render();
+            }
+            ImGui::PopItemWidth();
 
             ImGui::PopItemWidth();
             ImGui::EndTabItem();
@@ -294,15 +308,17 @@ public:
             [[maybe_unused]] auto _ = image.saveToFile("../output.png");
         }
 
-        if (rendering) {
-            im::Text("Render time: %f", timer.getElapsedTime().asSeconds() - start_time.asSeconds());
-        } else {
-            im::Text("Render time: %f", render_time);
+        const int tmp_render_time = rendering ? timer.getElapsedTime().asSeconds() - start_time.asSeconds() : render_time;
+        im::Text("Render time: %.1fs", tmp_render_time);
+
+        if (enable_render_cgh) {
+            ImGui::Text("Expected time: %.1fs", expected_time);
+            const auto percent = static_cast<Real>(scene->camera->computed_pixels) / (height * width);
+            ImGui::Text("%3.1f%%: %.1fs", percent * 100, tmp_render_time / percent);
         }
 
         im::End();
         im::PopItemWidth();
-        //im::PopStyleColor();
         im::EndFrame();
     }
 
@@ -332,6 +348,18 @@ public:
             scene->camera->max_depth = max_depth;
             scene->camera->update();
             if (enable_render_cgh) {
+                // Get an approximated render time
+                auto tmp_camera = Camera(*scene->camera);
+                tmp_camera.point_cloud_screen_height_in_px = 9;
+                tmp_camera.point_cloud_screen_width_in_px = 16;
+                tmp_camera.update();
+                const auto tmp_point_cloud = tmp_camera.compute_point_cloud(*scene);
+                const auto start = now();
+                tmp_camera.render_cgh(pixels, *scene, tmp_point_cloud, st);
+                const auto mspp = (now() - start) / tmp_point_cloud.size();
+                expected_time = mspp * point_cloud.size() / 1000;
+                printf("[ INFO ] Renderer computing at %ld ms/point (expected render time: %.0fs)\n", mspp, expected_time);
+                memset(pixels, 0, camera_image_size.x * camera_image_size.y * 4);
                 scene->camera->render_cgh(pixels, *scene, point_cloud, st);
             } else {
                 scene->camera->render(pixels, *scene, st);
@@ -353,7 +381,7 @@ public:
             for (const auto &t: m.triangles) {
                 auto [px, py] = camera->project(t.center());
                 Ray ray = camera->get_orthogonal_ray_at(std::floor(px), std::floor(py));
-                if (auto hit = t.intersect(ray, Triangle::CullBackfaces::YES)) {
+                if (const auto hit = t.intersect(ray, Triangle::CullBackfaces::YES)) {
                     if (hit->triangle == t) {
                         visible_triangles.emplace_back(t);
                     }
@@ -495,7 +523,7 @@ public:
             delete scene;
         }
 
-        scene = const_cast<Scene *>(scenes[selected_scene_idx](600, 400));
+        scene = const_cast<Scene *>(scenes[selected_scene_idx](width, height));
 
         assert(scene != nullptr);
 

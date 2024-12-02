@@ -61,6 +61,10 @@ public:
 
     Point point_cloud_screen_pixel_00_position;
 
+    Real sky_lighting_factor = 0;
+    Real diffuse_lighting_factor = 1;
+
+    int computed_pixels = 0;
 
     Camera(const int image_width, const int image_height) : Camera(image_width, image_height, 10, 10, 90) {
     }
@@ -188,7 +192,7 @@ public:
         };
     }
 
-    static Color compute_ray_color(const Ray &ray, const Scene &scene, int max_depth) {
+    [[nodiscard]] Color compute_ray_color(const Ray &ray, const Scene &scene, int max_depth) const {
         Ray current_ray = ray;
         int current_depth = max_depth;
         Color diffuse_lighting(0, 0, 0);
@@ -201,8 +205,8 @@ public:
                 break;
             }
 
-            assert(hit_data->triangle.material_idx < (int) scene.materials.size());
-            auto material = scene.materials[hit_data->triangle.material_idx];
+            assert(hit_data->triangle.material_idx < static_cast<int>(scene.materials.size()));
+            const auto material = scene.materials[hit_data->triangle.material_idx];
 
             if (material.is_diffuse) {
                 const auto normal = hit_data->triangle.normal().normalize();
@@ -214,10 +218,10 @@ public:
                     break;
                 }
                 for (const auto &[light_position, light_color]: scene.point_lights) {
-                    auto light_offset = light_position - p;
-                    auto light_distance = light_offset.length();
-                    auto light_direction = light_offset.normalize();
-                    auto dot_product = dot(light_direction, normal);
+                    const auto light_offset = light_position - p;
+                    const auto light_distance = light_offset.length();
+                    const auto light_direction = light_offset.normalize();
+                    const auto dot_product = dot(light_direction, normal);
 
                     if (dot_product >= 0) {
                         const auto shadow_ray = Ray{p, light_direction};
@@ -235,7 +239,9 @@ public:
         if (current_depth == max_depth) {
             return Color::black();
         }
-        return (attenuation * 0 + diffuse_lighting * 1).clamp(0, 1);
+
+        const auto final_color = (attenuation * sky_lighting_factor + diffuse_lighting * diffuse_lighting_factor).clamp(0, 1);
+        return final_color;
     }
 
     void render(unsigned char pixels[], const Scene &scene, const std::stop_token &st = {}) const {
@@ -259,7 +265,7 @@ public:
                 }
             }
         }
-        printf("[ INFO ] Finished cgi render in %.1f seconds\n", (now() - start) / 1000.0);
+        printf("[ INFO ] Finished cgi render in %.1fs\n", (now() - start) / 1000.0);
     }
 
     [[nodiscard]] std::vector<std::pair<Point, Color> > compute_point_cloud(const Scene &scene) const {
@@ -290,10 +296,9 @@ public:
 
         return {ax, ay};
     }
-
     // __attribute__((flatten))
     void render_cgh(unsigned char pixels[], const Scene &scene, const std::vector<std::pair<Point, Color> > &point_cloud,
-                    const std::stop_token &st = {}) const {
+                    const std::stop_token &st = {}) {
         auto start = now();
         printf("[ INFO ] Starting color generation for the point cloud\n");
 
@@ -310,11 +315,11 @@ public:
             color /= samples_per_pixel;
         }
 
-        printf("[ INFO ] Ended color generation for the point cloud in %.1f seconds (%ld ms/point)\n", (now() - start) / 1000.0, (now() - start) / point_cloud.size());
-        printf("[ INFO ] Starting wave computation (expected time = %ld s)\n", 222 * point_cloud.size() / 1000);
+        printf("[ INFO ] Ended color generation for the point cloud in %.1fs (%ld ms/point)\n", (now() - start) / 1000.0, (now() - start) / point_cloud.size());
+        printf("[ INFO ] Starting wave computation\n");
 
         start = now();
-
+        computed_pixels = 0;
 #pragma omp parallel for collapse(2) shared(pixels) default(none) firstprivate(point_cloud_mut, scene, st) num_threads(omp_get_max_threads())
         for (int y = 0; y < slm_height_in_pixels; y++) {
             for (int x = 0; x < slm_width_in_pixels; x++) {
@@ -335,14 +340,15 @@ public:
                     pixels[(y * slm_width_in_pixels + x) * 4 + 1] = a;
                     pixels[(y * slm_width_in_pixels + x) * 4 + 2] = a;
                     pixels[(y * slm_width_in_pixels + x) * 4 + 3] = 255;
+                    ++computed_pixels;
                 }
             }
         }
 
-        printf("[ INFO ] Ended wave computation in %.1f seconds (%ld ms/point)\n", (now() - start) / 1000.0, (now() - start) / point_cloud.size());
+        printf("[ INFO ] Ended wave computation in %.1fs (%ld ms/point)\n", (now() - start) / 1000.0, (now() - start) / point_cloud.size());
     }
 
-    static std::complex<Real> compute_wave_2(Ray ray, const Scene &scene, const Point expected_point, const Color color) {
+    static std::complex<Real> compute_wave_2(Ray ray, const Scene &scene, const Point &expected_point, const Color &color) {
         if (auto hit_data = scene.intersect(ray)) {
             if (!(ray.at(hit_data->t) - expected_point).is_close_to_0()) {
                 return {0, 0};
@@ -356,21 +362,21 @@ public:
             }
 
             // TODO: Compute a more accurate intensity value
-            auto intensity = color.r + color.g + color.b / 3;
+            auto amplitude = color.r + color.g + color.b / 3;
             auto sub_phase = (2 * std::numbers::pi / wavelength) * ((ray.origin - expected_point).length());
             auto sub_phase_c = std::polar(1.0, sub_phase);
 
-            return intensity * sub_phase_c;
+            return amplitude * sub_phase_c;
         }
         return {0, 0};
     }
 
     //__attribute__((flatten))
-    static std::complex<Real> compute_wave(Ray ray, const Scene &scene, const Point expected_point, [[maybe_unused]] const Color color, int max_depth) {
+    [[nodiscard]] std::complex<Real> compute_wave(Ray ray, const Scene &scene, const Point &expected_point, [[maybe_unused]] const Color &color, int max_depth) const {
         Ray current_ray = ray;
         int current_depth = max_depth;
         Color attenuation(1, 1, 1);
-
+        Color diffuse_lighting(0, 0, 0);
 
         while (auto hit_data = scene.intersect(current_ray)) {
             // First iteration checks if the intersection point is the expected point
@@ -388,31 +394,38 @@ public:
             auto material = scene.materials[hit_data->triangle.material_idx];
 
             if (material.is_diffuse) {
-                // N = edge1 x edge2
-                auto normal = cross(hit_data->triangle.b - hit_data->triangle.a,
-                                    hit_data->triangle.c - hit_data->triangle.a);
-                auto scatter_direction = normal + Vec::random_unit_vector();
+                const auto normal = hit_data->triangle.normal().normalize();
+                const auto scatter_direction = normal + Vec::random_unit_vector();
                 attenuation *= material.albedo;
-                current_ray = Ray{current_ray.at(hit_data->t), scatter_direction};
-            }
+                const Point p = current_ray.at(hit_data->t);
+                current_ray = Ray{p, scatter_direction};
+                if (attenuation.is_close_to_0()) {
+                    break;
+                }
+                for (const auto &[light_position, light_color]: scene.point_lights) {
+                    const auto light_offset = light_position - p;
+                    const auto light_distance = light_offset.length();
+                    const auto light_direction = light_offset.normalize();
+                    const auto dot_product = dot(light_direction, normal);
 
-            if constexpr (false) {
-                attenuation = material.albedo;
-                break;
-                //attenuation = Color{hit_data.u, hit_data.v, 1 - hit_data.u - hit_data.v};
+                    if (dot_product >= 0) {
+                        const auto shadow_ray = Ray{p, light_direction};
+                        if (!scene.intersects(shadow_ray, light_distance)) {
+                            diffuse_lighting += attenuation * light_color * dot_product;
+                        }
+                    }
+                }
+            } else {
+                assert(false && "Not diffuse material is not yet implemented\n");
             }
         }
 
         // Wave computation
-        auto sub_image = attenuation;
-        auto intensity = attenuation.r + attenuation.g + attenuation.b / 3;
+        const auto final_color = (attenuation * sky_lighting_factor + diffuse_lighting * diffuse_lighting_factor).clamp(0, 1);
+        auto intensity = final_color.r + final_color.g + final_color.b / 3;
         auto sub_phase = (2 * std::numbers::pi / wavelength) * ((ray.origin - expected_point).length());
-        //auto sub_phase_c = std::exp(std::complex<Real>(0, sub_phase));
         auto sub_phase_c = std::polar(1.0, sub_phase);
 
-        //long double a = 0;
-
         return intensity * sub_phase_c;
-        return sub_image.r * sub_phase_c;
     }
 };

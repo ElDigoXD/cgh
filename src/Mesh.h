@@ -158,7 +158,7 @@ public:
             }
         }
 
-        printf("[ INFO ] Ended BVH generation in %.1f seconds\n", (now() - start) / 1000.0);
+        printf("[ INFO ] Ended BVH generation in %.1fs\n", (now() - start) / 1000.0);
     }
 
     [[nodiscard]] bool intersects(const Ray &ray, const Real max_t) const {
