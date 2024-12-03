@@ -12,6 +12,7 @@ image = "ph_1gpu_1638s.png"
 if len(sys.argv) > 1:
     image = sys.argv[1]
 
+
 mm = 1
 um = 1e-3
 nm = 1e-6
@@ -29,21 +30,26 @@ dx = pixelsize
 dy = pixelsize
 
 # Import CGH
+if image.endswith(".csv"):
+    data_im = np.recfromtxt(f"./{image}", delimiter=",", names=None)
+    complex_data = data_im
+else:
+    image = Image.open(f'./{image}')
+    data_im = np.array(image)
 
-image = Image.open(f'./{image}')
-data_im = np.array(image)
+    data_im = data_im[:, :, 0]
+    print("Imported image: ", data_im.shape, " pixels.")
 
-data_im = data_im[:, :, 0]
-print("Imported image: ", data_im.shape, " pixels.")
+    # [0, 255] --> [-1, 1]
+    data_norm = (data_im - 127.5) / 127.5
 
-# [0, 255] --> [-1, 1]
-data_norm = (data_im - 127.5) / 127.5
+    # [-1, 1] --> [-pi, pi]
+    complex_data = np.exp(1j * np.pi * data_norm)
+    print(np.max(complex_data))
+    print(np.min(complex_data))
 
-# [-1, 1] --> [-pi, pi]
-data_phase = np.exp(1j * np.pi * data_norm)
-
-nx = int(data_phase.shape[1])
-ny = int(data_phase.shape[0])
+nx = int(complex_data.shape[1])
+ny = int(complex_data.shape[0])
 
 lx = nx * dx
 ly = ny * dy
@@ -62,7 +68,7 @@ def propagation_kernel(slm_z):
     kernel = np.exp(1j * ((k * slm_z) * np.sqrt(1 - mod_fxfy)))
     kernel = fftshift(kernel)
 
-    propagated = ifft2(fft2(data_phase) * kernel)
+    propagated = ifft2(fft2(complex_data) * kernel)
 
     return propagated
 
