@@ -296,8 +296,9 @@ public:
 
         return {ax, ay};
     }
+
     // __attribute__((flatten))
-    void render_cgh(unsigned char pixels[], const Scene &scene, const std::vector<std::pair<Point, Color> > &point_cloud,
+    void render_cgh(unsigned char pixels[], std::complex<Real> complex_pixels[], const Scene &scene, const std::vector<std::pair<Point, Color> > &point_cloud,
                     const std::stop_token &st = {}) {
         auto start = now();
         printf("[ INFO ] Starting color generation for the point cloud\n");
@@ -320,7 +321,7 @@ public:
 
         start = now();
         computed_pixels = 0;
-#pragma omp parallel for collapse(2) shared(pixels) default(none) firstprivate(point_cloud_mut, scene, st) num_threads(omp_get_max_threads())
+#pragma omp parallel for collapse(2) shared(pixels, complex_pixels) default(none) firstprivate(point_cloud_mut, scene, st) num_threads(omp_get_max_threads())
         for (int y = 0; y < slm_height_in_pixels; y++) {
             for (int x = 0; x < slm_width_in_pixels; x++) {
                 if (!st.stop_requested()) {
@@ -335,6 +336,7 @@ public:
 
                     // Todo: divide by number of effective points
                     agg /= static_cast<Real>(point_cloud_mut.size());
+                    complex_pixels[(y * slm_width_in_pixels + x)] = agg;
                     const auto a = static_cast<unsigned char>((arg(agg) + std::numbers::pi) / (2 * std::numbers::pi) * 255);
                     pixels[(y * slm_width_in_pixels + x) * 4 + 0] = a;
                     pixels[(y * slm_width_in_pixels + x) * 4 + 1] = a;

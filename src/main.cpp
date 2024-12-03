@@ -34,6 +34,7 @@ public:
 
     // Render data
     unsigned char *pixels = new unsigned char[max_window_size.x * max_window_size.y * 4];
+    std::complex<Real> *complex_pixels = new std::complex<Real> [max_window_size.x * max_window_size.y * 4];
     Scene *scene = nullptr;
     std::vector<std::pair<Point, Color> > point_cloud;
     sf::Vector2u camera_image_size;
@@ -307,8 +308,19 @@ public:
             const auto image = sf::Image(camera_image_size, pixels);
             [[maybe_unused]] auto _ = image.saveToFile("../output.png");
         }
+        ImGui::SameLine();
+        if (im::Button("Export")) {
+            FILE *fd = std::fopen("../output.csv", "w");
+            for (int y = 0; y < camera_image_size.x; y++) {
+                for (int x = 0; x < camera_image_size.y; x++) {
+                    fprintf(fd, "(%e%+ej)", complex_pixels[y * camera_image_size.x + x].real(), complex_pixels[y * camera_image_size.x + x].imag());
+                    fprintf(fd, x == camera_image_size.y - 1 ? "\n" : ",");
+                }
+            }
+            fflush(fd);
+        }
 
-        const int tmp_render_time = rendering ? timer.getElapsedTime().asSeconds() - start_time.asSeconds() : render_time;
+        const float tmp_render_time = rendering ? timer.getElapsedTime().asSeconds() - start_time.asSeconds() : render_time;
         im::Text("Render time: %.1fs", tmp_render_time);
 
         if (enable_render_cgh) {
@@ -355,12 +367,12 @@ public:
                 tmp_camera.update();
                 const auto tmp_point_cloud = tmp_camera.compute_point_cloud(*scene);
                 const auto start = now();
-                tmp_camera.render_cgh(pixels, *scene, tmp_point_cloud, st);
+                tmp_camera.render_cgh(pixels, complex_pixels, *scene, tmp_point_cloud, st);
                 const auto mspp = (now() - start) / tmp_point_cloud.size();
                 expected_time = mspp * point_cloud.size() / 1000;
                 printf("[ INFO ] Renderer computing at %ld ms/point (expected render time: %.0fs)\n", mspp, expected_time);
                 memset(pixels, 0, camera_image_size.x * camera_image_size.y * 4);
-                scene->camera->render_cgh(pixels, *scene, point_cloud, st);
+                scene->camera->render_cgh(pixels, complex_pixels, *scene, point_cloud, st);
             } else {
                 scene->camera->render(pixels, *scene, st);
             }
