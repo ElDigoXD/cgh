@@ -147,8 +147,10 @@ public:
             });
 
             if (enable_render) {
+                // ReSharper disable once CppDFAUnreachableCode
                 // ReSharper disable once CppDFAConstantConditions
-                if (rendering && update_texture_clock.getElapsedTime().asSeconds() > 0.05) {
+                if (rendering && update_texture_clock.getElapsedTime().asSeconds() > 1) {
+                    // ReSharper disable once CppDFAUnreachableCode
                     texture.update(pixels, camera_image_size, {0, 0});
                     update_texture_clock.restart();
                 }
@@ -259,7 +261,7 @@ public:
         if (ImGui::BeginTabItem("Scene")) {
             ImGui::PushItemWidth(-1);
 
-            if (ImGui::Combo("##Scene", &selected_scene_idx, scene_names, IM_ARRAYSIZE(scene_names))) {
+            if (ImGui::Combo("##Scene combo", &selected_scene_idx, scene_names, IM_ARRAYSIZE(scene_names))) {
                 update_scene();
                 update_render();
                 update_wireframe();
@@ -311,10 +313,10 @@ public:
         ImGui::SameLine();
         if (im::Button("Export")) {
             FILE *fd = std::fopen("../output.csv", "w");
-            for (int y = 0; y < camera_image_size.x; y++) {
-                for (int x = 0; x < camera_image_size.y; x++) {
+            for (int y = 0; y < camera_image_size.y; y++) {
+                for (int x = 0; x < camera_image_size.x; x++) {
                     fprintf(fd, "(%e%+ej)", complex_pixels[y * camera_image_size.x + x].real(), complex_pixels[y * camera_image_size.x + x].imag());
-                    fprintf(fd, x == camera_image_size.y - 1 ? "\n" : ",");
+                    fprintf(fd, x == camera_image_size.x - 1 ? "\n" : ",");
                 }
             }
             fflush(fd);

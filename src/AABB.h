@@ -59,7 +59,7 @@ public:
         z.max = std::max(z.max, p.z);
     }
 
-    constexpr const Interval &operator[](int axis) const {
+    constexpr const Interval &operator[](const int axis) const {
         switch (axis) {
             case 0:
                 return x;
