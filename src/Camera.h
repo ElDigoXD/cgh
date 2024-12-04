@@ -53,8 +53,8 @@ public:
 
     Point slm_pixel_00_location;
 
-    int point_cloud_screen_height_in_px = 40;
-    int point_cloud_screen_width_in_px = 60;
+    int point_cloud_screen_height_in_px = 1080/2.7;
+    int point_cloud_screen_width_in_px = point_cloud_screen_height_in_px * (16 / 9.0);
 
     Vec point_cloud_screen_pixel_delta_x;
     Vec point_cloud_screen_pixel_delta_y;

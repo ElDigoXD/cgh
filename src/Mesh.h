@@ -180,7 +180,7 @@ public:
                 continue;
             }
 
-            if (!tree[i].aabb.intersect(ray)) {
+            if (!tree[i].aabb.intersect(ray, max_t)) {
                 continue;
             }
 
@@ -193,7 +193,7 @@ public:
         return false;
     }
 
-    [[nodiscard]] std::optional<HitData> intersect(const Ray &ray, Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
+    [[nodiscard]] std::optional<HitData> intersect(const Ray &ray, const Real max_t, Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
         std::vector<int> vec;
         vec.reserve(tree.size() / 2);
         std::stack stack(std::move(vec));
@@ -207,14 +207,14 @@ public:
 
             if (tree[i].is_leaf()) {
                 if (auto hit = triangles[tree[i].triangle_index()].intersect(ray, cull_backfaces)) {
-                    if (!closest_hit || hit->t < closest_hit->t) {
+                    if (!closest_hit || (hit->t < closest_hit->t && hit->t < max_t)) {
                         closest_hit = hit;
                     }
                 }
                 continue;
             }
 
-            if (!tree[i].aabb.intersect(ray)) {
+            if (!tree[i].aabb.intersect(ray, max_t)) {
                 continue;
             }
 

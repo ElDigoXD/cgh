@@ -72,7 +72,8 @@ public:
         }
     }
 
-    [[nodiscard]] constexpr bool intersect(const Ray &ray) const {
+    [[nodiscard]] constexpr bool intersect(const Ray &ray, const Real max_t) const {
+        // Interval ray_t = {0, max_t};
         Interval ray_t = {0, std::numeric_limits<Real>::infinity()};
         for (int axis = 0; axis < 3; axis++) {
             if (ray.direction.data[axis] == 0) continue;

@@ -313,8 +313,8 @@ public:
         ImGui::SameLine();
         if (im::Button("Export")) {
             FILE *fd = std::fopen("../output.csv", "w");
-            for (int y = 0; y < camera_image_size.y; y++) {
-                for (int x = 0; x < camera_image_size.x; x++) {
+            for (uint y = 0; y < camera_image_size.y; y++) {
+                for (uint x = 0; x < camera_image_size.x; x++) {
                     fprintf(fd, "(%e%+ej)", complex_pixels[y * camera_image_size.x + x].real(), complex_pixels[y * camera_image_size.x + x].imag());
                     fprintf(fd, x == camera_image_size.x - 1 ? "\n" : ",");
                 }

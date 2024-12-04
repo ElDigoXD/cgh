@@ -33,7 +33,7 @@ public:
                                                                      Triangle::CullBackfaces::YES) const {
         std::optional<HitData> closest_hit;
         for (const auto &mesh: meshes) {
-            if (const auto hit = mesh.intersect(ray, cull_backfaces)) {
+            if (const auto hit = mesh.intersect(ray, closest_hit ? closest_hit->t : std::numeric_limits<Real>::infinity(), cull_backfaces)) {
                 if (!closest_hit || hit->t < closest_hit->t) {
                     closest_hit = hit;
                 }
