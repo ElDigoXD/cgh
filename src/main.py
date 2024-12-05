@@ -84,9 +84,9 @@ zs = range(760, 850, 10)
 zs = range(200, 218, 2)
 zs = [299, 300, 301]
 zs = range(50, 600, 50)
-zs = range(296, 310, 2)
+zs = range(296, 304, 2)
 
-max_columns = 3
+max_columns = 2
 num_rows = int(np.ceil(len(zs) / max_columns))
 num_cols = min(len(zs), max_columns)
 
@@ -116,4 +116,4 @@ for i, ax in enumerate(axes.flat):
 
 plt.tight_layout()
 plt.savefig("figure.png")
-plt.show()
+#plt.show()

@@ -79,8 +79,8 @@ public:
         aabb_depth = 3;
         samples_per_pixel = 100;
         max_depth = 1000;
-        width = 1920;
-        height = 1080;
+        // width = 1920;
+        // height = 1080;
 
 
         for (uint i = 0; i < sizeof(scene_names) / sizeof(char *); i++) {
