@@ -44,6 +44,10 @@ public:
                                                      y(std::min(a.y, b.y), std::max(a.y, b.y)),
                                                      z(std::min(a.z, b.z), std::max(a.z, b.z)) {}
 
+    constexpr AABB(const float a[3], const float b[3]) : x(std::min(a[0], b[0]), std::max(a[0], b[0])),
+                                                 y(std::min(a[1], b[1]), std::max(a[1], b[1])),
+                                                 z(std::min(a[2], b[2]), std::max(a[2], b[2])) {}
+
     constexpr AABB(const AABB &a, const AABB &b) {
         x = Interval{a.x, b.x};
         y = Interval{a.y, b.y};
@@ -57,6 +61,14 @@ public:
         y.max = std::max(y.max, p.y);
         z.min = std::min(z.min, p.z);
         z.max = std::max(z.max, p.z);
+    }
+    constexpr void extend(const float p[3]) {
+        x.min = std::min(x.min, static_cast<double>(p[0]));
+        x.max = std::max(x.max, static_cast<double>(p[0]));
+        y.min = std::min(y.min, static_cast<double>(p[1]));
+        y.max = std::max(y.max, static_cast<double>(p[1]));
+        z.min = std::min(z.min, static_cast<double>(p[2]));
+        z.max = std::max(z.max, static_cast<double>(p[2]));
     }
 
     constexpr const Interval &operator[](const int axis) const {

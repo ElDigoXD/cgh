@@ -406,9 +406,9 @@ public:
         wire = sf::VertexArray(sf::PrimitiveType::Lines, visible_triangles.size() * 6);
         int i = 0;
         for (auto &t: visible_triangles) {
-            auto [ax, ay] = camera->project(t.a);
-            auto [bx, by] = camera->project(t.b);
-            auto [cx, cy] = camera->project(t.c);
+            auto [ax, ay] = camera->project(t.a());
+            auto [bx, by] = camera->project(t.b());
+            auto [cx, cy] = camera->project(t.c());
 
             wire[i * 6 + 0].position.x = static_cast<float>(ax);
             wire[i * 6 + 0].position.y = static_cast<float>(ay);
@@ -441,9 +441,9 @@ public:
         for (const auto &mesh: scene->meshes) {
             for (size_t j = 0; j < mesh.triangles.size(); j++) {
                 const auto &t = mesh.triangles[j];
-                auto [ax, ay] = scene->camera->project(t.a);
-                auto [bx, by] = scene->camera->project(t.b);
-                auto [cx, cy] = scene->camera->project(t.c);
+                auto [ax, ay] = scene->camera->project(t.a());
+                auto [bx, by] = scene->camera->project(t.b());
+                auto [cx, cy] = scene->camera->project(t.c());
 
                 wire[offset + j * 6 + 0].position.x = static_cast<float>(ax);
                 wire[offset + j * 6 + 0].position.y = static_cast<float>(ay);

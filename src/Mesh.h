@@ -49,11 +49,11 @@ public:
         while (!stack.empty()) {
             auto [index, start, end] = stack.top();
             stack.pop();
-            tree[index].aabb = AABB(triangles[start].a, triangles[start].b);
+            tree[index].aabb = AABB(triangles[start].a_data, triangles[start].b_data);
             for (int i = start; i < end; i++) {
-                tree[index].aabb.extend(triangles[i].a);
-                tree[index].aabb.extend(triangles[i].b);
-                tree[index].aabb.extend(triangles[i].c);
+                tree[index].aabb.extend(triangles[i].a_data);
+                tree[index].aabb.extend(triangles[i].b_data);
+                tree[index].aabb.extend(triangles[i].c_data);
             }
 
             const auto span = end - start;
@@ -69,20 +69,20 @@ public:
                 } else if (heuristic == Heuristic::TRIANGLE_AREA) {
                     Real smallest_area = std::numeric_limits<Real>::max();
                     for (int axis = 0; axis < 3; axis++) {
-                        auto aabb1 = AABB(triangles[start].a, triangles[start].b);
-                        auto aabb2 = AABB(triangles[mid].a, triangles[mid].b);
+                        auto aabb1 = AABB(triangles[start].a_data, triangles[start].a_data);
+                        auto aabb2 = AABB(triangles[mid].a_data, triangles[mid].b_data);
                         std::sort(triangles.begin() + start, triangles.begin() + end, [axis](const Triangle &a, const Triangle &b) {
-                            return a.a.data[axis] < b.a.data[axis];
+                            return a.a_data[axis] < b.a_data[axis];
                         });
                         for (int i = start; i < mid; i++) {
-                            aabb1.extend(triangles[i].a);
-                            aabb1.extend(triangles[i].b);
-                            aabb1.extend(triangles[i].c);
+                            aabb1.extend(triangles[i].a_data);
+                            aabb1.extend(triangles[i].b_data);
+                            aabb1.extend(triangles[i].c_data);
                         }
                         for (int i = mid; i < end; i++) {
-                            aabb2.extend(triangles[i].a);
-                            aabb2.extend(triangles[i].b);
-                            aabb2.extend(triangles[i].c);
+                            aabb2.extend(triangles[i].a_data);
+                            aabb2.extend(triangles[i].b_data);
+                            aabb2.extend(triangles[i].c_data);
                         }
                         auto area1 = .0;
                         auto area2 = .0;
@@ -101,20 +101,20 @@ public:
                 } else if (heuristic == Heuristic::BOX_AREA) {
                     Real smallest_area = std::numeric_limits<Real>::max();
                     for (int axis = 0; axis < 3; axis++) {
-                        auto aabb1 = AABB(triangles[start].a, triangles[start].b);
-                        auto aabb2 = AABB(triangles[mid].a, triangles[mid].b);
+                        auto aabb1 = AABB(triangles[start].a_data, triangles[start].b_data);
+                        auto aabb2 = AABB(triangles[mid].a_data, triangles[mid].b_data);
                         std::sort(triangles.begin() + start, triangles.begin() + end, [axis](const Triangle &a, const Triangle &b) {
-                            return a.a.data[axis] < b.a.data[axis];
+                            return a.a_data[axis] < b.a_data[axis];
                         });
                         for (int i = start; i < mid; i++) {
-                            aabb1.extend(triangles[i].a);
-                            aabb1.extend(triangles[i].b);
-                            aabb1.extend(triangles[i].c);
+                            aabb1.extend(triangles[i].a_data);
+                            aabb1.extend(triangles[i].b_data);
+                            aabb1.extend(triangles[i].c_data);
                         }
                         for (int i = mid; i < end; i++) {
-                            aabb2.extend(triangles[i].a);
-                            aabb2.extend(triangles[i].b);
-                            aabb2.extend(triangles[i].c);
+                            aabb2.extend(triangles[i].a_data);
+                            aabb2.extend(triangles[i].b_data);
+                            aabb2.extend(triangles[i].c_data);
                         }
                         auto area = aabb1.area() + aabb2.area();
                         if (area < smallest_area) {
@@ -125,20 +125,20 @@ public:
                 } else if (heuristic == Heuristic::BOX_VOLUME) {
                     Real smallest_volume = std::numeric_limits<Real>::max();
                     for (int axis = 0; axis < 3; axis++) {
-                        auto aabb1 = AABB(triangles[start].a, triangles[start].b);
-                        auto aabb2 = AABB(triangles[mid].a, triangles[mid].b);
+                        auto aabb1 = AABB(triangles[start].a_data, triangles[start].b_data);
+                        auto aabb2 = AABB(triangles[mid].a_data, triangles[mid].b_data);
                         std::sort(triangles.begin() + start, triangles.begin() + end, [axis](const Triangle &a, const Triangle &b) {
-                            return a.a.data[axis] < b.a.data[axis];
+                            return a.a().data[axis] < b.a_data[axis];
                         });
                         for (int i = start; i < mid; i++) {
-                            aabb1.extend(triangles[i].a);
-                            aabb1.extend(triangles[i].b);
-                            aabb1.extend(triangles[i].c);
+                            aabb1.extend(triangles[i].a_data);
+                            aabb1.extend(triangles[i].b_data);
+                            aabb1.extend(triangles[i].c_data);
                         }
                         for (int i = mid; i < end; i++) {
-                            aabb2.extend(triangles[i].a);
-                            aabb2.extend(triangles[i].b);
-                            aabb2.extend(triangles[i].c);
+                            aabb2.extend(triangles[i].a_data);
+                            aabb2.extend(triangles[i].b_data);
+                            aabb2.extend(triangles[i].c_data);
                         }
                         auto area = aabb1.volume() + aabb2.volume();
                         if (area < smallest_volume) {
@@ -149,7 +149,7 @@ public:
                 }
 
                 std::sort(triangles.begin() + start, triangles.begin() + end, [best_axis](const Triangle &a, const Triangle &b) {
-                    return a.a.data[best_axis] < b.a.data[best_axis];
+                    return a.a_data[best_axis] < b.a_data[best_axis];
                 });
 
                 tree[index].data = 0;
@@ -229,9 +229,7 @@ public:
 
     static void scale(std::vector<Triangle> &mesh, const Vector &factor) {
         for (auto &i: mesh) {
-            i.a = i.a * factor;
-            i.b = i.b * factor;
-            i.c = i.c * factor;
+            i = Triangle(i.a() * factor, i.b() * factor, i.c() * factor, i.material_idx);
         }
     }
 
@@ -247,19 +245,17 @@ public:
 
     static void move(std::vector<Triangle> &mesh, const Vector &vec) {
         for (auto &i: mesh) {
-            i.a += vec;
-            i.b += vec;
-            i.c += vec;
+            i = Triangle(i.a() + vec, i.b() + vec, i.c() + vec, i.material_idx);
         }
     }
 
     static AABB compute_aabb(const std::vector<Triangle> &mesh) {
         assert(!mesh.empty());
-        AABB aabb{mesh[0].a, mesh[0].b};
+        AABB aabb{mesh[0].a_data, mesh[0].b_data};
         for (auto &t: mesh) {
-            aabb.extend(t.a);
-            aabb.extend(t.b);
-            aabb.extend(t.c);
+            aabb.extend(t.a_data);
+            aabb.extend(t.b_data);
+            aabb.extend(t.c_data);
         }
         return aabb;
     }
@@ -281,15 +277,15 @@ public:
 
     static void flip_faces(std::vector<Triangle> &mesh) {
         for (auto &t: mesh) {
-            std::swap(t.a, t.c);
+            std::swap(t.a_data, t.c_data);
         }
     }
 
     static void change_up_coord(std::vector<Triangle> &mesh) {
         for (auto &t: mesh) {
-            std::swap(t.a.y, t.a.z);
-            std::swap(t.b.y, t.b.z);
-            std::swap(t.c.y, t.c.z);
+            std::swap(t.a_data[1], t.a_data[2]);
+            std::swap(t.b_data[1], t.b_data[2]);
+            std::swap(t.c_data[1], t.c_data[2]);
         }
         scale(mesh, {1, -1, 1});
     }
