@@ -1,10 +1,10 @@
 #pragma once
 
-#include <cmath>
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 
-typedef double Real;
+#include "typedefs.h"
 
 class Color {
 public:
@@ -20,17 +20,21 @@ public:
             Real y;
             Real z;
         };
+
         struct {
             Real r;
             Real g;
             Real b;
         };
+
         Real data[3]{0, 0, 0};
     };
 
-    constexpr Color() {}; // NOLINT(*-pro-type-member-init)
+    constexpr Color() {
+    }; // NOLINT(*-pro-type-member-init)
 
-    constexpr Color(const Real x, const Real y, const Real z) : x{x}, y{y}, z{z} {} // NOLINT(*-pro-type-member-init)
+    constexpr Color(const Real x, const Real y, const Real z) : x{x}, y{y}, z{z} {
+    } // NOLINT(*-pro-type-member-init)
 
     constexpr Color operator+(Color const other) const {
         return Color{x + other.x, y + other.y, z + other.z};
@@ -72,7 +76,6 @@ public:
     }
 
     constexpr void operator-=(const Color other) {
-
         x -= other.x;
         y -= other.y;
         z -= other.z;

@@ -5,8 +5,6 @@
 
 #include "Random.h"
 
-typedef double Real;
-
 class Vector {
 public:
     union {
@@ -15,30 +13,34 @@ public:
             Real y;
             Real z;
         };
+
         struct {
             Real r;
             Real g;
             Real b;
         };
-        Real data[3]{0, 0, 0};
+
+        std::array<Real, 3> data{0, 0, 0};
     };
 
 
-    constexpr Vector() {}; // NOLINT(*-pro-type-member-init)
+    constexpr Vector() { // NOLINT(*-pro-type-member-init)
+    }
 
-    constexpr Vector(const Real x, const Real y, const Real z) : x{x}, y{y}, z{z} {} // NOLINT(*-pro-type-member-init)
+    constexpr Vector(const Real x, const Real y, const Real z) : x{x}, y{y}, z{z} { // NOLINT(*-pro-type-member-init)
+    }
 
     constexpr Vector operator+(Vector const other) const {
         return Vector{x + other.x, y + other.y, z + other.z};
     }
 
 
-    inline constexpr Vector operator-() const {
+    constexpr Vector operator-() const {
         return Vector{-x, -y, -z};
     }
 
-
-    constexpr Vector operator-(const Vector &other) const {
+    template<class T>
+    constexpr Vector operator-(const T &other) const {
         return Vector{x - other.x, y - other.y, z - other.z};
     }
 
@@ -117,9 +119,11 @@ public:
 
 
     [[nodiscard]] constexpr Vector cross(const Vector &other) const {
-        return Vector{y * other.z - z * other.y,
-                      z * other.x - x * other.z,
-                      x * other.y - y * other.x};
+        return Vector{
+            y * other.z - z * other.y,
+            z * other.x - x * other.z,
+            x * other.y - y * other.x
+        };
     }
 
     static Vector random_in_unit_sphere() {
@@ -159,8 +163,9 @@ constexpr Vector normalize(const Vector &a) {
     return a.normalize();
 }
 
-template <> struct std::hash<Vector> {
-    std::size_t operator()(const Vector& v) const noexcept {
+template<>
+struct std::hash<Vector> {
+    std::size_t operator()(const Vector &v) const noexcept {
         return std::hash<Real>()(v.x) ^ (std::hash<Real>()(v.y) << 1) ^ (std::hash<Real>()(v.z) << 2);
     }
 };

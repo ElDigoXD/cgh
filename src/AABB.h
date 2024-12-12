@@ -4,9 +4,8 @@
 #include <limits>
 
 #include "Ray.h"
+#include "Triangle.h"
 #include "Vector.h"
-
-typedef double Real;
 
 class Interval {
 public:
@@ -15,10 +14,12 @@ public:
 
     constexpr Interval() = default;
 
-    constexpr Interval(const Real min, const Real max) : min(min), max(max) {}
+    constexpr Interval(const Real min, const Real max) : min(min), max(max) {
+    }
 
     constexpr Interval(const Interval &a, const Interval &b) : min(std::min(a.min, b.min)),
-                                                               max(std::max(a.max, b.max)) {}
+                                                               max(std::max(a.max, b.max)) {
+    }
 
     [[nodiscard]] constexpr bool has_length() const {
         return max > min;
@@ -38,15 +39,26 @@ public:
 
     constexpr AABB() = default;
 
-    constexpr AABB(const Interval &x, const Interval &y, const Interval &z) : x(x), y(y), z(z) {}
+    constexpr AABB(const Interval &x, const Interval &y, const Interval &z) : x(x), y(y), z(z) {
+    }
 
-    constexpr AABB(const Point &a, const Point &b) : x(std::min(a.x, b.x), std::max(a.x, b.x)),
-                                                     y(std::min(a.y, b.y), std::max(a.y, b.y)),
-                                                     z(std::min(a.z, b.z), std::max(a.z, b.z)) {}
+    constexpr AABB(const Point &a, const Point &b)
+        : x(std::min(a.x, b.x), std::max(a.x, b.x)),
+          y(std::min(a.y, b.y), std::max(a.y, b.y)),
+          z(std::min(a.z, b.z), std::max(a.z, b.z)) {
+    }
 
-    constexpr AABB(const float a[3], const float b[3]) : x(std::min(a[0], b[0]), std::max(a[0], b[0])),
-                                                 y(std::min(a[1], b[1]), std::max(a[1], b[1])),
-                                                 z(std::min(a[2], b[2]), std::max(a[2], b[2])) {}
+    constexpr AABB(const float a[3], const float b[3])
+        : x(std::min(a[0], b[0]), std::max(a[0], b[0])),
+          y(std::min(a[1], b[1]), std::max(a[1], b[1])),
+          z(std::min(a[2], b[2]), std::max(a[2], b[2])) {
+    }
+
+    constexpr AABB(const Vecf a, const Vecf b)
+        : x(std::min(a.x, b.x), std::max(a.x, b.x)),
+          y(std::min(a.y, b.y), std::max(a.y, b.y)),
+          z(std::min(a.z, b.z), std::max(a.z, b.z)) {
+    }
 
     constexpr AABB(const AABB &a, const AABB &b) {
         x = Interval{a.x, b.x};
@@ -62,6 +74,7 @@ public:
         z.min = std::min(z.min, p.z);
         z.max = std::max(z.max, p.z);
     }
+
     constexpr void extend(const float p[3]) {
         x.min = std::min(x.min, static_cast<double>(p[0]));
         x.max = std::max(x.max, static_cast<double>(p[0]));
@@ -69,6 +82,21 @@ public:
         y.max = std::max(y.max, static_cast<double>(p[1]));
         z.min = std::min(z.min, static_cast<double>(p[2]));
         z.max = std::max(z.max, static_cast<double>(p[2]));
+    }
+
+    constexpr void extend(const Vecf &p) {
+        x.min = std::min(x.min, static_cast<double>(p.x));
+        x.max = std::max(x.max, static_cast<double>(p.x));
+        y.min = std::min(y.min, static_cast<double>(p.y));
+        y.max = std::max(y.max, static_cast<double>(p.y));
+        z.min = std::min(z.min, static_cast<double>(p.z));
+        z.max = std::max(z.max, static_cast<double>(p.z));
+    }
+
+    constexpr void extend(const Triangle &t) {
+        extend(t.a());
+        extend(t.b());
+        extend(t.c());
     }
 
     constexpr const Interval &operator[](const int axis) const {
@@ -84,20 +112,21 @@ public:
         }
     }
 
+    // __attribute_noinline__
     [[nodiscard]] constexpr bool intersect(const Ray &ray, const Real max_t) const {
-        // Interval ray_t = {0, max_t};
-        Interval ray_t = {0, std::numeric_limits<Real>::infinity()};
+        Interval ray_t = {0, max_t};
+        //Interval ray_t = {0, std::numeric_limits<Real>::infinity()};
         for (int axis = 0; axis < 3; axis++) {
             if (ray.direction.data[axis] == 0) continue;
 
             const auto inverse_direction = 1 / ray.direction.data[axis];
             const auto t0 = std::min(
-                    ((*this)[axis].min - ray.origin.data[axis]) * inverse_direction,
-                    ((*this)[axis].max - ray.origin.data[axis]) * inverse_direction);
+                ((*this)[axis].min - ray.origin.data[axis]) * inverse_direction,
+                ((*this)[axis].max - ray.origin.data[axis]) * inverse_direction);
 
             const auto t1 = std::max(
-                    ((*this)[axis].min - ray.origin.data[axis]) * inverse_direction,
-                    ((*this)[axis].max - ray.origin.data[axis]) * inverse_direction);
+                ((*this)[axis].min - ray.origin.data[axis]) * inverse_direction,
+                ((*this)[axis].max - ray.origin.data[axis]) * inverse_direction);
 
             if (t0 < t1) {
                 if (t0 > ray_t.min) ray_t.min = t0;
@@ -122,6 +151,7 @@ public:
     [[nodiscard]] constexpr Real volume() const {
         return (x.max - x.min) * (y.max - y.min) * (z.max - z.min);
     }
+
     [[nodiscard]] constexpr Real area() const {
         return (x.max - x.min) * (y.max - y.min) + (x.max - x.min) * (z.max - z.min) + (y.max - y.min) * (z.max - z.min);
     }

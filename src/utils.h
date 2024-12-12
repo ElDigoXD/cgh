@@ -2,10 +2,9 @@
 
 #include <numbers>
 
-#include "SFML/Graphics.hpp"
 #include "imgui.h"
-
-typedef double Real;
+#include "Vecf.h"
+#include "SFML/Graphics.hpp"
 
 enum class Axis {
     X, Y, Z
@@ -17,6 +16,27 @@ constexpr Real degrees_to_radians(const Real degrees) {
 
 static int now() {
     return static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+}
+
+// Todo: Find a better place
+constexpr Vector cross(const Vecf &a, const Vecf &b) {
+    return Vector{
+        static_cast<double>(a.y) * b.z - static_cast<double>(a.z) * b.y,
+        static_cast<double>(a.z) * b.x - static_cast<double>(a.x) * b.z,
+        static_cast<double>(a.x) * b.y - static_cast<double>(a.y) * b.x
+    };
+}
+
+constexpr Vector cross(const Vector &a, const Vecf &b) {
+    return Vector{
+        static_cast<double>(a.y) * b.z - static_cast<double>(a.z) * b.y,
+        static_cast<double>(a.z) * b.x - static_cast<double>(a.x) * b.z,
+        static_cast<double>(a.x) * b.y - static_cast<double>(a.y) * b.x
+    };
+}
+
+constexpr Real dot(const Vecf &a, const Vec &b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
 namespace sf {

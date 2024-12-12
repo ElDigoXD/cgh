@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <limits>
 
-typedef double Real;
+#include "typedefs.h"
 
 static thread_local unsigned int rng_state = 8917264;
 

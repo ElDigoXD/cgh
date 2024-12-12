@@ -3,47 +3,43 @@
 #include <optional>
 
 #include "Ray.h"
+#include "typedefs.h"
+#include "utils.h"
+#include "Vecf.h"
 #include "Vector.h"
 
 struct HitData;
 
 struct Triangle {
-    Triangle() = default;
+    Vecf a_data, b_data, c_data;
+    u32 material_idx{};
 
-    float a_data[3]{}, b_data[3]{}, c_data[3]{};
-    int material_idx{};
-
-    constexpr Triangle(const Point &a, const Point &b, const Point &c, const int material_idx) : material_idx(material_idx) {
-        a_data[0] = static_cast<float>(a.x);
-        a_data[1] = static_cast<float>(a.y);
-        a_data[2] = static_cast<float>(a.z);
-        b_data[0] = static_cast<float>(b.x);
-        b_data[1] = static_cast<float>(b.y);
-        b_data[2] = static_cast<float>(b.z);
-        c_data[0] = static_cast<float>(c.x);
-        c_data[1] = static_cast<float>(c.y);
-        c_data[2] = static_cast<float>(c.z);
+    constexpr Triangle(const Point &a, const Point &b, const Point &c, const int material_idx)
+        : a_data{static_cast<float>(a.x), static_cast<float>(a.y), static_cast<float>(a.z)},
+          b_data{static_cast<float>(b.x), static_cast<float>(b.y), static_cast<float>(b.z)},
+          c_data{static_cast<float>(c.x), static_cast<float>(c.y), static_cast<float>(c.z)},
+          material_idx(material_idx) {
     }
-    constexpr Triangle(const float a[3], const float b[3], const float c[3], const int material_idx): material_idx(material_idx) {
-        std::copy_n(a, 3, a_data);
-        std::copy_n(b, 3, b_data);
-        std::copy_n(c, 3, c_data);
+
+    constexpr Triangle(const Vecf a, const Vecf b, const Vecf c, const u32 material_idx)
+        : a_data(a), b_data(b), c_data(c),
+          material_idx(material_idx) {
     }
 
     [[nodiscard]] constexpr Point a() const {
-        return {a_data[0], a_data[1], a_data[2]};
+        return Point{a_data.x, a_data.y, a_data.z};
     }
 
     [[nodiscard]] constexpr Point b() const {
-        return {b_data[0], b_data[1], b_data[2]};
+        return Point{b_data.x, b_data.y, b_data.z};
     }
 
     [[nodiscard]] constexpr Point c() const {
-        return {c_data[0], c_data[1], c_data[2]};
+        return Point{c_data.x, c_data.y, c_data.z};
     }
 
 
-    [[nodiscard]] constexpr Vec normal() const { return cross(b() - a(), c() - a()); }
+    [[nodiscard]] constexpr Vec normal() const { return cross(b_data - a_data, c_data - a_data); }
 
     constexpr bool operator==(const Triangle &other) const { return a() == other.a() && b() == other.b() && c() == other.c(); }
 
@@ -63,11 +59,44 @@ struct Triangle {
     }
 };
 
-struct HitData {
-    constexpr HitData(const Triangle &triangle, const Real t, const Real u, const Real v) : triangle(triangle), t(t), u(u), v(v) {
+struct Face {
+    union {
+        std::array<u32, 3> vertex_ids{};
+
+        struct {
+            u32 a_vertex_idx;
+            u32 b_vertex_idx;
+            u32 c_vertex_idx;
+        };
+    };
+
+    union {
+        std::array<i32, 3> vertex_normal_ids{};
+
+        struct {
+            i32 a_normal_idx;
+            i32 b_normal_idx;
+            i32 c_normal_idx;
+        };
+    };
+
+    u32 material_idx{};
+
+    constexpr Face(const std::array<u32, 3> &vertex_ids, const std::array<i32, 3> &vertex_normal_ids, const u32 material_idx)
+        : vertex_ids(vertex_ids), vertex_normal_ids(vertex_normal_ids), material_idx(material_idx) {
     }
 
-    Triangle triangle;
+    constexpr Face(const u32 a_vertex_idx, const u32 b_vertex_idx, const u32 c_vertex_idx, const i32 a_normal_idx, const i32 b_normal_idx, const i32 c_normal_idx, const u32 material_idx)
+        : a_vertex_idx(a_vertex_idx), b_vertex_idx(b_vertex_idx), c_vertex_idx(c_vertex_idx), a_normal_idx(a_normal_idx), b_normal_idx(b_normal_idx), c_normal_idx(c_normal_idx), material_idx(material_idx) {
+    }
+};
+
+struct HitData {
+    constexpr HitData(const Real t, const Real u, const Real v) : t(t), u(u), v(v) {
+    }
+
+    u32 face_idx{std::numeric_limits<u32>::max()};
+    u32 mesh_idx{std::numeric_limits<u32>::max()};
     Real t;
     Real u;
     Real v;
@@ -98,7 +127,7 @@ constexpr std::optional<HitData> Triangle::intersect(const Ray &ray, const CullB
     }
     const Real t = dot(edge2, s_cross_edge1) * inv_determinant;
     if (t > 0.000001) {
-        return HitData{*this, t, u, v};
+        return HitData{t, u, v};
     } else {
         return {}; // This ray intersects this triangle, but the intersection is behind the ray
     }

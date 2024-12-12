@@ -2,8 +2,6 @@
 
 #include "Color.h"
 
-typedef double Real;
-
 class Material {
 public:
     Color albedo = Color(0.5, 0.5, 0.7);

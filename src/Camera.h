@@ -12,8 +12,8 @@
 #include "Ray.h"
 #include "Scene.h"
 #include "Triangle.h"
-#include "Vector.h"
 #include "utils.h"
+#include "Vector.h"
 
 class Camera {
 public:
@@ -53,8 +53,11 @@ public:
 
     Point slm_pixel_00_location;
 
-    int point_cloud_screen_height_in_px = 1080/2.7;
-    int point_cloud_screen_width_in_px = point_cloud_screen_height_in_px * (16 / 9.0);
+    // int point_cloud_screen_height_in_px = 1080 / 2.7;
+    // int point_cloud_screen_width_in_px = point_cloud_screen_height_in_px * (16 / 9.0);
+
+    int point_cloud_screen_height_in_px = 40;
+    int point_cloud_screen_width_in_px = 60;
 
     Vec point_cloud_screen_pixel_delta_x;
     Vec point_cloud_screen_pixel_delta_y;
@@ -205,11 +208,11 @@ public:
                 break;
             }
 
-            assert(hit_data->triangle.material_idx < static_cast<int>(scene.materials.size()));
-            const auto material = scene.materials[hit_data->triangle.material_idx];
+            const auto &triangle = scene.get_triangle_from_hit_data(hit_data.value());
+            const auto &material = scene.meshes[hit_data->mesh_idx].materials[triangle.material_idx];
 
             if (material.is_diffuse) {
-                const auto normal = hit_data->triangle.normal().normalize();
+                const auto normal = triangle.normal().normalize();
                 const auto scatter_direction = normal + Vec::random_unit_vector();
                 attenuation *= material.albedo;
                 const Point p = current_ray.at(hit_data->t);
@@ -231,7 +234,7 @@ public:
                     }
                 }
             } else {
-                assert(false && "Not diffuse material is not yet implemented\n");
+                assert(false && "Not diffuse material is not yet implemented");
             }
         }
 
@@ -273,9 +276,9 @@ public:
 
         for (int y = 0; y < point_cloud_screen_height_in_px; y++) {
             for (int x = 0; x < point_cloud_screen_width_in_px; x++) {
-                auto ray = get_random_orthogonal_ray_at_screen(x, y);
+                const auto &ray = get_random_orthogonal_ray_at_screen(x, y);
 
-                if (auto hit_data = scene.intersect(ray)) {
+                if (const auto &hit_data = scene.intersect(ray)) {
                     //point_cloud.emplace_back(std::pair{ray.at(hit_data.value().t), rand_real() * 2 * std::numbers::pi});
                     point_cloud.emplace_back(ray.at(hit_data.value().t), Color::black());
                 }
@@ -315,7 +318,7 @@ public:
             }
             color /= samples_per_pixel;
         }
-
+        assert(point_cloud.size() > 0);
         printf("[ INFO ] Ended color generation for the point cloud in %.1fs (%ld ms/point)\n", (now() - start) / 1000.0, (now() - start) / point_cloud.size());
         printf("[ INFO ] Starting wave computation\n");
 
@@ -350,13 +353,14 @@ public:
         printf("[ INFO ] Ended wave computation in %.1fs (%ld ms/point)\n", (now() - start) / 1000.0, (now() - start) / point_cloud.size());
     }
 
-    static std::complex<Real> compute_wave_2(Ray ray, const Scene &scene, const Point &expected_point, const Color &color) {
-        if (auto hit_data = scene.intersect(ray)) {
+    static std::complex<Real> compute_wave_2(const Ray &ray, const Scene &scene, const Point &expected_point, const Color &color) {
+        if (const auto &hit_data = scene.intersect(ray)) {
             if (!(ray.at(hit_data->t) - expected_point).is_close_to_0()) {
                 return {0, 0};
             }
 
-            auto material = scene.materials[hit_data->triangle.material_idx];
+            const auto &triangle = scene.get_triangle_from_hit_data(hit_data.value());
+            const auto &material = scene.meshes[hit_data->mesh_idx].materials[triangle.material_idx];
 
             if (!material.is_diffuse) {
                 dprintf(STDERR_FILENO, "Not diffuse material is not yet implemented\n");
@@ -364,9 +368,9 @@ public:
             }
 
             // TODO: Compute a more accurate intensity value
-            auto amplitude = color.r + color.g + color.b / 3;
-            auto sub_phase = (2 * std::numbers::pi / wavelength) * ((ray.origin - expected_point).length());
-            auto sub_phase_c = std::polar(1.0, sub_phase);
+            const auto amplitude = color.r + color.g + color.b / 3;
+            const auto sub_phase = (2 * std::numbers::pi / wavelength) * ((ray.origin - expected_point).length());
+            const auto sub_phase_c = std::polar(1.0, sub_phase);
 
             return amplitude * sub_phase_c;
         }
@@ -393,10 +397,11 @@ public:
             }
 
 
-            auto material = scene.materials[hit_data->triangle.material_idx];
+            const auto &triangle = scene.get_triangle_from_hit_data(hit_data.value());
+            const auto &material = scene.meshes[hit_data->mesh_idx].materials[triangle.material_idx];
 
             if (material.is_diffuse) {
-                const auto normal = hit_data->triangle.normal().normalize();
+                const auto normal = triangle.normal().normalize();
                 const auto scatter_direction = normal + Vec::random_unit_vector();
                 attenuation *= material.albedo;
                 const Point p = current_ray.at(hit_data->t);
@@ -425,7 +430,7 @@ public:
         // Wave computation
         const auto final_color = (attenuation * sky_lighting_factor + diffuse_lighting * diffuse_lighting_factor).clamp(0, 1);
         auto intensity = final_color.r + final_color.g + final_color.b / 3;
-        auto sub_phase = (2 * std::numbers::pi / wavelength) * ((ray.origin - expected_point).length());
+        auto sub_phase = (2 * std::numbers::pi / wavelength) * (ray.origin - expected_point).length();
         auto sub_phase_c = std::polar(1.0, sub_phase);
 
         return intensity * sub_phase_c;

@@ -1,13 +1,14 @@
-#include <thread>
 #include <functional>
+#include <thread>
 #include <unordered_set>
 
-#include "SFML/Graphics.hpp"
 #include "imgui-SFML.h"
 #include "imgui.h"
+#include "SFML/Graphics.hpp"
 
 #include "Camera.h"
 #include "Scene.h"
+#include "typedefs.h"
 #include "Vector.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
@@ -75,6 +76,7 @@ public:
 
         enable_render = true;
         enable_wireframe = false;
+        enable_only_visible_wireframe = false;
         enable_aabb = false;
         aabb_depth = 3;
         samples_per_pixel = 100;
@@ -242,14 +244,14 @@ public:
             ImGui::PopItemWidth();
 
             ImGui::Text("Look From:");
-            if (im::DragDouble3("##Look From", scene->camera->look_from.data, 1, -300, 300)) {
+            if (im::DragDouble3("##Look From", scene->camera->look_from.data.data(), 1, -300, 300)) {
                 update_render();
                 update_wireframe();
                 update_aabb_wireframe();
                 update_lights();
             }
             ImGui::Text("Look At:");
-            if (im::DragDouble3("##Look At", scene->camera->look_at.data, 0.01, -100, 100)) {
+            if (im::DragDouble3("##Look At", scene->camera->look_at.data.data(), 0.01, -100, 100)) {
                 update_render();
                 update_wireframe();
                 update_aabb_wireframe();
@@ -287,7 +289,7 @@ public:
 
             if (!scene->point_lights.empty()) {
                 ImGui::Text("First light:");
-                if (ImGui::DragDouble3("##First light", const_cast<double *>(scene->point_lights[0].first.data), -0.01,
+                if (ImGui::DragDouble3("##First light", scene->point_lights[0].first.data.data(), -0.01,
                                        -10, 10)) {
                     update_render();
                     update_lights();
@@ -392,13 +394,10 @@ public:
         const auto camera = scene->camera;
         camera->update();
         for (const auto &m: scene->meshes) {
-            for (const auto &t: m.triangles) {
-                auto [px, py] = camera->project(t.center());
-                Ray ray = camera->get_orthogonal_ray_at(std::floor(px), std::floor(py));
-                if (const auto hit = t.intersect(ray, Triangle::CullBackfaces::YES)) {
-                    if (hit->triangle == t) {
-                        visible_triangles.emplace_back(t);
-                    }
+            for (const auto &face: m.faces) {
+                const auto &t = m.getTriangleFromFace(face);
+                if (dot(t.normal().normalize(), camera->w) >= 0) {
+                    visible_triangles.emplace_back(t);
                 }
             }
         }
@@ -439,8 +438,8 @@ public:
         scene->camera->update();
         auto offset = 0;
         for (const auto &mesh: scene->meshes) {
-            for (size_t j = 0; j < mesh.triangles.size(); j++) {
-                const auto &t = mesh.triangles[j];
+            for (size_t j = 0; j < mesh.faces.size(); j++) {
+                const auto &t = mesh.getTriangleFromFace(mesh.faces[j]);
                 auto [ax, ay] = scene->camera->project(t.a());
                 auto [bx, by] = scene->camera->project(t.b());
                 auto [cx, cy] = scene->camera->project(t.c());
@@ -460,7 +459,7 @@ public:
                 wire[offset + j * 6 + 5].position.x = static_cast<float>(cx);
                 wire[offset + j * 6 + 5].position.y = static_cast<float>(cy);
             }
-            offset += static_cast<int>(mesh.triangles.size()) * 6;
+            offset += static_cast<int>(mesh.faces.size()) * 6;
         }
     }
 
@@ -510,7 +509,7 @@ public:
 
         auto array_size = 0;
         for (const auto &mesh: scene->meshes) {
-            const auto tree = mesh.tree;
+            const auto &tree = mesh.tree;
             const int pow = std::min(1 << depth, static_cast<int>(tree.size()) / 2);
             array_size += 12 * 2 * pow;
         }
@@ -519,7 +518,7 @@ public:
 
         auto offset = 0;
         for (const auto &mesh: scene->meshes) {
-            const auto tree = mesh.tree;
+            const auto &tree = mesh.tree;
 
             const int pow = std::min(1 << depth, static_cast<int>(tree.size()) / 2);
 
