@@ -396,7 +396,7 @@ public:
         for (const auto &m: scene->meshes) {
             for (const auto &face: m.faces) {
                 const auto &t = m.getTriangleFromFace(face);
-                if (dot(t.normal().normalize(), camera->w) >= 0) {
+                if (dot(t.normal(), camera->w) >= 0) {
                     visible_triangles.emplace_back(t);
                 }
             }

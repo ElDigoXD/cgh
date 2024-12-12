@@ -38,8 +38,8 @@ struct Triangle {
         return Point{c_data.x, c_data.y, c_data.z};
     }
 
-
-    [[nodiscard]] constexpr Vec normal() const { return cross(b_data - a_data, c_data - a_data); }
+    /** @return Triangle's normalized normal vector. */
+    [[nodiscard]] constexpr Vec normal() const { return cross(b_data - a_data, c_data - a_data).normalize(); }
 
     constexpr bool operator==(const Triangle &other) const { return a() == other.a() && b() == other.b() && c() == other.c(); }
 

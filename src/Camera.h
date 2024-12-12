@@ -212,7 +212,7 @@ public:
             const auto &material = scene.meshes[hit_data->mesh_idx].materials[triangle.material_idx];
 
             if (material.is_diffuse) {
-                const auto normal = triangle.normal().normalize();
+                const auto normal = triangle.normal();
                 const auto scatter_direction = normal + Vec::random_unit_vector();
                 attenuation *= material.albedo;
                 const Point p = current_ray.at(hit_data->t);
@@ -401,7 +401,7 @@ public:
             const auto &material = scene.meshes[hit_data->mesh_idx].materials[triangle.material_idx];
 
             if (material.is_diffuse) {
-                const auto normal = triangle.normal().normalize();
+                const auto normal = triangle.normal();
                 const auto scatter_direction = normal + Vec::random_unit_vector();
                 attenuation *= material.albedo;
                 const Point p = current_ray.at(hit_data->t);
