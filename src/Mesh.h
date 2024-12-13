@@ -226,7 +226,7 @@ public:
         return closest_hit;
     }
 
-    template<class VecType, class = std::enable_if_t<std::is_same_v<VecType, Vec> || std::is_same_v<VecType, Vecf>> >
+    template<class VecType> requires std::is_same_v<VecType, Vec> || std::is_same_v<VecType, Vecf>
     constexpr void scale(const VecType &factor) {
         for (auto &t: triangles) {
             t.a_data *= factor;
@@ -239,7 +239,7 @@ public:
         scale(Vecf{factor, factor, factor});
     }
 
-    template<class VecType, class = std::enable_if_t<std::is_same_v<VecType, Vec> || std::is_same_v<VecType, Vecf>> >
+    template<class VecType> requires std::is_same_v<VecType, Vec> || std::is_same_v<VecType, Vecf>
     constexpr void move(const VecType &vec) {
         for (auto &t: triangles) {
             t.a_data += vec;

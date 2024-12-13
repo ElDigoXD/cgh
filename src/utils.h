@@ -19,15 +19,8 @@ static int now() {
 }
 
 // Todo: Find a better place
-constexpr Vector cross(const Vecf &a, const Vecf &b) {
-    return Vector{
-        static_cast<double>(a.y) * b.z - static_cast<double>(a.z) * b.y,
-        static_cast<double>(a.z) * b.x - static_cast<double>(a.x) * b.z,
-        static_cast<double>(a.x) * b.y - static_cast<double>(a.y) * b.x
-    };
-}
-
-constexpr Vector cross(const Vector &a, const Vecf &b) {
+template<class VecTypeA, class VecTypeB> requires (std::is_same_v<VecTypeA, Vec> || std::is_same_v<VecTypeA, Vecf>) && (std::is_same_v<VecTypeB, Vec> || std::is_same_v<VecTypeB, Vecf>)
+constexpr Vector cross(const VecTypeA &a, const VecTypeB &b) {
     return Vector{
         static_cast<double>(a.y) * b.z - static_cast<double>(a.z) * b.y,
         static_cast<double>(a.z) * b.x - static_cast<double>(a.x) * b.z,
@@ -40,7 +33,7 @@ constexpr Real dot(const Vecf &a, const Vec &b) {
 }
 
 namespace sf {
-    constexpr Vector2f to_vector2f(const sf::Vector2u &v) { return {static_cast<float>(v.x), static_cast<float>(v.y)}; }
+    constexpr Vector2f to_vector2f(const Vector2u &v) { return {static_cast<float>(v.x), static_cast<float>(v.y)}; }
 }
 
 namespace ImGui {
