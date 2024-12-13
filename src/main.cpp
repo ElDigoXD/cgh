@@ -394,8 +394,7 @@ public:
         const auto camera = scene->camera;
         camera->update();
         for (const auto &m: scene->meshes) {
-            for (const auto &face: m.faces) {
-                const auto &t = m.getTriangleFromFace(face);
+            for (const auto &t: m.triangles) {
                 if (dot(t.normal(), camera->w) >= 0) {
                     visible_triangles.emplace_back(t);
                 }
@@ -438,8 +437,8 @@ public:
         scene->camera->update();
         auto offset = 0;
         for (const auto &mesh: scene->meshes) {
-            for (size_t j = 0; j < mesh.faces.size(); j++) {
-                const auto &t = mesh.getTriangleFromFace(mesh.faces[j]);
+            for (size_t j = 0; j < mesh.triangles.size(); j++) {
+                const auto &t = mesh.triangles[j];
                 auto [ax, ay] = scene->camera->project(t.a());
                 auto [bx, by] = scene->camera->project(t.b());
                 auto [cx, cy] = scene->camera->project(t.c());
@@ -459,7 +458,7 @@ public:
                 wire[offset + j * 6 + 5].position.x = static_cast<float>(cx);
                 wire[offset + j * 6 + 5].position.y = static_cast<float>(cy);
             }
-            offset += static_cast<int>(mesh.faces.size()) * 6;
+            offset += static_cast<int>(mesh.triangles.size()) * 6;
         }
     }
 

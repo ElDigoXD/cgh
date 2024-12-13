@@ -33,7 +33,7 @@ public:
             if (const auto &hit = mesh.intersect(ray, closest_hit ? closest_hit->t : std::numeric_limits<Real>::infinity(), cull_backfaces)) {
                 if (!closest_hit || hit->t < closest_hit->t) {
                     closest_hit = hit;
-                    closest_hit->mesh_idx = i;
+                    closest_hit->material = mesh.materials[hit->triangle.material_idx];
                 }
             }
         }
@@ -48,16 +48,9 @@ public:
     [[nodiscard]] constexpr int get_triangle_count() const {
         int count = 0;
         for (const auto &mesh: meshes) {
-            count += static_cast<int>(mesh.faces.size());
+            count += static_cast<int>(mesh.triangles.size());
         }
         return count;
-    }
-
-    [[nodiscard]] constexpr Triangle get_triangle_from_hit_data(const HitData &hit_data) const {
-        assert(hit_data.mesh_idx != std::numeric_limits<u32>::max());
-        assert(hit_data.face_idx != std::numeric_limits<u32>::max());
-        const auto &mesh = meshes[hit_data.mesh_idx];
-        return mesh.getTriangleFromFace(mesh.faces[hit_data.face_idx]);
     }
 };
 

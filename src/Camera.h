@@ -208,8 +208,8 @@ public:
                 break;
             }
 
-            const auto &triangle = scene.get_triangle_from_hit_data(hit_data.value());
-            const auto &material = scene.meshes[hit_data->mesh_idx].materials[triangle.material_idx];
+            const auto &triangle = hit_data->triangle;
+            const auto &material = hit_data->material;
 
             if (material.is_diffuse) {
                 const auto normal = triangle.normal();
@@ -359,8 +359,8 @@ public:
                 return {0, 0};
             }
 
-            const auto &triangle = scene.get_triangle_from_hit_data(hit_data.value());
-            const auto &material = scene.meshes[hit_data->mesh_idx].materials[triangle.material_idx];
+            // const auto &triangle = hit_data->triangle;
+            const auto &material = hit_data->material;
 
             if (!material.is_diffuse) {
                 dprintf(STDERR_FILENO, "Not diffuse material is not yet implemented\n");
@@ -397,8 +397,8 @@ public:
             }
 
 
-            const auto &triangle = scene.get_triangle_from_hit_data(hit_data.value());
-            const auto &material = scene.meshes[hit_data->mesh_idx].materials[triangle.material_idx];
+            const auto &triangle = hit_data->triangle;
+            const auto &material = hit_data->material;
 
             if (material.is_diffuse) {
                 const auto normal = triangle.normal();

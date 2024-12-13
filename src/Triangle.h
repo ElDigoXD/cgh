@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include "Material.h"
 #include "Ray.h"
 #include "typedefs.h"
 #include "utils.h"
@@ -12,6 +13,7 @@ struct HitData;
 
 struct Triangle {
     Vecf a_data, b_data, c_data;
+    Vecf a_normal_data, b_normal_data, c_normal_data;
     u32 material_idx{};
 
     constexpr Triangle(const Point &a, const Point &b, const Point &c, const int material_idx)
@@ -21,8 +23,13 @@ struct Triangle {
           material_idx(material_idx) {
     }
 
-    constexpr Triangle(const Vecf a, const Vecf b, const Vecf c, const u32 material_idx)
+    constexpr Triangle(const Vecf &a, const Vecf &b, const Vecf &c, const u32 material_idx)
         : a_data(a), b_data(b), c_data(c),
+          material_idx(material_idx) {
+    }
+
+    constexpr Triangle(const Vecf &a, const Vecf &b, const Vecf &c, const Vecf &a_normal, const Vecf &b_normal, const Vecf &c_normal, const u32 material_idx)
+        : a_data(a), b_data(b), c_data(c), a_normal_data(a_normal), b_normal_data(b_normal), c_normal_data(c_normal),
           material_idx(material_idx) {
     }
 
@@ -92,11 +99,11 @@ struct Face {
 };
 
 struct HitData {
-    constexpr HitData(const Real t, const Real u, const Real v) : t(t), u(u), v(v) {
+    constexpr HitData(const Triangle &triangle, const Real t, const Real u, const Real v) : triangle(triangle), t(t), u(u), v(v) {
     }
 
-    u32 face_idx{std::numeric_limits<u32>::max()};
-    u32 mesh_idx{std::numeric_limits<u32>::max()};
+    Triangle triangle;
+    Material material;
     Real t;
     Real u;
     Real v;
@@ -110,27 +117,21 @@ constexpr std::optional<HitData> Triangle::intersect(const Ray &ray, const CullB
     const Vec ray_cross_edge2 = cross(ray.direction, edge2);
     const Real determinant = dot(edge1, ray_cross_edge2);
 
-    if (determinant < epsilon && (cull_backfaces == CullBackfaces::YES || determinant > -epsilon)) {
-        return {}; // This ray is parallel to this triangle (or gets culled away)
-    }
+    if (determinant < epsilon && (cull_backfaces == CullBackfaces::YES || determinant > -epsilon)) { return {}; } // This ray is parallel to this triangle (or gets culled away)
 
     const Real inv_determinant = 1 / determinant;
     const Vec s = ray.origin - a();
     const Real u = dot(s, ray_cross_edge2) * inv_determinant;
-    if (u < 0 || u > 1) {
-        return {};
-    }
+    if (u < 0 || u > 1) { return {}; }
+
     const Vec s_cross_edge1 = cross(s, edge1);
     const Real v = dot(ray.direction, s_cross_edge1) * inv_determinant;
-    if (v < 0 || u + v > 1) {
-        return {};
-    }
+    if (v < 0 || u + v > 1) { return {}; }
+
     const Real t = dot(edge2, s_cross_edge1) * inv_determinant;
-    if (t > 0.000001) {
-        return HitData{t, u, v};
-    } else {
-        return {}; // This ray intersects this triangle, but the intersection is behind the ray
-    }
+    if (t <= 0.000001) { return {}; } // This ray intersects this triangle, but the intersection is behind the ray
+
+    return HitData{*this, t, u, v};
 }
 
 template<>

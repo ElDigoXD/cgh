@@ -106,7 +106,7 @@ const Scene *multi_mesh(const int image_width, const int image_height) {
     cornell_box_mesh.scale(factor);
 
     teapot_mesh.normalize();
-    teapot_mesh.move({-0.4, -0.02, 0.4});
+    teapot_mesh.move(Vecf{-0.4, -0.02, 0.4});
     teapot_mesh.move(center);
     teapot_mesh.scale(factor);
 
@@ -116,7 +116,7 @@ const Scene *multi_mesh(const int image_width, const int image_height) {
     dragon_mesh.normalize();
     dragon_mesh.scale(0.8);
     dragon_mesh.flip(Axis::X);
-    dragon_mesh.move({0.35, 0.255, -0.35});
+    dragon_mesh.move(Vecf{0.35, 0.255, -0.35});
     dragon_mesh.move(center);
     dragon_mesh.scale(factor);
 

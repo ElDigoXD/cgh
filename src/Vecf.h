@@ -45,7 +45,8 @@ struct Vecf {
         z *= other.z;
     }
 
-    constexpr void operator+=(const Vecf &other) {
+    template<class VecType, class = std::enable_if_t<std::is_same_v<VecType, Vec> || std::is_same_v<VecType, Vecf>> >
+    constexpr void operator+=(const VecType &other) {
         x += other.x;
         y += other.y;
         z += other.z;
