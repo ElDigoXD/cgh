@@ -23,11 +23,11 @@ public:
     }
 
     [[nodiscard]] constexpr bool intersects(const Ray &ray, const Real max_t) const{
-        return std::ranges::any_of(meshes, [&](const Mesh &mesh) { return mesh.intersects(ray, max_t); });
+        return std::ranges::any_of(meshes, [&](const Mesh &mesh) { return mesh.does_intersect(ray, max_t); });
     }
 
-    [[nodiscard]] constexpr std::optional<HitData> intersect(const Ray &ray, const Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
-        std::optional<HitData> closest_hit;
+    [[nodiscard]] constexpr std::optional<TriangleIntersection> intersect(const Ray &ray, const Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
+        std::optional<TriangleIntersection> closest_hit;
         for (usize i = 0; i < meshes.size(); i++) {
             const auto &mesh = meshes[i];
             if (const auto &hit = mesh.intersect(ray, closest_hit ? closest_hit->t : std::numeric_limits<Real>::infinity(), cull_backfaces)) {

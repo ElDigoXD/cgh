@@ -159,7 +159,7 @@ public:
     }
 
     // __attribute_noinline__
-    [[nodiscard]] bool intersects(const Ray &ray, const Real max_t) const {
+    [[nodiscard]] bool does_intersect(const Ray &ray, const Real max_t) const {
         std::vector<int> vec;
         vec.reserve(log_n);
         std::stack stack(std::move(vec));
@@ -192,13 +192,13 @@ public:
     }
 
     // __attribute_noinline__
-    [[nodiscard]] std::optional<HitData> intersect(const Ray &ray, const Real max_t, const Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
+    [[nodiscard]] std::optional<TriangleIntersection> intersect(const Ray &ray, const Real max_t, const Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
         std::vector<int> vec;
         vec.reserve(log_n);
         std::stack stack(std::move(vec));
         stack.push(0);
 
-        std::optional<HitData> closest_hit;
+        std::optional<TriangleIntersection> closest_hit;
 
         while (!stack.empty()) {
             const int i = stack.top();

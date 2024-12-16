@@ -9,7 +9,7 @@
 #include "Vecf.h"
 #include "Vector.h"
 
-struct HitData;
+struct TriangleIntersection;
 
 struct Triangle {
     Vecf a_data, b_data, c_data;
@@ -55,7 +55,7 @@ struct Triangle {
         NO
     };
 
-    [[nodiscard]] constexpr std::optional<HitData> intersect(const Ray &ray, CullBackfaces cull_backfaces) const;
+    [[nodiscard]] constexpr std::optional<TriangleIntersection> intersect(const Ray &ray, CullBackfaces cull_backfaces) const;
 
     constexpr Point operator[](const Real vertex) const { return vertex == 0 ? a() : vertex == 1 ? b() : c(); }
 
@@ -98,8 +98,8 @@ struct Face {
     }
 };
 
-struct HitData {
-    constexpr HitData(const Triangle &triangle, const Real t, const Real u, const Real v) : triangle(triangle), t(t), u(u), v(v) {
+struct TriangleIntersection {
+    constexpr TriangleIntersection(const Triangle &triangle, const Real t, const Real u, const Real v) : triangle(triangle), t(t), u(u), v(v) {
     }
 
     Triangle triangle;
@@ -110,7 +110,7 @@ struct HitData {
 };
 
 // https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
-constexpr std::optional<HitData> Triangle::intersect(const Ray &ray, const CullBackfaces cull_backfaces = CullBackfaces::YES) const {
+constexpr std::optional<TriangleIntersection> Triangle::intersect(const Ray &ray, const CullBackfaces cull_backfaces = CullBackfaces::YES) const {
     constexpr Real epsilon = std::numeric_limits<Real>::epsilon();
     const Vec edge1 = b() - a();
     const Vec edge2 = c() - a();
@@ -131,7 +131,7 @@ constexpr std::optional<HitData> Triangle::intersect(const Ray &ray, const CullB
     const Real t = dot(edge2, s_cross_edge1) * inv_determinant;
     if (t <= 0.000001) { return {}; } // This ray intersects this triangle, but the intersection is behind the ray
 
-    return HitData{*this, t, u, v};
+    return TriangleIntersection{*this, t, u, v};
 }
 
 template<>
