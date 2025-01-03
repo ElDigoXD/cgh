@@ -32,6 +32,9 @@ struct Vecf {
     explicit constexpr Vecf(const std::array<double, 3> &data): x{static_cast<Real>(data[0])}, y{static_cast<Real>(data[1])}, z{static_cast<Real>(data[2])} {
     }
 
+    constexpr Vecf operator+(const Vecf &other) const {
+        return Vecf{x + other.x, y + other.y, z + other.z};
+    }
 
     constexpr void operator*=(const Real scalar) {
         x *= scalar;
@@ -43,6 +46,10 @@ struct Vecf {
         x *= other.x;
         y *= other.y;
         z *= other.z;
+    }
+
+    [[nodiscard]] constexpr bool is_close_to_0() const {
+        return std::abs(x) < 0.00001 && std::abs(y) < 0.00001 && std::abs(z) < 0.00001;
     }
 
     template<class VecType> requires std::is_same_v<VecType, Vec> || std::is_same_v<VecType, Vecf>

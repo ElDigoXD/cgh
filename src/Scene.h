@@ -22,14 +22,13 @@ public:
         : camera(camera) {
     }
 
-    [[nodiscard]] constexpr bool intersects(const Ray &ray, const Real max_t) const{
+    [[nodiscard]] constexpr bool intersects(const Ray &ray, const Real max_t) const {
         return std::ranges::any_of(meshes, [&](const Mesh &mesh) { return mesh.does_intersect(ray, max_t); });
     }
 
     [[nodiscard]] constexpr std::optional<TriangleIntersection> intersect(const Ray &ray, const Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
         std::optional<TriangleIntersection> closest_hit;
-        for (usize i = 0; i < meshes.size(); i++) {
-            const auto &mesh = meshes[i];
+        for (const auto &mesh: meshes) {
             if (const auto &hit = mesh.intersect(ray, closest_hit ? closest_hit->t : std::numeric_limits<Real>::infinity(), cull_backfaces)) {
                 if (!closest_hit || hit->t < closest_hit->t) {
                     closest_hit = hit;
@@ -40,8 +39,8 @@ public:
         return closest_hit;
     }
 
-    void add_mesh(Mesh &mesh) {
-        mesh.generate_bvh();
+    void add_mesh(Mesh &mesh, const Mesh::Heuristic heuristic = Mesh::Heuristic::BOX_AREA) {
+        mesh.generate_bvh(heuristic);
         meshes.emplace_back(mesh);
     }
 
@@ -70,6 +69,9 @@ const Scene *dragon(int image_width, int image_height);
 
 const Scene *tree(int image_width, int image_height);
 
+const Scene *bmw(int image_width, int image_height);
+const Scene *knob(int image_width, int image_height);
+
 static constexpr const char *scene_names[] = {
     "basic_triangle",
     "cornell_box",
@@ -79,6 +81,8 @@ static constexpr const char *scene_names[] = {
     "multi_mesh",
     "dragon",
     "tree",
+    "bmw",
+    "knob",
 };
 
 static const std::function<const Scene *(int, int)> scenes[] = {
@@ -90,4 +94,6 @@ static const std::function<const Scene *(int, int)> scenes[] = {
     multi_mesh,
     dragon,
     tree,
+    bmw,
+    knob,
 };

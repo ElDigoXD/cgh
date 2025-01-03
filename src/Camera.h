@@ -8,6 +8,7 @@
 
 #include "omp.h"
 
+#include "BRDFs.h"
 #include "Material.h"
 #include "Ray.h"
 #include "Scene.h"
@@ -68,6 +69,7 @@ public:
     Real diffuse_lighting_factor = 1;
 
     int computed_pixels = 0;
+    int MAX_THREADS = 16;
 
     Camera(const int image_width, const int image_height) : Camera(image_width, image_height, 10, 10, 90) {
     }
@@ -201,6 +203,7 @@ public:
         Color diffuse_lighting(0, 0, 0);
         Color attenuation(1, 1, 1);
 
+
         while (auto hit_data = scene.intersect(current_ray, Triangle::CullBackfaces::YES)) {
             // Ray does not find an ambient source of light (escapes the scene)
             if (current_depth-- == 0) {
@@ -211,31 +214,31 @@ public:
             const auto &triangle = hit_data->triangle;
             const auto &material = hit_data->material;
 
-            if (material.is_diffuse) {
-                const auto normal = triangle.normal();
-                const auto scatter_direction = normal + Vec::random_unit_vector();
-                attenuation *= material.albedo;
-                const Point p = current_ray.at(hit_data->t);
-                current_ray = Ray{p, scatter_direction};
-                if (attenuation.is_close_to_0()) {
-                    break;
-                }
-                for (const auto &[light_position, light_color]: scene.point_lights) {
-                    const auto light_offset = light_position - p;
-                    const auto light_distance = light_offset.length();
-                    const auto light_direction = light_offset.normalize();
-                    const auto dot_product = dot(light_direction, normal);
+            const auto &normal = triangle.normal(hit_data->u, hit_data->v);
+            // TODO: Find how to get direction
+            const auto scatter_direction = normal + Vec::random_unit_vector();
+            //attenuation *= material.albedo;
+            attenuation *= material.albedo();
+            const Point p = current_ray.at(hit_data->t);
+            if (attenuation.is_close_to_0()) {
+                break;
+            }
+            for (const auto &[light_position, light_color]: scene.point_lights) {
+                const auto &light_offset = light_position - p;
+                const auto &light_distance = light_offset.length();
+                const auto &light_direction = light_offset.normalize();
+                const auto &dot_product = dot(light_direction, normal);
 
-                    if (dot_product >= 0) {
-                        const auto shadow_ray = Ray{p, light_direction};
-                        if (!scene.intersects(shadow_ray, light_distance)) {
-                            diffuse_lighting += attenuation * light_color * dot_product;
-                        }
+                if (dot_product >= 0) {
+                    const auto shadow_ray = Ray{p, light_direction};
+                    if (!scene.intersects(shadow_ray, light_distance)) {
+                        // diffuse_lighting += attenuation * light_color * dot_product;
+                        const auto &a = material.BRDF(light_direction, -current_ray.direction, normal);
+                        diffuse_lighting += attenuation * Color{a.x, a.y, a.z} * dot_product;
                     }
                 }
-            } else {
-                assert(false && "Not diffuse material is not yet implemented");
             }
+            current_ray = Ray{p, scatter_direction};
         }
 
         // bg color
@@ -249,23 +252,22 @@ public:
 
     void render(unsigned char pixels[], const Scene &scene, const std::stop_token &st = {}) const {
         const auto start = now();
-        printf("[ INFO ] Starting cgi render with %dx%d pixels, %d spp, %d max depth, %d threads\n", image_width, image_height, samples_per_pixel, max_depth, omp_get_max_threads() * 2);
-#pragma omp parallel for collapse(1) shared(pixels) default(none) firstprivate(scene, st) num_threads(omp_get_max_threads()*2)
+        printf("[ INFO ] Starting cgi render with %dx%d pixels, %d spp, %d max depth, %d threads\n", image_width, image_height, samples_per_pixel, max_depth, MAX_THREADS);
+#pragma omp parallel for collapse(1) shared(pixels, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)
         for (int y = 0; y < image_height; y++) {
-            if (!st.stop_requested()) {
-                for (int x = 0; x < image_width; x++) {
-                    Color color;
-                    for (int i = 0; i < samples_per_pixel; i++) {
-                        const auto ray = get_random_orthogonal_ray_at(x, y);
-                        color += compute_ray_color(ray, scene, max_depth);
-                    }
-                    color /= samples_per_pixel;
-
-                    pixels[(y * image_width + x) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
-                    pixels[(y * image_width + x) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
-                    pixels[(y * image_width + x) * 4 + 2] = static_cast<unsigned char>(std::sqrt(color.b) * 255);
-                    pixels[(y * image_width + x) * 4 + 3] = 255;
+            if (st.stop_requested()) [[unlikely]] continue;
+            for (int x = 0; x < image_width; x++) {
+                Color color;
+                for (int i = 0; i < samples_per_pixel; i++) {
+                    const auto ray = get_random_orthogonal_ray_at(x, y);
+                    color += compute_ray_color(ray, scene, max_depth);
                 }
+                color /= samples_per_pixel;
+
+                pixels[(y * image_width + x) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
+                pixels[(y * image_width + x) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
+                pixels[(y * image_width + x) * 4 + 2] = static_cast<unsigned char>(std::sqrt(color.b) * 255);
+                pixels[(y * image_width + x) * 4 + 3] = 255;
             }
         }
         printf("[ INFO ] Finished cgi render in %.1fs\n", (now() - start) / 1000.0);
@@ -307,7 +309,7 @@ public:
         printf("[ INFO ] Starting color generation for the point cloud\n");
 
         auto point_cloud_mut = point_cloud;
-#pragma omp parallel for collapse(1) shared(point_cloud_mut) default(none) firstprivate(scene) num_threads(omp_get_max_threads())
+#pragma omp parallel for collapse(1) shared(point_cloud_mut, scene) default(none) num_threads(MAX_THREADS) schedule(dynamic)
         for (auto &[point, color]: point_cloud_mut) {
             auto [x, y] = project(point);
             const auto origin = slm_pixel_00_location + (slm_pixel_delta_x * std::floor(x)) + (slm_pixel_delta_y * std::floor(y));
@@ -324,11 +326,12 @@ public:
 
         start = now();
         computed_pixels = 0;
-#pragma omp parallel for collapse(2) shared(pixels, complex_pixels) default(none) firstprivate(point_cloud_mut, scene, st) num_threads(omp_get_max_threads())
+#pragma omp parallel for collapse(2) shared(pixels, complex_pixels, point_cloud_mut, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)
         for (int y = 0; y < slm_height_in_pixels; y++) {
             for (int x = 0; x < slm_width_in_pixels; x++) {
                 if (!st.stop_requested()) {
-                    const auto slm_pixel_center = slm_pixel_00_location + (slm_pixel_delta_x * x) + (slm_pixel_delta_y * y);
+                    [[likely]]
+                            const auto slm_pixel_center = slm_pixel_00_location + (slm_pixel_delta_x * x) + (slm_pixel_delta_y * y);
                     std::complex<Real> agg;
                     for (const auto &[point, color]: point_cloud_mut) {
                         const auto ray = Ray{slm_pixel_center, point - slm_pixel_center};
@@ -361,11 +364,6 @@ public:
 
             // const auto &triangle = hit_data->triangle;
             const auto &material = hit_data->material;
-
-            if (!material.is_diffuse) {
-                dprintf(STDERR_FILENO, "Not diffuse material is not yet implemented\n");
-                exit(1);
-            }
 
             // TODO: Compute a more accurate intensity value
             const auto amplitude = color.r + color.g + color.b / 3;
@@ -400,30 +398,26 @@ public:
             const auto &triangle = hit_data->triangle;
             const auto &material = hit_data->material;
 
-            if (material.is_diffuse) {
-                const auto normal = triangle.normal();
-                const auto scatter_direction = normal + Vec::random_unit_vector();
-                attenuation *= material.albedo;
-                const Point p = current_ray.at(hit_data->t);
-                current_ray = Ray{p, scatter_direction};
-                if (attenuation.is_close_to_0()) {
-                    break;
-                }
-                for (const auto &[light_position, light_color]: scene.point_lights) {
-                    const auto light_offset = light_position - p;
-                    const auto light_distance = light_offset.length();
-                    const auto light_direction = light_offset.normalize();
-                    const auto dot_product = dot(light_direction, normal);
+            const auto normal = triangle.normal();
+            const auto scatter_direction = normal + Vec::random_unit_vector();
+            attenuation *= material.albedo();
+            const Point p = current_ray.at(hit_data->t);
+            current_ray = Ray{p, scatter_direction};
+            if (attenuation.is_close_to_0()) {
+                break;
+            }
+            for (const auto &[light_position, light_color]: scene.point_lights) {
+                const auto light_offset = light_position - p;
+                const auto light_distance = light_offset.length();
+                const auto light_direction = light_offset.normalize();
+                const auto dot_product = dot(light_direction, normal);
 
-                    if (dot_product >= 0) {
-                        const auto shadow_ray = Ray{p, light_direction};
-                        if (!scene.intersects(shadow_ray, light_distance)) {
-                            diffuse_lighting += attenuation * light_color * dot_product;
-                        }
+                if (dot_product >= 0) {
+                    const auto shadow_ray = Ray{p, light_direction};
+                    if (!scene.intersects(shadow_ray, light_distance)) {
+                        diffuse_lighting += attenuation * light_color * dot_product;
                     }
                 }
-            } else {
-                assert(false && "Not diffuse material is not yet implemented\n");
             }
         }
 
@@ -434,5 +428,24 @@ public:
         auto sub_phase_c = std::polar(1.0, sub_phase);
 
         return intensity * sub_phase_c;
+    }
+
+    void render_normals(unsigned char pixels[], const Scene &scene, const std::stop_token &st = {}) const {
+#pragma omp parallel for shared(pixels, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)
+        for (int y = 0; y < image_height; y++) {
+            if (st.stop_requested()) [[unlikely]] continue;
+
+            for (int x = 0; x < image_width; x++) {
+                const auto &ray = get_orthogonal_ray_at(x, y);
+                if (const auto &hit = scene.intersect(ray, Triangle::CullBackfaces::YES)) {
+                    const auto &triangle = hit->triangle;
+                    const auto &normal = triangle.normal(hit->u, hit->v);
+                    pixels[(y * image_width + x) * 4 + 0] = static_cast<unsigned char>(std::sqrt(normal.x) * 255);
+                    pixels[(y * image_width + x) * 4 + 1] = static_cast<unsigned char>(std::sqrt(normal.y) * 255);
+                    pixels[(y * image_width + x) * 4 + 2] = static_cast<unsigned char>(std::sqrt(normal.z) * 255);
+                    pixels[(y * image_width + x) * 4 + 3] = 255;
+                }
+            }
+        }
     }
 };

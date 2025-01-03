@@ -46,9 +46,20 @@ struct Triangle {
     }
 
     /** @return Triangle's normalized normal vector. */
-    [[nodiscard]] constexpr Vec normal() const { return cross(b_data - a_data, c_data - a_data).normalize(); }
+    [[nodiscard]] constexpr Vec normal() const {
+        return cross(b_data - a_data, c_data - a_data).normalize();
+    }
 
-    constexpr bool operator==(const Triangle &other) const { return a() == other.a() && b() == other.b() && c() == other.c(); }
+    [[nodiscard]] constexpr Vec normal(const Real u, const Real v) const {
+        if (a_normal_data.is_close_to_0()) {
+            return cross(b_data - a_data, c_data - a_data).normalize();
+        }
+        return Vector{b_normal_data * u + c_normal_data * v + a_normal_data * (1 - u - v)}.normalize();
+    }
+
+    constexpr bool operator==(const Triangle &other) const {
+        return a() == other.a() && b() == other.b() && c() == other.c();
+    }
 
     enum class CullBackfaces : bool {
         YES,
@@ -103,7 +114,7 @@ struct TriangleIntersection {
     }
 
     Triangle triangle;
-    Material material;
+    Material material{};
     Real t;
     Real u;
     Real v;

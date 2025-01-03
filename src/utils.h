@@ -4,6 +4,7 @@
 
 #include "imgui.h"
 #include "Vecf.h"
+#include "Vector.h"
 #include "SFML/Graphics.hpp"
 
 enum class Axis {

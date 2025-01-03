@@ -53,8 +53,8 @@ FetchContent_Declare(
         URL https://github.com/tinyobjloader/tinyobjloader/raw/refs/tags/v2.0.0rc13/tiny_obj_loader.h
         URL_HASH SHA256=a55a0933a29caa0e9e84ef62a45cbe8cb25dd0e17bc2850c591c6b06f95d5ebe
         DOWNLOAD_NO_EXTRACT ON
-
 )
+
 FetchContent_MakeAvailable(tinyobjloader)
 
 add_library(tinyobjloader-lib INTERFACE ${tinyobjloader_SOURCE_DIR})
@@ -62,9 +62,12 @@ target_include_directories(tinyobjloader-lib INTERFACE ${tinyobjloader_SOURCE_DI
 
 
 add_executable(untitled
+        src/AABB.h
+        src/BRDFs.h
         src/Camera.h
         src/Color.h
         src/Material.h
+        src/Mesh.h
         src/ObjReader.h
         src/Random.h
         src/Ray.h
@@ -73,10 +76,8 @@ add_executable(untitled
         src/Triangle.h
         src/Vector.h
         src/main.cpp
-        src/utils.h
-        src/AABB.h
-        src/Mesh.h
         src/typedefs.h
+        src/utils.h
 )
 
 target_link_libraries(untitled PRIVATE ImGui-SFML::ImGui-SFML OpenMP::OpenMP_CXX tinyobjloader-lib)

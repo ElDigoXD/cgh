@@ -9,14 +9,19 @@
 static Mesh load(const char *filename) {
     tinyobj::ObjReader reader;
     tinyobj::ObjReaderConfig config;
+    const auto start = now();
     if (!reader.ParseFromFile(filename)) {
         std::fprintf(stderr, "[ERROR] %s\n", reader.Error().c_str());
         exit(1);
     };
 
+
+
     if (!reader.Warning().empty()) {
         std::fprintf(stderr, "[WARN] %s\n", reader.Warning().c_str());
     };
+    printf("[ INFO ] Finished obj load in %.1fs\n", (now() - start) / 1000.0);
+
 
     const auto &attrib = reader.GetAttrib();
     const auto &og_vertices = attrib.vertices;
@@ -59,14 +64,23 @@ static Mesh load(const char *filename) {
     }
 
     for (auto &material: obj_materials) {
+        auto brdf = DisneyBRDF2{};
+        brdf.base_color = Color{material.diffuse};
+        brdf.roughness = material.roughness;
+        brdf.metallic = material.metallic;
+        brdf.sheen = material.sheen;
+        brdf.anisotropic = material.anisotropy;
+        brdf.clearcoat = material.clearcoat_thickness;
+        brdf.clearcoat_gloss = material.clearcoat_roughness;
+
         materials.emplace_back(
-            Color{material.diffuse}
+            brdf
         );
     }
 
     if (materials.empty()) {
         printf("no materials found, using Material{Color{1, 1, 1}}\n");
-        materials.push_back(Material{Color{1, 1, 1}});
+        materials.emplace_back(Color{1, 1, 1});
     }
 
     return Mesh{faces, vertices, normals, materials};

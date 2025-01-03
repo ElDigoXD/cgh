@@ -2,6 +2,8 @@
 
 #include <stack>
 
+#include <optional>
+
 #include "AABB.h"
 #include "Triangle.h"
 #include "utils.h"
@@ -26,14 +28,25 @@ public:
           materials(materials), log_n(static_cast<int>(log2(tree.size()))) {
         triangles.reserve(faces.size());
         for (const auto &face: faces) {
-            triangles.emplace_back(
-                vertices[face.a_vertex_idx],
-                vertices[face.b_vertex_idx],
-                vertices[face.c_vertex_idx],
-                normals[face.a_normal_idx],
-                normals[face.b_normal_idx],
-                normals[face.c_normal_idx],
-                face.material_idx);
+            if (face.a_normal_idx == -1 || face.b_normal_idx == -1 || face.c_normal_idx == -1) {
+                triangles.emplace_back(
+                    vertices[face.a_vertex_idx],
+                    vertices[face.b_vertex_idx],
+                    vertices[face.c_vertex_idx],
+                    Vecf{0, 0, 0},
+                    Vecf{0, 0, 0},
+                    Vecf{0, 0, 0},
+                    face.material_idx);
+            } else {
+                triangles.emplace_back(
+                    vertices[face.a_vertex_idx],
+                    vertices[face.b_vertex_idx],
+                    vertices[face.c_vertex_idx],
+                    normals[face.a_normal_idx],
+                    normals[face.b_normal_idx],
+                    normals[face.c_normal_idx],
+                    face.material_idx);
+            }
         }
     }
 
@@ -281,6 +294,7 @@ public:
     constexpr void flip_faces() {
         for (auto &t: triangles) {
             std::swap(t.a_data, t.c_data);
+            std::swap(t.a_normal_data, t.c_normal_data);
         }
     }
 

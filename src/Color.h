@@ -8,10 +8,9 @@
 
 class Color {
 public:
-    explicit Color(const float array[3]) { // NOLINT(*-pro-type-member-init)
-        data[0] = array[0];
-        data[1] = array[1];
-        data[2] = array[2];
+    template <typename RealT> requires std::is_floating_point_v<RealT>
+    explicit constexpr Color(const RealT array[3]) { // NOLINT(*-pro-type-member-init)
+        data = {array[0], array[1], array[2]};
     }
 
     union {
@@ -27,7 +26,7 @@ public:
             Real b;
         };
 
-        Real data[3]{0, 0, 0};
+        std::array<Real, 3> data{0, 0, 0};
     };
 
     constexpr Color() {
@@ -38,6 +37,11 @@ public:
 
     constexpr Color operator+(Color const other) const {
         return Color{x + other.x, y + other.y, z + other.z};
+    }
+
+    template<class RealT> requires std::is_floating_point_v<RealT>
+    constexpr Color operator+(RealT const scalar) const {
+        return Color{x + scalar, y + scalar, z + scalar};
     }
 
     constexpr Color operator-() const {

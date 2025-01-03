@@ -5,6 +5,8 @@
 
 #include "Random.h"
 
+struct Vecf;
+
 class Vector {
 public:
     union {
@@ -30,8 +32,16 @@ public:
     constexpr Vector(const Real x, const Real y, const Real z) : x{x}, y{y}, z{z} { // NOLINT(*-pro-type-member-init)
     }
 
-    constexpr Vector operator+(Vector const other) const {
+    template<class VecType> requires std::is_same_v<VecType, Vecf>
+    explicit Vector(const VecType &v): x{v.x}, y{v.y}, z{v.z} {
+    }
+
+    constexpr Vector operator+(const Vector &other) const {
         return Vector{x + other.x, y + other.y, z + other.z};
+    }
+
+    constexpr Vector operator+(const Real scalar) const {
+        return Vector{x + scalar, y + scalar, z + scalar};
     }
 
 
@@ -126,6 +136,10 @@ public:
         };
     }
 
+    [[nodiscard]] constexpr Vector clamp(const Vector &a, const Vector &b) const {
+        return Vector{std::clamp(x, a.x, b.x), std::clamp(y, a.y, b.y), std::clamp(z, a.z, b.z)};
+    }
+
     static Vector random_in_unit_sphere() {
         Vector p;
         do {
@@ -150,6 +164,11 @@ public:
         std::cout << "(" << x << " ," << y << " ," << z << ")";
     }
 };
+
+
+constexpr Vector operator*(const Real scalar, const Vector &v) {
+    return Vector{scalar * v.x, scalar * v.y, scalar * v.z};
+}
 
 constexpr Real dot(const Vector &a, const Vector &b) {
     return a.dot(b);

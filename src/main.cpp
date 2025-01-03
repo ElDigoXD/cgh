@@ -20,7 +20,7 @@ public:
     // GUI data
     sf::RenderWindow window = sf::RenderWindow(sf::VideoMode({800, 400}), "Raytracer GUI");
     sf::Vector2u image_size = window.getSize() - sf::Vector2u{200, 0};
-    constexpr static const sf::Vector2u max_window_size = {2120, 1080};
+    constexpr static sf::Vector2u max_window_size = {2120, 1080};
 
     sf::Texture texture{max_window_size};
     sf::Sprite sprite{texture};
@@ -56,28 +56,43 @@ public:
     // GUI state
     bool enable_wireframe = true;
     bool enable_only_visible_wireframe = true;
+    bool enable_auto_wireframe = true;
     bool enable_aabb = true;
     bool enable_lights = true;
     bool enable_render = false;
+    bool enable_render_normals = false;
     bool enable_render_cgh = false;
+    bool enable_camera_movement = true;
     int selected_heuristic = 1;
+
 
     bool rendering = false;
     double render_time = 0;
     double expected_time = 0;
     bool render_has_finished = false;
 
+    std::optional<sf::Mouse::Button> mouse_button_pressed;
+    sf::Vector2i old_mouse_position;
+    Material *current_material = nullptr;
+
     int selected_scene_idx = 0;
+    int selected_material_idx = 0;
 
     void run() {
         // scene = basic_triangle(600, 400);
         // scene->camera->max_depth = max_depth;
         // scene->camera->samples_per_pixel = samples_per_pixel;
 
-        enable_render = true;
         enable_wireframe = false;
-        enable_only_visible_wireframe = false;
+        enable_only_visible_wireframe = true;
+        enable_auto_wireframe = true;
         enable_aabb = false;
+        enable_lights = true;
+        enable_render = true;
+        enable_render_normals = false;
+        enable_render_cgh = false;
+        enable_camera_movement = true;
+
         aabb_depth = 3;
         samples_per_pixel = 100;
         max_depth = 1000;
@@ -86,7 +101,7 @@ public:
 
 
         for (uint i = 0; i < sizeof(scene_names) / sizeof(char *); i++) {
-            if (strcmp(scene_names[i], "tree") == 0) {
+            if (strcmp(scene_names[i], "knob") == 0) {
                 selected_scene_idx = static_cast<int>(i);
                 break;
             }
@@ -129,15 +144,50 @@ public:
                 if (event->is<sf::Event::Closed>()) {
                     window.close();
                     return;
-                } else if ([[maybe_unused]] auto *resized = event->getIf<sf::Event::Resized>()) {
+                } else if ([[maybe_unused]] auto *event_r = event->getIf<sf::Event::Resized>()) {
                     image_size = window.getSize() - sf::Vector2u{200, 0};
                     window.setView(sf::View(sf::FloatRect{{0, 0}, sf::to_vector2f(window.getSize())}));
                     sprite.setScale({
                         static_cast<float>(image_size.x) / static_cast<float>(camera_image_size.x),
                         static_cast<float>(image_size.y) / static_cast<float>(camera_image_size.y)
                     });
+                } else if (auto *event_mp = event->getIf<sf::Event::MouseButtonPressed>()) {
+                    if (event_mp->button == sf::Mouse::Button::Left
+                        && sprite.getGlobalBounds().contains(sf::Vector2<float>(event_mp->position))
+                        && event_mp->position.x < image_size.x) {
+                        if (enable_camera_movement) {
+                            mouse_button_pressed = sf::Mouse::Button::Left;
+                            old_mouse_position = event_mp->position;
+                            //window.setMouseCursorVisible(false);
+                        } else {
+                            const auto &ray = scene->camera->get_orthogonal_ray_at(sf::Mouse::getPosition(window).x, sf::Mouse::getPosition(window).y);
+                            std::optional<TriangleIntersection> closest_hit;
+                            for (auto &mesh: scene->meshes) {
+                                if (const auto &hit = mesh.intersect(ray, closest_hit ? closest_hit->t : std::numeric_limits<Real>::infinity(), Triangle::CullBackfaces::YES)) {
+                                    if (!closest_hit || hit->t < closest_hit->t) {
+                                        closest_hit = hit;
+                                        current_material = &mesh.materials[hit->triangle.material_idx];
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (event_mp->button == sf::Mouse::Button::Middle) {
+                        scene->camera->look_from *= -1;
+                        update_render();
+                        update_lights();
+                        update_aabb_wireframe();
+                        update_wireframe();
+                    }
+                } else if ([[maybe_unused]] auto *mouseButtonReleased = event->getIf<sf::Event::MouseButtonReleased>()) {
+                    if (mouse_button_pressed) {
+                        mouse_button_pressed = {};
+                        window.setMouseCursorVisible(true);
+                    }
                 }
             }
+
+            handle_mouse();
 
             imgui_window();
 
@@ -151,14 +201,16 @@ public:
             if (enable_render) {
                 // ReSharper disable once CppDFAUnreachableCode
                 // ReSharper disable once CppDFAConstantConditions
-                if (rendering && update_texture_clock.getElapsedTime().asSeconds() > 1) {
+                if (rendering && update_texture_clock.getElapsedTime().asSeconds() > .1) {
                     // ReSharper disable once CppDFAUnreachableCode
                     texture.update(pixels, camera_image_size, {0, 0});
                     update_texture_clock.restart();
                 }
                 window.draw(sprite);
             }
-            if (enable_wireframe) {
+            if ((enable_wireframe && !enable_auto_wireframe)
+                || (enable_wireframe && enable_auto_wireframe && rendering && timer.getElapsedTime().asSeconds() - start_time.asSeconds() < 1 && mouse_button_pressed)
+                || (enable_wireframe && enable_auto_wireframe && !enable_render)) {
                 window.draw(wire, render_states);
             }
 
@@ -198,16 +250,18 @@ public:
             ImGui::PushItemWidth(-1);
             ImGui::Checkbox("Enable wireframe", &enable_wireframe);
             if (enable_wireframe) {
-                im::Indent(5);
+                im::Indent(10);
 
                 if (im::Checkbox("Only visible", &enable_only_visible_wireframe)) {
                     update_wireframe();
                 }
-                im::Unindent(5);
+                if (ImGui::Checkbox("Auto", &enable_auto_wireframe)) {
+                }
+                im::Unindent(10);
             }
             ImGui::Checkbox("Enable aabb", &enable_aabb);
             if (enable_aabb) {
-                im::Indent(5);
+                im::Indent(10);
                 if (ImGui::SliderInt("##AABB Depth", &aabb_depth, 1,
                                      std::ceil(std::log2(
                                          std::max_element(scene->meshes.begin(), scene->meshes.end(),
@@ -217,7 +271,7 @@ public:
                                      "%d", ImGuiSliderFlags_AlwaysClamp)) {
                     update_aabb_wireframe();
                 }
-                im::Unindent(5);
+                im::Unindent(10);
             }
             ImGui::Checkbox("Enable lights", &enable_lights);
 
@@ -230,6 +284,9 @@ public:
                     update_render();
                 }
                 im::Unindent(5);
+                if (ImGui::Checkbox("Enable normals", &enable_render_normals)) {
+                    update_render();
+                }
             }
 
             ImGui::PushItemWidth(ImGui::GetWindowWidth() / 2);
@@ -239,6 +296,9 @@ public:
             }
             if (ImGui::SliderInt("Samples", &samples_per_pixel, 1, 1000, "%d", ImGuiSliderFlags_Logarithmic)) {
                 scene->camera->samples_per_pixel = samples_per_pixel;
+                update_render();
+            }
+            if (ImGui::SliderInt("Threads", &scene->camera->MAX_THREADS, 1, static_cast<int>(std::thread::hardware_concurrency() * 2))) {
                 update_render();
             }
             ImGui::PopItemWidth();
@@ -257,6 +317,35 @@ public:
                 update_aabb_wireframe();
                 update_lights();
             }
+
+            if (im::Button("Save")) {
+                const auto image = sf::Image(camera_image_size, pixels);
+                [[maybe_unused]] auto _ = image.saveToFile("../output.png");
+            }
+            ImGui::SameLine();
+            if (im::Button("Export")) {
+                FILE *fd = std::fopen("../output.csv", "w");
+                for (uint y = 0; y < camera_image_size.y; y++) {
+                    for (uint x = 0; x < camera_image_size.x; x++) {
+                        fprintf(fd, "(%e%+ej)", complex_pixels[y * camera_image_size.x + x].real(), complex_pixels[y * camera_image_size.x + x].imag());
+                        fprintf(fd, x == camera_image_size.x - 1 ? "\n" : ",");
+                    }
+                }
+                fflush(fd);
+            }
+
+            const float tmp_render_time = rendering ? timer.getElapsedTime().asSeconds() - start_time.asSeconds() : render_time;
+            im::Text("Render time: %.1fs", tmp_render_time);
+            if (mouse_button_pressed) {
+                im::Text("FPS: %.1f", 1 / dt.asSeconds());
+            }
+
+            if (enable_render_cgh) {
+                ImGui::Text("Expected time: %.1fs", expected_time);
+                const auto percent = static_cast<Real>(scene->camera->computed_pixels) / (height * width);
+                ImGui::Text("%3.1f%%: %.1fs", percent * 100, tmp_render_time / percent);
+            }
+
             ImGui::PopItemWidth();
             ImGui::EndTabItem();
         }
@@ -269,6 +358,7 @@ public:
                 update_wireframe();
                 update_aabb_wireframe();
                 update_lights();
+                current_material = nullptr;
             }
             if (ImGui::Combo("##heuristic", &selected_heuristic,
                              "biggest axis\0box area\0box volume\0triangle area\0")) {
@@ -283,7 +373,7 @@ public:
             ImGui::Text("Point Cloud Size:");
             if (ImGui::DragInt2("##Point Cloud Size", &scene->camera->point_cloud_screen_height_in_px, 10, 40, 1000)) {
                 scene->camera->update();
-                point_cloud = scene->camera->compute_point_cloud(*scene);
+                //point_cloud = scene->camera->compute_point_cloud(*scene);
                 update_render();
             }
 
@@ -307,35 +397,133 @@ public:
             ImGui::PopItemWidth();
             ImGui::EndTabItem();
         }
-        im::EndTabBar();
-        if (im::Button("Save")) {
-            const auto image = sf::Image(camera_image_size, pixels);
-            [[maybe_unused]] auto _ = image.saveToFile("../output.png");
-        }
-        ImGui::SameLine();
-        if (im::Button("Export")) {
-            FILE *fd = std::fopen("../output.csv", "w");
-            for (uint y = 0; y < camera_image_size.y; y++) {
-                for (uint x = 0; x < camera_image_size.x; x++) {
-                    fprintf(fd, "(%e%+ej)", complex_pixels[y * camera_image_size.x + x].real(), complex_pixels[y * camera_image_size.x + x].imag());
-                    fprintf(fd, x == camera_image_size.x - 1 ? "\n" : ",");
+        enable_camera_movement = true;
+        if (ImGui::BeginTabItem("Material")) {
+            ImGui::PushItemWidth(-1);
+            enable_camera_movement = false;
+            if (!current_material) {
+                ImGui::Text("No material selected\nclick on a mesh");
+            } else {
+                ImGui::PushItemWidth(100);
+
+                if (ImGui::Combo("BDRF", &selected_material_idx, "D2\0D\0P\0\0")) {
+                    if (selected_material_idx == 0) {
+                        if (const auto &current_brdf = std::get_if<DisneyBRDF>(&current_material->brdf)) {
+                            auto new_material = DisneyBRDF2{};
+                            new_material.base_color = current_brdf->base_color;
+                            new_material.metallic = current_brdf->metallic;
+                            new_material.subsurface = current_brdf->subsurface;
+                            new_material.specular = current_brdf->specular;
+                            new_material.roughness = current_brdf->roughness;
+                            new_material.specular_tint = current_brdf->specular_tint;
+                            new_material.anisotropic = current_brdf->anisotropic;
+                            new_material.sheen = current_brdf->sheen;
+                            new_material.sheen_tint = current_brdf->sheen_tint;
+                            new_material.clearcoat = current_brdf->clearcoat;
+                            new_material.clearcoat_gloss = current_brdf->clearcoat_gloss;
+                            current_material->brdf = new_material;
+                        } else {
+                            current_material->brdf = DisneyBRDF2{};
+                        }
+                    } else if (selected_material_idx == 1) {
+                        current_material->brdf = DisneyBRDF{};
+                    } else if (selected_material_idx == 2) {
+                        current_material->brdf = BlinnPhongBRDF{};
+                    }
+                    update_render();
                 }
+
+                if (const auto &disneyBRDF2 = std::get_if<DisneyBRDF2>(&current_material->brdf)) {
+                    selected_material_idx = 0;
+                    const auto &a = disneyBRDF2->base_color;
+                    float c[3] = {static_cast<float>(a.r), static_cast<float>(a.g), static_cast<float>(a.b)};
+                    if (ImGui::ColorEdit3("##color", c)) {
+                        disneyBRDF2->base_color = Color{c};
+                        update_render();
+                    }
+                    if (ImGui::SliderFloat("metallic", &disneyBRDF2->metallic, 0, 1)
+                        | ImGui::SliderFloat("subsurface", &disneyBRDF2->subsurface, 0, 1)
+                        | ImGui::SliderFloat("specular", &disneyBRDF2->specular, 0, 2)
+                        | ImGui::SliderFloat("roughness", &disneyBRDF2->roughness, 0, 1)
+                        | ImGui::SliderFloat("specularTint", &disneyBRDF2->specular_tint, 0, 1)
+                        | ImGui::SliderFloat("anisotropic", &disneyBRDF2->anisotropic, 0, 1)
+                        | ImGui::SliderFloat("sheen", &disneyBRDF2->sheen, 0, 1)
+                        | ImGui::SliderFloat("sheenTint", &disneyBRDF2->sheen_tint, 0, 1)
+                        | ImGui::SliderFloat("clearcoat", &disneyBRDF2->clearcoat, 0, 1)
+                        | ImGui::SliderFloat("clearcoatGloss", &disneyBRDF2->clearcoat_gloss, 0, 1)) {
+                        update_render();
+                    }
+                } else if (const auto &disneyBRDF = std::get_if<DisneyBRDF>(&current_material->brdf)) {
+                    selected_material_idx = 1;
+                    const auto &a = disneyBRDF->base_color;
+                    float c[3] = {static_cast<float>(a.r), static_cast<float>(a.g), static_cast<float>(a.b)};
+                    if (ImGui::ColorEdit3("##color", c)) {
+                        disneyBRDF->base_color = Color{c};
+                        update_render();
+                    }
+                    if (ImGui::SliderFloat("metallic", &disneyBRDF->metallic, 0, 1)
+                        | ImGui::SliderFloat("subsurface", &disneyBRDF->subsurface, 0, 1)
+                        | ImGui::SliderFloat("specular", &disneyBRDF->specular, 0, 2)
+                        | ImGui::SliderFloat("roughness", &disneyBRDF->roughness, 0, 1)
+                        | ImGui::SliderFloat("specularTint", &disneyBRDF->specular_tint, 0, 1)
+                        | ImGui::SliderFloat("anisotropic", &disneyBRDF->anisotropic, 0, 1)
+                        | ImGui::SliderFloat("sheen", &disneyBRDF->sheen, 0, 1)
+                        | ImGui::SliderFloat("sheenTint", &disneyBRDF->sheen_tint, 0, 1)
+                        | ImGui::SliderFloat("clearcoat", &disneyBRDF->clearcoat, 0, 1)
+                        | ImGui::SliderFloat("clearcoatGloss", &disneyBRDF->clearcoat_gloss, 0, 1)) {
+                        update_render();
+                    }
+                } else if (const auto &blinnPhongBRDF = std::get_if<BlinnPhongBRDF>(&current_material->brdf)) {
+                    selected_material_idx = 2;
+                    const auto &a = blinnPhongBRDF->base_color;
+                    float c[3] = {static_cast<float>(a.r), static_cast<float>(a.g), static_cast<float>(a.b)};
+                    if (ImGui::ColorEdit3("##color", c)) {
+                        blinnPhongBRDF->base_color = Color{c};
+                        update_render();
+                    }
+                    if (ImGui::SliderFloat("specular", &blinnPhongBRDF->specular_strength, 0, 2)
+                        | ImGui::SliderFloat("specular peak", &blinnPhongBRDF->direct_specular_peak, 1, 100)
+                        | ImGui::Checkbox("only phong", &blinnPhongBRDF->only_phong)) {
+                        update_render();
+                    }
+                }
+                ImGui::PopItemWidth();
             }
-            fflush(fd);
+
+            ImGui::PopItemWidth();
+            ImGui::EndTabItem();
         }
 
-        const float tmp_render_time = rendering ? timer.getElapsedTime().asSeconds() - start_time.asSeconds() : render_time;
-        im::Text("Render time: %.1fs", tmp_render_time);
-
-        if (enable_render_cgh) {
-            ImGui::Text("Expected time: %.1fs", expected_time);
-            const auto percent = static_cast<Real>(scene->camera->computed_pixels) / (height * width);
-            ImGui::Text("%3.1f%%: %.1fs", percent * 100, tmp_render_time / percent);
-        }
+        im::EndTabBar();
 
         im::End();
         im::PopItemWidth();
         im::EndFrame();
+    }
+
+    void handle_mouse() {
+        if (!mouse_button_pressed) return;
+
+        constexpr Real sensitivity = 20 / 5000.0;
+
+        auto rodrigues_rotation = [](const Vec &v, const Vec &k, const double deg) -> Vec {
+            return v * cos(deg) + cross(k, v) * sin(deg) + k * dot(k, v) * (1 - cos(deg));
+        };
+
+        const auto &new_position = sf::Mouse::getPosition(window);
+        //sf::Mouse::setPosition(old_mouse_position, window);
+        const auto &delta = old_mouse_position - new_position;
+        old_mouse_position = new_position;
+        if (delta != sf::Vector2i{0, 0}) {
+            auto new_look_from = rodrigues_rotation(scene->camera->look_at - scene->camera->look_from, scene->camera->u, delta.y * sensitivity);
+            new_look_from = rodrigues_rotation(new_look_from, Vec{0, 1, 0}, delta.x * sensitivity);
+            scene->camera->look_from = scene->camera->look_at - new_look_from;
+            scene->camera->update();
+            update_render();
+            update_aabb_wireframe();
+            update_wireframe();
+            update_lights();
+        }
     }
 
     void stop_render_and_wait() {
@@ -376,9 +564,14 @@ public:
                 expected_time = mspp * point_cloud.size() / 1000;
                 printf("[ INFO ] Renderer computing at %ld ms/point (expected render time: %.0fs)\n", mspp, expected_time);
                 memset(pixels, 0, camera_image_size.x * camera_image_size.y * 4);
+                point_cloud = scene->camera->compute_point_cloud(*scene);
                 scene->camera->render_cgh(pixels, complex_pixels, *scene, point_cloud, st);
             } else {
-                scene->camera->render(pixels, *scene, st);
+                if (enable_render_normals) {
+                    scene->camera->render_normals(pixels, *scene, st);
+                } else {
+                    scene->camera->render(pixels, *scene, st);
+                }
             }
             texture.update(pixels, camera_image_size, {0, 0});
             rendering = false;
@@ -391,7 +584,7 @@ public:
 
     void test_wireframe_visible() {
         std::vector<Triangle> visible_triangles = {};
-        const auto camera = scene->camera;
+        const auto &camera = scene->camera;
         camera->update();
         for (const auto &m: scene->meshes) {
             for (const auto &t: m.triangles) {
@@ -402,8 +595,9 @@ public:
         }
 
         wire = sf::VertexArray(sf::PrimitiveType::Lines, visible_triangles.size() * 6);
-        int i = 0;
-        for (auto &t: visible_triangles) {
+#pragma omp parallel for default(none) shared(visible_triangles, wire, camera)
+        for (int i = 0; i < static_cast<int>(visible_triangles.size()); i++) {
+            const auto &t = visible_triangles[i];
             auto [ax, ay] = camera->project(t.a());
             auto [bx, by] = camera->project(t.b());
             auto [cx, cy] = camera->project(t.c());
@@ -422,11 +616,11 @@ public:
             wire[i * 6 + 4].position.y = static_cast<float>(by);
             wire[i * 6 + 5].position.x = static_cast<float>(cx);
             wire[i * 6 + 5].position.y = static_cast<float>(cy);
-            ++i;
         }
     }
 
     void update_wireframe() {
+        if (!enable_wireframe) return;
         if (enable_only_visible_wireframe) {
             test_wireframe_visible();
             return;
@@ -540,7 +734,7 @@ public:
         assert(scene != nullptr);
 
         scene->camera->max_depth = max_depth;
-        point_cloud = scene->camera->compute_point_cloud(*scene);
+        // point_cloud = scene->camera->compute_point_cloud(*scene);
     }
 
     void update_lights() {
