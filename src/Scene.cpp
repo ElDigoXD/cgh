@@ -229,7 +229,6 @@ const Scene *bmw(const int image_width, const int image_height) {
     return scene;
 }
 
-// TODO: Remove non-knob objects
 const Scene *knob(const int image_width, const int image_height) {
     auto *camera = new Camera(image_width, image_height);
     camera->look_from = {-162, 100, -232};
