@@ -91,7 +91,7 @@ const Scene *teapot(const int image_width, const int image_height) {
     mesh.normalize();
     mesh.scale(4);
 
-    mesh.materials[0] = Material{Color{1, .4, .0} * .5};
+    mesh.materials[0] = Material{GGXBRDF{Color{1, .4, .0} * .5, 0.5, 1}};
 
     auto floor_mesh = Mesh{
         std::vector<Face>{
@@ -105,7 +105,7 @@ const Scene *teapot(const int image_width, const int image_height) {
             {-4, -1, -4},
         },
         std::vector<Vecf>{},
-        std::vector{Material{Color{1, 1, 1}}}
+        std::vector{Material{GGXBRDF{Color{1, 1, 1}, 0, 1}}}
     };
 
     const auto scene = new Scene(camera);
@@ -139,7 +139,7 @@ const Scene *multi_mesh(const int image_width, const int image_height) {
     teapot_mesh.scale(factor);
 
 
-    teapot_mesh.materials[0] = Material{Color{1, .4, .0}};
+    teapot_mesh.materials[0] = Material{GGXBRDF{Color{1, .4, .0}, 1, 1}};
 
     dragon_mesh.normalize();
     dragon_mesh.scale(0.8);
@@ -169,7 +169,7 @@ const Scene *dragon(const int image_width, const int image_height) {
     mesh.normalize();
     mesh.scale(3);
 
-    mesh.materials[0] = Material{Color::cyan()};
+    mesh.materials[0] = Material{GGXBRDF{Color::cyan(), 0.5, 1}};
 
     const auto scene = new Scene(camera);
     scene->add_mesh(mesh);
@@ -243,17 +243,17 @@ const Scene *knob(const int image_width, const int image_height) {
     //mesh.scale(10.f);
     auto floor_mesh = Mesh{
         std::vector<Face>{
-                {{0, 1, 2}, {-1, -1, -1}, 0},
-                {{3, 2, 1}, {-1, -1, -1}, 0},
-            },
-            std::vector<Vecf>{
-                {+4, -1.4, +4},
-                {+4, -1.4, -4},
-                {-4, -1.4, +4},
-                {-4, -1.4, -4},
-            },
-            std::vector<Vecf>{},
-            std::vector{Material{Color{1, 1, 1}}}
+            {{0, 1, 2}, {-1, -1, -1}, 0},
+            {{3, 2, 1}, {-1, -1, -1}, 0},
+        },
+        std::vector<Vecf>{
+            {+4, -1.4, +4},
+            {+4, -1.4, -4},
+            {-4, -1.4, +4},
+            {-4, -1.4, -4},
+        },
+        std::vector<Vecf>{},
+        std::vector{Material{GGXBRDF{Color{1, 1, 1}, 0.00, 1}}}
     };
 
     const auto scene = new Scene(camera);

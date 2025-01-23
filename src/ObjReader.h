@@ -2,6 +2,7 @@
 
 #include <cstdio>
 
+#include "BRDF2s.h"
 #include "Mesh.h"
 #include "tiny_obj_loader.h"
 #include "Triangle.h"
@@ -14,7 +15,6 @@ static Mesh load(const char *filename) {
         std::fprintf(stderr, "[ERROR] %s\n", reader.Error().c_str());
         exit(1);
     };
-
 
 
     if (!reader.Warning().empty()) {
@@ -64,14 +64,11 @@ static Mesh load(const char *filename) {
     }
 
     for (auto &material: obj_materials) {
-        auto brdf = DisneyBRDF2{};
-        brdf.base_color = Color{material.diffuse};
-        brdf.roughness = material.roughness;
-        brdf.metallic = material.metallic;
-        brdf.sheen = material.sheen;
-        brdf.anisotropic = material.anisotropy;
-        brdf.clearcoat = material.clearcoat_thickness;
-        brdf.clearcoat_gloss = material.clearcoat_roughness;
+        auto brdf = GGXBRDF{
+            Color{material.diffuse},
+            material.roughness,
+            material.metallic
+        };
 
         materials.emplace_back(
             brdf

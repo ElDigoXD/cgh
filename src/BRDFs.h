@@ -3,16 +3,11 @@
 #include <cmath>
 
 #include "Color.h"
-#include "typedefs.h"
+#include "utils.h"
 #include "Vector.h"
 
 template<typename Real> requires std::is_floating_point_v<Real>
 constexpr static Real mix(const Real a, const Real b, const Real t) {
-    return a * (1 - t) + b * t;
-}
-
-template<typename Real> requires std::is_floating_point_v<Real>
-constexpr static Vec mix(const Vec &a, const Vec &b, const Real t) {
     return a * (1 - t) + b * t;
 }
 

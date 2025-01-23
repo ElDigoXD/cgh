@@ -16,6 +16,9 @@
 #include "utils.h"
 #include "Vector.h"
 
+#define IMAGE_WIDTH 600
+#define IMAGE_HEIGHT 400
+
 class Camera {
 public:
     int image_width;
@@ -71,20 +74,20 @@ public:
     int computed_pixels = 0;
     int MAX_THREADS = 16;
 
-    Camera(const int image_width, const int image_height) : Camera(image_width, image_height, 10, 10, 90) {
+    Camera(const int image_weight, const int image_height) : Camera(image_weight, image_height, 10, 10, 90) {
     }
 
 
-    Camera(const int image_width, const int image_height, const int samples_per_pixel, const int max_depth, const Real fov)
-        : image_width{image_width},
-          image_height{image_height},
+    Camera(const int image_weight, const int image_height, const int samples_per_pixel, const int max_depth, const Real fov)
+        : image_width{IMAGE_WIDTH},
+          image_height{IMAGE_HEIGHT},
           samples_per_pixel{samples_per_pixel},
           max_depth{max_depth}, fov{fov} {
         update();
     }
 
     void update() {
-        update(image_width, image_height);
+        update(IMAGE_WIDTH, IMAGE_HEIGHT);
     }
 
     void update(const int width, const int height) {
@@ -96,7 +99,7 @@ public:
         const auto h = tan(theta / 2);
 
         viewport_height = 2.0 * h * focus_dist;
-        viewport_width = viewport_height * (static_cast<Real>(image_width) / static_cast<Real>(image_height));
+        viewport_width = viewport_height * (static_cast<Real>(IMAGE_WIDTH) / static_cast<Real>(IMAGE_HEIGHT));
 
         viewport_height = slm_pixel_size * height;
         viewport_width = slm_pixel_size * width;
@@ -109,8 +112,8 @@ public:
         viewport_x = u * viewport_width;
         viewport_y = -v * viewport_height;
 
-        pixel_delta_x = viewport_x / (Real) image_width;
-        pixel_delta_y = viewport_y / (Real) image_height;
+        pixel_delta_x = viewport_x / (Real) IMAGE_WIDTH;
+        pixel_delta_y = viewport_y / (Real) IMAGE_HEIGHT;
 
         viewport_upper_left = look_from - (w * focus_dist) - viewport_x / 2 - viewport_y / 2;
 
@@ -205,24 +208,13 @@ public:
 
 
         while (auto hit_data = scene.intersect(current_ray, Triangle::CullBackfaces::YES)) {
-            // Ray does not find an ambient source of light (escapes the scene)
-            if (current_depth-- == 0) {
-                attenuation = Color::black();
-                break;
-            }
-
             const auto &triangle = hit_data->triangle;
             const auto &material = hit_data->material;
 
             const auto &normal = triangle.normal(hit_data->u, hit_data->v);
-            // TODO: Find how to get direction
-            const auto scatter_direction = normal + Vec::random_unit_vector();
-            //attenuation *= material.albedo;
-            attenuation *= material.albedo();
+            const auto [scatter_direction, w] = material.sample(normal, -current_ray.direction.normalize());
             const Point p = current_ray.at(hit_data->t);
-            if (attenuation.is_close_to_0()) {
-                break;
-            }
+
             for (const auto &[light_position, light_color]: scene.point_lights) {
                 const auto &light_offset = light_position - p;
                 const auto &light_distance = light_offset.length();
@@ -232,13 +224,18 @@ public:
                 if (dot_product >= 0) {
                     const auto shadow_ray = Ray{p, light_direction};
                     if (!scene.intersects(shadow_ray, light_distance)) {
-                        // diffuse_lighting += attenuation * light_color * dot_product;
-                        const auto &a = material.BRDF(light_direction, -current_ray.direction, normal);
-                        diffuse_lighting += attenuation * Color{a.x, a.y, a.z} * dot_product;
+                        const auto &c = material.BRDF(light_direction, -current_ray.direction.normalize(), normal);
+                        diffuse_lighting += attenuation * c * light_color;
                     }
                 }
             }
-            current_ray = Ray{p, scatter_direction};
+            current_ray = Ray{p, Vec{scatter_direction}};
+            attenuation *= w;
+            if (attenuation.is_close_to_0() || current_depth-- == 0) {
+                if (max_depth - current_depth > 100)
+                    printf("Attenuation is close to 0 or max, att = %f, %f, %f | depth = %d/%d\n", attenuation.r, attenuation.g, attenuation.b, max_depth - current_depth, max_depth);
+                break;
+            }
         }
 
         // bg color
@@ -252,11 +249,11 @@ public:
 
     void render(unsigned char pixels[], const Scene &scene, const std::stop_token &st = {}) const {
         const auto start = now();
-        printf("[ INFO ] Starting cgi render with %dx%d pixels, %d spp, %d max depth, %d threads\n", image_width, image_height, samples_per_pixel, max_depth, MAX_THREADS);
+        printf("[ INFO ] Starting cgi render with %dx%d pixels, %d spp, %d max depth, %d threads\n", IMAGE_WIDTH, IMAGE_HEIGHT, samples_per_pixel, max_depth, MAX_THREADS);
 #pragma omp parallel for collapse(1) shared(pixels, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)
-        for (int y = 0; y < image_height; y++) {
+        for (int y = 0; y < IMAGE_HEIGHT; y++) {
             if (st.stop_requested()) [[unlikely]] continue;
-            for (int x = 0; x < image_width; x++) {
+            for (int x = 0; x < IMAGE_WIDTH; x++) {
                 Color color;
                 for (int i = 0; i < samples_per_pixel; i++) {
                     const auto ray = get_random_orthogonal_ray_at(x, y);
@@ -264,10 +261,10 @@ public:
                 }
                 color /= samples_per_pixel;
 
-                pixels[(y * image_width + x) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
-                pixels[(y * image_width + x) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
-                pixels[(y * image_width + x) * 4 + 2] = static_cast<unsigned char>(std::sqrt(color.b) * 255);
-                pixels[(y * image_width + x) * 4 + 3] = 255;
+                pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
+                pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
+                pixels[(y * IMAGE_WIDTH + x) * 4 + 2] = static_cast<unsigned char>(std::sqrt(color.b) * 255);
+                pixels[(y * IMAGE_WIDTH + x) * 4 + 3] = 255;
             }
         }
         printf("[ INFO ] Finished cgi render in %.1fs\n", (now() - start) / 1000.0);
@@ -432,18 +429,18 @@ public:
 
     void render_normals(unsigned char pixels[], const Scene &scene, const std::stop_token &st = {}) const {
 #pragma omp parallel for shared(pixels, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)
-        for (int y = 0; y < image_height; y++) {
+        for (int y = 0; y < IMAGE_HEIGHT; y++) {
             if (st.stop_requested()) [[unlikely]] continue;
 
-            for (int x = 0; x < image_width; x++) {
+            for (int x = 0; x < IMAGE_WIDTH; x++) {
                 const auto &ray = get_orthogonal_ray_at(x, y);
                 if (const auto &hit = scene.intersect(ray, Triangle::CullBackfaces::YES)) {
                     const auto &triangle = hit->triangle;
                     const auto &normal = triangle.normal(hit->u, hit->v);
-                    pixels[(y * image_width + x) * 4 + 0] = static_cast<unsigned char>(std::sqrt(normal.x) * 255);
-                    pixels[(y * image_width + x) * 4 + 1] = static_cast<unsigned char>(std::sqrt(normal.y) * 255);
-                    pixels[(y * image_width + x) * 4 + 2] = static_cast<unsigned char>(std::sqrt(normal.z) * 255);
-                    pixels[(y * image_width + x) * 4 + 3] = 255;
+                    pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = static_cast<unsigned char>(std::sqrt(normal.x) * 255);
+                    pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = static_cast<unsigned char>(std::sqrt(normal.y) * 255);
+                    pixels[(y * IMAGE_WIDTH + x) * 4 + 2] = static_cast<unsigned char>(std::sqrt(normal.z) * 255);
+                    pixels[(y * IMAGE_WIDTH + x) * 4 + 3] = 255;
                 }
             }
         }

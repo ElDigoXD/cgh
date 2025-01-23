@@ -2,6 +2,7 @@
 
 #include <variant>
 
+#include "BRDF2s.h"
 #include "BRDFs.h"
 #include "Color.h"
 
@@ -9,7 +10,7 @@ static_assert(std::is_base_of_v<BRDF, DisneyBRDF2>);
 static_assert(std::is_base_of_v<BRDF, DisneyBRDF>);
 static_assert(std::is_base_of_v<BRDF, BlinnPhongBRDF>);
 
-typedef std::variant<DisneyBRDF2, DisneyBRDF, BlinnPhongBRDF> BRDF_T;
+typedef std::variant<DisneyBRDF2, DisneyBRDF, BlinnPhongBRDF, CookTorranceBRDF, GGXBRDF> BRDF_T;
 
 class Material {
 public:
@@ -37,7 +38,22 @@ public:
         if (std::holds_alternative<BlinnPhongBRDF>(brdf)) {
             return std::get_if<BlinnPhongBRDF>(&brdf)->base_color;
         }
+        if (std::holds_alternative<CookTorranceBRDF>(brdf)) {
+            return std::get_if<CookTorranceBRDF>(&brdf)->base_color;
+        }
+        if (std::holds_alternative<GGXBRDF>(brdf)) {
+            return std::get_if<GGXBRDF>(&brdf)->base_color;
+        }
+        assert(false && "Material::albedo() called on unsupported BRDF type");
         __builtin_unreachable();
+    }
+
+    [[nodiscard]] constexpr Color diffuseBRDF(const Vec &L, const Vec &V, const Vec &N) const {
+        return {0, 0, 0};
+    }
+
+    [[nodiscard]] constexpr Color specularBRDF(const Vec &L, const Vec &V, const Vec &N) const {
+        return {0, 0, 0};
     }
 
     [[nodiscard]] constexpr Color BRDF(const Vec &L, const Vec &V, const Vec &N) const {
@@ -56,6 +72,27 @@ public:
         if (std::holds_alternative<BlinnPhongBRDF>(brdf)) {
             return std::get_if<BlinnPhongBRDF>(&brdf)->brdf(L, V, N, X, Y);
         }
+        if (std::holds_alternative<CookTorranceBRDF>(brdf)) {
+            return std::get_if<CookTorranceBRDF>(&brdf)->brdf(L, V, N, X, Y);
+        }
+        if (std::holds_alternative<GGXBRDF>(brdf)) {
+            return std::get_if<GGXBRDF>(&brdf)->brdf(L, V, N, X, Y);
+        }
+        assert(false && "Material::BRDF() called on unsupported BRDF type");
+        __builtin_unreachable();
+    }
+
+    [[nodiscard]] constexpr std::pair<Vecf, Color> sample(const Vec &normal, const Vec &wi) const {
+        if (std::holds_alternative<CookTorranceBRDF>(brdf)) {
+            const auto &cookTorranceBRDF = std::get_if<CookTorranceBRDF>(&brdf);
+            //return indirect_cook_torrance_brdf(Vecf{normal.data}, Vecf{wi.data}, cookTorranceBRDF->roughness, cookTorranceBRDF->f0);
+        }
+        if (std::holds_alternative<GGXBRDF>(brdf)) {
+            const auto &ggxBRDF = std::get_if<GGXBRDF>(&brdf);
+            return indirect_ggx_brdf(Vecf{normal.data}, Vecf{wi.data}, ggxBRDF->roughness, ggxBRDF->f0);
+        }
+        return {Vecf{(normal + Vec::random_unit_vector()).data}, {1 / M_PI, 1 / M_PI, 1 / M_PI}};
+        assert(false && "Material::sample() called on unsupported BRDF type");
         __builtin_unreachable();
     }
 };

@@ -50,6 +50,11 @@ public:
     sf::VertexArray wire_depth_aabb;
     int aabb_depth = 1;
     sf::CircleShape light_circle;
+    std::vector<sf::CircleShape> brdf_samples;
+    sf::VertexArray wire_brdf_samples;
+    sf::RenderTexture brdf_samples_texture{max_window_size};
+    Material brdf_viewer_material = Material{GGXBRDF{Color{1, 1, 1}, 0.5, 0.5}};
+    float brdf_viewer_angle = 45; // Degrees
     std::jthread render_thread;
 
 
@@ -63,6 +68,7 @@ public:
     bool enable_render_normals = false;
     bool enable_render_cgh = false;
     bool enable_camera_movement = true;
+    bool enable_bdrf_viewer = true;
     int selected_heuristic = 1;
 
 
@@ -88,14 +94,14 @@ public:
         enable_auto_wireframe = true;
         enable_aabb = false;
         enable_lights = true;
-        enable_render = true;
+        enable_render = false;
         enable_render_normals = false;
         enable_render_cgh = false;
         enable_camera_movement = true;
 
         aabb_depth = 3;
-        samples_per_pixel = 100;
-        max_depth = 1000;
+        samples_per_pixel = 1;
+        max_depth = 2;
         // width = 1920;
         // height = 1080;
 
@@ -213,13 +219,16 @@ public:
                 || (enable_wireframe && enable_auto_wireframe && !enable_render)) {
                 window.draw(wire, render_states);
             }
-
             if (enable_aabb) {
                 window.draw(wire_depth_aabb, render_states);
             }
-
             if (enable_lights) {
                 window.draw(light_circle, render_states);
+            }
+            if (enable_bdrf_viewer) {
+                window.clear();
+                sprite.setTexture(brdf_samples_texture.getTexture());
+                window.draw(sprite);
             }
 
             ImGui::SFML::Render(window);
@@ -287,6 +296,12 @@ public:
                 if (ImGui::Checkbox("Enable normals", &enable_render_normals)) {
                     update_render();
                 }
+            }
+            if (ImGui::Checkbox("Enable brdf viewer", &enable_bdrf_viewer) && !enable_bdrf_viewer) {
+                sprite.setTexture(texture);
+            }
+            if (enable_bdrf_viewer && im::Button("Sample material")) {
+                sample_material();
             }
 
             ImGui::PushItemWidth(ImGui::GetWindowWidth() / 2);
@@ -384,6 +399,12 @@ public:
                     update_render();
                     update_lights();
                 }
+                const auto a = scene->point_lights[0].second;
+                float c[3] = {static_cast<float>(a.r), static_cast<float>(a.g), static_cast<float>(a.b)};
+                if (ImGui::ColorEdit3("##First light color", c)) {
+                    scene->point_lights[0].second = Color{c};
+                    update_render();
+                }
             }
             ImGui::PushItemWidth(ImGui::GetWindowWidth() / 2);
             if (ImGui::SliderDouble("Sky##Sky factor", &scene->camera->sky_lighting_factor, 0, 1)) {
@@ -400,13 +421,20 @@ public:
         enable_camera_movement = true;
         if (ImGui::BeginTabItem("Material")) {
             ImGui::PushItemWidth(-1);
+            ImGui::PushItemWidth(100);
+
             enable_camera_movement = false;
-            if (!current_material) {
+            if (!current_material && !enable_bdrf_viewer) {
                 ImGui::Text("No material selected\nclick on a mesh");
             } else {
-                ImGui::PushItemWidth(100);
+                if (enable_bdrf_viewer) {
+                    current_material = &brdf_viewer_material;
+                    if (im::SliderFloat("Angle", &brdf_viewer_angle, 0.01, 90)) {
+                        sample_material();
+                    }
+                }
 
-                if (ImGui::Combo("BDRF", &selected_material_idx, "D2\0D\0P\0\0")) {
+                if (ImGui::Combo("BDRF", &selected_material_idx, "D2\0D\0Phong\0Cook\0GGX\0")) {
                     if (selected_material_idx == 0) {
                         if (const auto &current_brdf = std::get_if<DisneyBRDF>(&current_material->brdf)) {
                             auto new_material = DisneyBRDF2{};
@@ -429,8 +457,37 @@ public:
                         current_material->brdf = DisneyBRDF{};
                     } else if (selected_material_idx == 2) {
                         current_material->brdf = BlinnPhongBRDF{};
+                    } else if (selected_material_idx == 3) {
+                        if (const auto &ggxBRDF = std::get_if<GGXBRDF>(&current_material->brdf)) {
+                            current_material->brdf = CookTorranceBRDF{
+                                ggxBRDF->base_color,
+                                ggxBRDF->roughness,
+                                0.5
+                            };
+                        } else {
+                            current_material->brdf = CookTorranceBRDF{
+                                current_material->albedo(),
+                                .3,
+                                .1
+                            };
+                        }
+                    } else if (selected_material_idx == 4) {
+                        if (const auto cookTorranceBRDF = std::get_if<CookTorranceBRDF>(&current_material->brdf)) {
+                            current_material->brdf = GGXBRDF{
+                                cookTorranceBRDF->base_color,
+                                cookTorranceBRDF->roughness,
+                                cookTorranceBRDF->f0
+                            };
+                        } else {
+                            current_material->brdf = GGXBRDF{
+                                current_material->albedo(),
+                                .3,
+                                .1
+                            };
+                        }
                     }
                     update_render();
+                    sample_material();
                 }
 
                 if (const auto &disneyBRDF2 = std::get_if<DisneyBRDF2>(&current_material->brdf)) {
@@ -440,6 +497,7 @@ public:
                     if (ImGui::ColorEdit3("##color", c)) {
                         disneyBRDF2->base_color = Color{c};
                         update_render();
+                        sample_material();
                     }
                     if (ImGui::SliderFloat("metallic", &disneyBRDF2->metallic, 0, 1)
                         | ImGui::SliderFloat("subsurface", &disneyBRDF2->subsurface, 0, 1)
@@ -452,6 +510,7 @@ public:
                         | ImGui::SliderFloat("clearcoat", &disneyBRDF2->clearcoat, 0, 1)
                         | ImGui::SliderFloat("clearcoatGloss", &disneyBRDF2->clearcoat_gloss, 0, 1)) {
                         update_render();
+                        sample_material();
                     }
                 } else if (const auto &disneyBRDF = std::get_if<DisneyBRDF>(&current_material->brdf)) {
                     selected_material_idx = 1;
@@ -460,6 +519,7 @@ public:
                     if (ImGui::ColorEdit3("##color", c)) {
                         disneyBRDF->base_color = Color{c};
                         update_render();
+                        sample_material();
                     }
                     if (ImGui::SliderFloat("metallic", &disneyBRDF->metallic, 0, 1)
                         | ImGui::SliderFloat("subsurface", &disneyBRDF->subsurface, 0, 1)
@@ -472,6 +532,7 @@ public:
                         | ImGui::SliderFloat("clearcoat", &disneyBRDF->clearcoat, 0, 1)
                         | ImGui::SliderFloat("clearcoatGloss", &disneyBRDF->clearcoat_gloss, 0, 1)) {
                         update_render();
+                        sample_material();
                     }
                 } else if (const auto &blinnPhongBRDF = std::get_if<BlinnPhongBRDF>(&current_material->brdf)) {
                     selected_material_idx = 2;
@@ -480,11 +541,44 @@ public:
                     if (ImGui::ColorEdit3("##color", c)) {
                         blinnPhongBRDF->base_color = Color{c};
                         update_render();
+                        sample_material();
                     }
                     if (ImGui::SliderFloat("specular", &blinnPhongBRDF->specular_strength, 0, 2)
                         | ImGui::SliderFloat("specular peak", &blinnPhongBRDF->direct_specular_peak, 1, 100)
                         | ImGui::Checkbox("only phong", &blinnPhongBRDF->only_phong)) {
                         update_render();
+                        sample_material();
+                    }
+                } else if (const auto &cookTorranceBRDF = std::get_if<CookTorranceBRDF>(&current_material->brdf)) {
+                    selected_material_idx = 3;
+                    const auto &a = cookTorranceBRDF->base_color;
+                    float c[3] = {static_cast<float>(a.r), static_cast<float>(a.g), static_cast<float>(a.b)};
+                    if (ImGui::ColorEdit3("##color", c)) {
+                        cookTorranceBRDF->base_color = Color{c};
+                        update_render();
+                        sample_material();
+                    }
+                    if (ImGui::SliderFloat("roughness", &cookTorranceBRDF->roughness, 0.001, 1)
+                        | ImGui::SliderFloat("f0", &cookTorranceBRDF->f0, 0, 1)
+                        | ImGui::Checkbox("use smith G", &cookTorranceBRDF->use_smith_g)) {
+                        update_render();
+                        sample_material();
+                    }
+                } else if (const auto &ggxBRDF = std::get_if<GGXBRDF>(&current_material->brdf)) {
+                    selected_material_idx = 4;
+                    const auto &a = ggxBRDF->base_color;
+                    float c[3] = {static_cast<float>(a.r), static_cast<float>(a.g), static_cast<float>(a.b)};
+                    if (ImGui::ColorEdit3("##color", c)) {
+                        ggxBRDF->base_color = Color{c};
+                        update_render();
+                        sample_material();
+                    }
+                    if (ImGui::SliderFloat("roughness", &ggxBRDF->roughness, 0.000, 1)
+                        | ImGui::SliderFloat("metalness", &ggxBRDF->metalness, 0, 1)) {
+                        ggxBRDF->f0 = mix(f0_dielectrics, ggxBRDF->base_color, ggxBRDF->metalness);
+                        ggxBRDF->diffuse_reflectance = ggxBRDF->base_color * (1 - ggxBRDF->metalness);
+                        update_render();
+                        sample_material();
                     }
                 }
                 ImGui::PopItemWidth();
@@ -750,6 +844,63 @@ public:
             1000 / static_cast<float>((scene->camera->look_from - scene->point_lights[0].first).length()));
         light_circle.setPointCount(100);
         light_circle.setFillColor(sf::Color::Yellow);
+    }
+
+    void sample_material() {
+        if (!enable_bdrf_viewer) return;
+        constexpr auto samples = 1000;
+        brdf_samples_texture.clear(sf::Color(0, 0, 0, 255));
+        wire_brdf_samples = sf::VertexArray(sf::PrimitiveType::LineStrip, samples);
+
+        constexpr auto N = Vec{0, 0, 1};
+        const auto V = Vec{cos(sf::degrees(brdf_viewer_angle).asRadians()), 0, sin(sf::degrees(brdf_viewer_angle).asRadians())}.normalize();
+        for (int i = 0; i < samples; i++) {
+            const auto angle = i * M_PI / samples;
+            const auto L = Vec{cos(angle), 0, sin(angle)}.normalize();
+
+            // Shows weight of the sampling technique
+            if (const auto ggx = std::get_if<GGXBRDF>(&brdf_viewer_material.brdf); ggx && true) {
+                const auto w = weight_ggx_vndf(ggx->roughness, dot(N, L), dot(N, V));
+                const auto f = luminance(schlick_fresnel(ggx->f0, dot(L, (L + V).normalize())));
+                wire_brdf_samples[i].position = sf::Vector2f{
+                    static_cast<float>(L.x * w * f * -200 + 300),
+                    static_cast<float>(L.z * w * f * -200 + 200)
+                };
+                wire_brdf_samples[i].color = sf::Color{255, 255, 255, 255};
+                if (i == samples / 4) {
+                    printf("w: %f\n", w * f);
+                }
+            } else { // Shows the brdf luminance at all outgoing directions
+                const auto c = brdf_viewer_material.BRDF(L, V, N);
+                const auto cl = luminance(c);
+                wire_brdf_samples[i].position = sf::Vector2f{
+                    static_cast<float>(L.x * cl * -200 + 300),
+                    static_cast<float>(L.z * cl * -200 + 200)
+                };
+                wire_brdf_samples[i].color = sf::Color{255, 255, 255, 255};
+            }
+        }
+        brdf_samples_texture.draw(wire_brdf_samples);
+
+
+        auto floor = sf::RectangleShape({600, 1});
+        floor.setPosition({0, 200});
+        floor.setFillColor(sf::Color(0xffffffff));
+        auto normal = sf::RectangleShape({1, 2000});
+        //normal.setOrigin({0, -200});
+        normal.setPosition({300, 200});
+        normal.setFillColor(sf::Color(0xa00000ff));
+        normal.rotate(sf::degrees(brdf_viewer_angle + 90));
+        auto circle = sf::CircleShape(200);
+        circle.setOrigin({200, 200});
+        circle.setPosition({300, 200});
+        circle.setFillColor(sf::Color(0));
+        circle.setOutlineThickness(1);
+        circle.setOutlineColor(sf::Color(0x0000ffff));
+        brdf_samples_texture.draw(floor);
+        brdf_samples_texture.draw(normal);
+        brdf_samples_texture.draw(circle);
+        brdf_samples_texture.display();
     }
 };
 

@@ -63,6 +63,7 @@ target_include_directories(tinyobjloader-lib INTERFACE ${tinyobjloader_SOURCE_DI
 
 add_executable(untitled
         src/AABB.h
+        src/BRDF2s.h
         src/BRDFs.h
         src/Camera.h
         src/Color.h
