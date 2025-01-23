@@ -29,8 +29,10 @@ constexpr Vector cross(const VecTypeA &a, const VecTypeB &b) {
     };
 }
 
-constexpr Real dot(const Vecf &a, const Vec &b) {
-    return a.x * b.x + a.y * b.y + a.z * b.z;
+/** Equivalent to lerp */
+template<typename Real, class VecType> requires std::is_floating_point_v<Real> || std::is_same_v<VecType, Vec> || std::is_same_v<VecType, Vecf>
+constexpr static VecType mix(const VecType &a, const VecType &b, const Real t) {
+    return a * (1 - t) + b * t;
 }
 
 namespace sf {

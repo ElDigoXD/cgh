@@ -36,7 +36,8 @@ public:
     explicit Vector(const VecType &v): x{v.x}, y{v.y}, z{v.z} {
     }
 
-    constexpr Vector operator+(const Vector &other) const {
+    template<class VecType> requires std::is_same_v<VecType, Vector> || std::is_same_v<VecType, Vecf>
+    constexpr Vector operator+(const VecType &other) const {
         return Vector{x + other.x, y + other.y, z + other.z};
     }
 
@@ -122,8 +123,8 @@ public:
         return x * x + y * y + z * z;
     }
 
-
-    [[nodiscard]] constexpr Real dot(const Vector &other) const {
+    template<class VecType> requires std::is_same_v<VecType, Vector> || std::is_same_v<VecType, Vecf>
+    [[nodiscard]] constexpr Real dot(const VecType &other) const {
         return x * other.x + y * other.y + z * other.z;
     }
 
@@ -165,20 +166,22 @@ public:
     }
 };
 
-
+template<typename Real> requires std::is_arithmetic_v<Real>
 constexpr Vector operator*(const Real scalar, const Vector &v) {
     return Vector{scalar * v.x, scalar * v.y, scalar * v.z};
 }
 
-constexpr Real dot(const Vector &a, const Vector &b) {
-    return a.dot(b);
+template<class VecTypeA, class VecTypeB> requires (std::is_same_v<VecTypeA, Vector> || std::is_same_v<VecTypeA, Vecf>) && (std::is_same_v<VecTypeB, Vector> || std::is_same_v<VecTypeB, Vecf>)
+constexpr Real dot(const VecTypeA &a, const VecTypeB &b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
 constexpr Vector cross(const Vector &a, const Vector &b) {
     return a.cross(b);
 }
 
-constexpr Vector normalize(const Vector &a) {
+template<class VecType> requires std::is_same_v<VecType, Vector> || std::is_same_v<VecType, Vecf>
+constexpr VecType normalize(const VecType &a) {
     return a.normalize();
 }
 
