@@ -392,7 +392,7 @@ public:
 
             const auto normal = triangle.normal();
             const auto scatter_direction = normal + Vec::random_unit_vector();
-            attenuation *= material.albedo();
+            // attenuation *= material.albedo(); todo: update cgh to use brdf
             const Point p = current_ray.at(hit_data->t);
             current_ray = Ray{p, scatter_direction};
             if (attenuation.is_close_to_0()) {

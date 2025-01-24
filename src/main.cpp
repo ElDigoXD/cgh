@@ -426,137 +426,17 @@ public:
                 }
 
                 if (ImGui::Combo("BDRF", &selected_material_idx, "D2\0D\0Phong\0Cook\0GGX\0")) {
-                    if (selected_material_idx == 0) {
-                        if (const auto &current_brdf = std::get_if<DisneyBRDF>(&current_material->brdf)) {
-                            auto new_material = DisneyBRDF2{};
-                            new_material.base_color = current_brdf->base_color;
-                            new_material.metallic = current_brdf->metallic;
-                            new_material.subsurface = current_brdf->subsurface;
-                            new_material.specular = current_brdf->specular;
-                            new_material.roughness = current_brdf->roughness;
-                            new_material.specular_tint = current_brdf->specular_tint;
-                            new_material.anisotropic = current_brdf->anisotropic;
-                            new_material.sheen = current_brdf->sheen;
-                            new_material.sheen_tint = current_brdf->sheen_tint;
-                            new_material.clearcoat = current_brdf->clearcoat;
-                            new_material.clearcoat_gloss = current_brdf->clearcoat_gloss;
-                            current_material->brdf = new_material;
-                        } else {
-                            current_material->brdf = DisneyBRDF2{};
-                        }
-                    } else if (selected_material_idx == 1) {
-                        current_material->brdf = DisneyBRDF{};
-                    } else if (selected_material_idx == 2) {
-                        current_material->brdf = BlinnPhongBRDF{};
-                    } else if (selected_material_idx == 3) {
-                        if (const auto &ggxBRDF = std::get_if<GGXBRDF>(&current_material->brdf)) {
-                            current_material->brdf = CookTorranceBRDF{
-                                ggxBRDF->base_color,
-                                ggxBRDF->roughness,
-                                0.5
-                            };
-                        } else {
-                            current_material->brdf = CookTorranceBRDF{
-                                current_material->albedo(),
-                                .3,
-                                .1
-                            };
-                        }
-                    } else if (selected_material_idx == 4) {
-                        if (const auto cookTorranceBRDF = std::get_if<CookTorranceBRDF>(&current_material->brdf)) {
-                            current_material->brdf = GGXBRDF{
-                                cookTorranceBRDF->base_color,
-                                cookTorranceBRDF->roughness,
-                                cookTorranceBRDF->f0
-                            };
-                        } else {
-                            current_material->brdf = GGXBRDF{
-                                current_material->albedo(),
-                                .3,
-                                .1
-                            };
-                        }
+                    if (selected_material_idx == 4) {
+                        current_material->brdf = GGXBRDF{
+                            current_material->albedo(),
+                            .3,
+                            .1
+                        };
                     }
                     update_render();
                     sample_material();
-                }
-
-                if (const auto &disneyBRDF2 = std::get_if<DisneyBRDF2>(&current_material->brdf)) {
-                    selected_material_idx = 0;
-                    const auto &a = disneyBRDF2->base_color;
-                    float c[3] = {static_cast<float>(a.r), static_cast<float>(a.g), static_cast<float>(a.b)};
-                    if (ImGui::ColorEdit3("##color", c)) {
-                        disneyBRDF2->base_color = Color{c};
-                        update_render();
-                        sample_material();
-                    }
-                    if (ImGui::SliderFloat("metallic", &disneyBRDF2->metallic, 0, 1)
-                        | ImGui::SliderFloat("subsurface", &disneyBRDF2->subsurface, 0, 1)
-                        | ImGui::SliderFloat("specular", &disneyBRDF2->specular, 0, 2)
-                        | ImGui::SliderFloat("roughness", &disneyBRDF2->roughness, 0, 1)
-                        | ImGui::SliderFloat("specularTint", &disneyBRDF2->specular_tint, 0, 1)
-                        | ImGui::SliderFloat("anisotropic", &disneyBRDF2->anisotropic, 0, 1)
-                        | ImGui::SliderFloat("sheen", &disneyBRDF2->sheen, 0, 1)
-                        | ImGui::SliderFloat("sheenTint", &disneyBRDF2->sheen_tint, 0, 1)
-                        | ImGui::SliderFloat("clearcoat", &disneyBRDF2->clearcoat, 0, 1)
-                        | ImGui::SliderFloat("clearcoatGloss", &disneyBRDF2->clearcoat_gloss, 0, 1)) {
-                        update_render();
-                        sample_material();
-                    }
-                } else if (const auto &disneyBRDF = std::get_if<DisneyBRDF>(&current_material->brdf)) {
-                    selected_material_idx = 1;
-                    const auto &a = disneyBRDF->base_color;
-                    float c[3] = {static_cast<float>(a.r), static_cast<float>(a.g), static_cast<float>(a.b)};
-                    if (ImGui::ColorEdit3("##color", c)) {
-                        disneyBRDF->base_color = Color{c};
-                        update_render();
-                        sample_material();
-                    }
-                    if (ImGui::SliderFloat("metallic", &disneyBRDF->metallic, 0, 1)
-                        | ImGui::SliderFloat("subsurface", &disneyBRDF->subsurface, 0, 1)
-                        | ImGui::SliderFloat("specular", &disneyBRDF->specular, 0, 2)
-                        | ImGui::SliderFloat("roughness", &disneyBRDF->roughness, 0, 1)
-                        | ImGui::SliderFloat("specularTint", &disneyBRDF->specular_tint, 0, 1)
-                        | ImGui::SliderFloat("anisotropic", &disneyBRDF->anisotropic, 0, 1)
-                        | ImGui::SliderFloat("sheen", &disneyBRDF->sheen, 0, 1)
-                        | ImGui::SliderFloat("sheenTint", &disneyBRDF->sheen_tint, 0, 1)
-                        | ImGui::SliderFloat("clearcoat", &disneyBRDF->clearcoat, 0, 1)
-                        | ImGui::SliderFloat("clearcoatGloss", &disneyBRDF->clearcoat_gloss, 0, 1)) {
-                        update_render();
-                        sample_material();
-                    }
-                } else if (const auto &blinnPhongBRDF = std::get_if<BlinnPhongBRDF>(&current_material->brdf)) {
-                    selected_material_idx = 2;
-                    const auto &a = blinnPhongBRDF->base_color;
-                    float c[3] = {static_cast<float>(a.r), static_cast<float>(a.g), static_cast<float>(a.b)};
-                    if (ImGui::ColorEdit3("##color", c)) {
-                        blinnPhongBRDF->base_color = Color{c};
-                        update_render();
-                        sample_material();
-                    }
-                    if (ImGui::SliderFloat("specular", &blinnPhongBRDF->specular_strength, 0, 2)
-                        | ImGui::SliderFloat("specular peak", &blinnPhongBRDF->direct_specular_peak, 1, 100)
-                        | ImGui::Checkbox("only phong", &blinnPhongBRDF->only_phong)) {
-                        update_render();
-                        sample_material();
-                    }
-                } else if (const auto &cookTorranceBRDF = std::get_if<CookTorranceBRDF>(&current_material->brdf)) {
-                    selected_material_idx = 3;
-                    const auto &a = cookTorranceBRDF->base_color;
-                    float c[3] = {static_cast<float>(a.r), static_cast<float>(a.g), static_cast<float>(a.b)};
-                    if (ImGui::ColorEdit3("##color", c)) {
-                        cookTorranceBRDF->base_color = Color{c};
-                        update_render();
-                        sample_material();
-                    }
-                    if (ImGui::SliderFloat("roughness", &cookTorranceBRDF->roughness, 0.001, 1)
-                        | ImGui::SliderFloat("f0", &cookTorranceBRDF->f0, 0, 1)
-                        | ImGui::Checkbox("use smith G", &cookTorranceBRDF->use_smith_g)) {
-                        update_render();
-                        sample_material();
-                    }
                 } else if (const auto &ggxBRDF = std::get_if<GGXBRDF>(&current_material->brdf)) {
-                    selected_material_idx = 4;
+                    selected_material_idx = 4; // todo: Remove old indexes.
                     const auto &a = ggxBRDF->base_color;
                     float c[3] = {static_cast<float>(a.r), static_cast<float>(a.g), static_cast<float>(a.b)};
                     if (ImGui::ColorEdit3("##color", c)) {
@@ -564,9 +444,12 @@ public:
                         update_render();
                         sample_material();
                     }
-                    if (ImGui::SliderFloat("roughness", &ggxBRDF->roughness, 0.000, 1)
+                    auto perceptual_roughness = std::sqrt(ggxBRDF->roughness);
+                    if (ImGui::SliderFloat("roughness", &perceptual_roughness, 0.000, 1)
                         | ImGui::SliderFloat("metalness", &ggxBRDF->metalness, 0, 1)) {
-                        ggxBRDF->f0 = mix(f0_dielectrics, ggxBRDF->base_color, ggxBRDF->metalness);
+
+                        ggxBRDF->roughness = perceptual_roughness * perceptual_roughness;
+                        ggxBRDF->f0 = mix(GGXBRDF::f0_dielectrics, ggxBRDF->base_color, ggxBRDF->metalness);
                         ggxBRDF->diffuse_reflectance = ggxBRDF->base_color * (1 - ggxBRDF->metalness);
                         update_render();
                         sample_material();
@@ -855,7 +738,7 @@ public:
             if (const auto ggx = std::get_if<GGXBRDF>(&brdf_viewer_material.brdf); ggx && false) {
                 const auto w = ggx->roughness == 0
                                    ? 1
-                                   : weight_ggx_vndf(ggx->roughness, dot(N, L), dot(N, V));
+                                   : ggx->weight_ggx_vndf(dot(N, L), dot(N, V));
                 const auto f = schlick_fresnel(ggx->f0, dot(L, (L + V).normalize()));
                 const auto fl = luminance(f);
                 wire_specular[i].position = sf::Vector2f{
