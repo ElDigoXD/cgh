@@ -44,7 +44,7 @@ const Scene *cornell_box(const int image_width, const int image_height) {
 
     const auto scene = new Scene(camera);
     scene->add_mesh(mesh);
-    scene->point_lights.emplace_back(Point{0, 10, 10}, Color{1, 1, 1});
+    scene->point_lights.emplace_back(Point{0, 1, 0}, Color{1, 1, 1});
     return scene;
 }
 
@@ -139,7 +139,7 @@ const Scene *multi_mesh(const int image_width, const int image_height) {
     teapot_mesh.scale(factor);
 
 
-    teapot_mesh.materials[0] = Material{GGXBRDF{Color{1, .4, .0}, 1, 1}};
+    teapot_mesh.materials[0] = Material{GGXBRDF{Color{1, .4, .0}, 0.1, 1}};
 
     dragon_mesh.normalize();
     dragon_mesh.scale(0.8);
@@ -148,14 +148,14 @@ const Scene *multi_mesh(const int image_width, const int image_height) {
     dragon_mesh.move(center);
     dragon_mesh.scale(factor);
 
-    dragon_mesh.materials[0] = Material{Color::cyan()};
+    dragon_mesh.materials[0] = Material{GGXBRDF{Color::cyan(), 0.1, 0}};
 
     const auto scene = new Scene(camera);
     scene->add_mesh(cornell_box_mesh);
     scene->add_mesh(teapot_mesh);
     scene->add_mesh(dragon_mesh);
 
-    scene->point_lights.emplace_back(Point{0, 0.7, 0} + Point{center.x, center.y, center.z}, Color{1, 1, 1});
+    scene->point_lights.emplace_back(Point{0, 1, 0} + Point{center.x, center.y, center.z}, Color{1, 1, 1});
     return scene;
 }
 
@@ -259,6 +259,7 @@ const Scene *knob(const int image_width, const int image_height) {
     const auto scene = new Scene(camera);
     scene->add_mesh(mesh, Mesh::Heuristic::BIGGEST_AXIS);
     scene->add_mesh(floor_mesh);
-    scene->point_lights.emplace_back(Point{-5, 5, -8}, Color{1, 1, 1});
+    scene->point_lights.emplace_back(Point{0, 0, -2.3}, Color{1, 1, 1} * 5);
+    //scene->point_lights.emplace_back(Point{-5, 5, -8}, Color{1, 1, 1});
     return scene;
 }

@@ -5,7 +5,7 @@
 
 #include "typedefs.h"
 
-static thread_local unsigned int rng_state = 8917264;
+static thread_local unsigned int rng_state = rand();
 
 [[maybe_unused]] static unsigned int rand_pcg() {
     const unsigned int state = rng_state;

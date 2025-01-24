@@ -68,9 +68,6 @@ public:
 
     Point point_cloud_screen_pixel_00_position;
 
-    Real sky_lighting_factor = 0;
-    Real diffuse_lighting_factor = 1;
-
     int computed_pixels = 0;
     int MAX_THREADS = 16;
 
@@ -200,10 +197,10 @@ public:
         };
     }
 
-    [[nodiscard]] Color compute_ray_color(const Ray &ray, const Scene &scene, int max_depth) const {
+    [[nodiscard]] static Color compute_ray_color(const Ray &ray, const Scene &scene, int max_depth) {
         Ray current_ray = ray;
         int current_depth = max_depth;
-        Color diffuse_lighting(0, 0, 0);
+        Color accumulated_lighting(0, 0, 0);
         Color attenuation(1, 1, 1);
 
 
@@ -225,15 +222,13 @@ public:
                     const auto shadow_ray = Ray{p, light_direction};
                     if (!scene.intersects(shadow_ray, light_distance)) {
                         const auto &c = material.BRDF(light_direction, -current_ray.direction.normalize(), normal);
-                        diffuse_lighting += attenuation * c * light_color;
+                        accumulated_lighting += attenuation * c * light_color;
                     }
                 }
             }
             current_ray = Ray{p, Vec{scatter_direction}};
             attenuation *= w;
-            if (attenuation.is_close_to_0() || current_depth-- == 0) {
-                if (max_depth - current_depth > 100)
-                    printf("Attenuation is close to 0 or max, att = %f, %f, %f | depth = %d/%d\n", attenuation.r, attenuation.g, attenuation.b, max_depth - current_depth, max_depth);
+            if (luminance(attenuation) <= 0.0001 || current_depth-- == 0) {
                 break;
             }
         }
@@ -243,7 +238,7 @@ public:
             return Color::black();
         }
 
-        const auto final_color = (attenuation * sky_lighting_factor + diffuse_lighting * diffuse_lighting_factor).clamp(0, 1);
+        const auto final_color = accumulated_lighting;
         return final_color;
     }
 
@@ -259,7 +254,7 @@ public:
                     const auto ray = get_random_orthogonal_ray_at(x, y);
                     color += compute_ray_color(ray, scene, max_depth);
                 }
-                color /= samples_per_pixel;
+                color = (color / samples_per_pixel).clamp(0, 1);
 
                 pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
                 pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
@@ -373,11 +368,11 @@ public:
     }
 
     //__attribute__((flatten))
-    [[nodiscard]] std::complex<Real> compute_wave(Ray ray, const Scene &scene, const Point &expected_point, [[maybe_unused]] const Color &color, int max_depth) const {
+    [[nodiscard]] static std::complex<Real> compute_wave(Ray ray, const Scene &scene, const Point &expected_point, [[maybe_unused]] const Color &color, int max_depth) {
         Ray current_ray = ray;
         int current_depth = max_depth;
         Color attenuation(1, 1, 1);
-        Color diffuse_lighting(0, 0, 0);
+        Color accumulated_lighting(0, 0, 0);
 
         while (auto hit_data = scene.intersect(current_ray)) {
             // First iteration checks if the intersection point is the expected point
@@ -412,14 +407,14 @@ public:
                 if (dot_product >= 0) {
                     const auto shadow_ray = Ray{p, light_direction};
                     if (!scene.intersects(shadow_ray, light_distance)) {
-                        diffuse_lighting += attenuation * light_color * dot_product;
+                        accumulated_lighting += attenuation * light_color * dot_product;
                     }
                 }
             }
         }
 
         // Wave computation
-        const auto final_color = (attenuation * sky_lighting_factor + diffuse_lighting * diffuse_lighting_factor).clamp(0, 1);
+        const auto final_color = accumulated_lighting.clamp(0, 1);
         auto intensity = final_color.r + final_color.g + final_color.b / 3;
         auto sub_phase = (2 * std::numbers::pi / wavelength) * (ray.origin - expected_point).length();
         auto sub_phase_c = std::polar(1.0, sub_phase);

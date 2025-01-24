@@ -1,13 +1,14 @@
 # Blender 4.0.2
 # www.blender.org
 mtllib cornell_box.mtl
+usemtl back_wall
 o back_wall
 v 54.959999 0.000004 55.920002
 v 0.000000 0.000004 55.920002
 v 0.000000 54.880005 55.919994
 v 55.599998 54.880005 55.919994
 s 0
-usemtl white
+usemtl back_wall
 f 1 2 3 4
 o ceiling
 v 55.600002 54.880001 -0.000004

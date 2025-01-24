@@ -112,6 +112,10 @@ public:
         return std::abs(x) < 0.00001 && std::abs(y) < 0.00001 && std::abs(z) < 0.00001;
     }
 
+    constexpr bool operator<=(const Color &other) const {
+        return x <= other.x && y <= other.y && z <= other.z;
+    }
+
     static constexpr Color black() { return Color{0, 0, 0}; }
 
     static constexpr Color white() { return Color{1, 1, 1}; }

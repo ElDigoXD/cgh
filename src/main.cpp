@@ -51,7 +51,6 @@ public:
     int aabb_depth = 1;
     sf::CircleShape light_circle;
     std::vector<sf::CircleShape> brdf_samples;
-    sf::VertexArray wire_brdf_samples;
     sf::RenderTexture brdf_samples_texture{max_window_size};
     Material brdf_viewer_material = Material{GGXBRDF{Color{1, 1, 1}, 0.5, 0.5}};
     float brdf_viewer_angle = 45; // Degrees
@@ -68,7 +67,7 @@ public:
     bool enable_render_normals = false;
     bool enable_render_cgh = false;
     bool enable_camera_movement = true;
-    bool enable_bdrf_viewer = true;
+    bool enable_bdrf_viewer = false;
     int selected_heuristic = 1;
 
 
@@ -94,20 +93,21 @@ public:
         enable_auto_wireframe = true;
         enable_aabb = false;
         enable_lights = true;
-        enable_render = false;
+        enable_render = true;
         enable_render_normals = false;
         enable_render_cgh = false;
         enable_camera_movement = true;
+        enable_bdrf_viewer = false;
 
         aabb_depth = 3;
-        samples_per_pixel = 1;
-        max_depth = 2;
+        samples_per_pixel = 50;
+        max_depth = 10;
         // width = 1920;
         // height = 1080;
 
 
         for (uint i = 0; i < sizeof(scene_names) / sizeof(char *); i++) {
-            if (strcmp(scene_names[i], "knob") == 0) {
+            if (strcmp(scene_names[i], "multi_mesh") == 0) {
                 selected_scene_idx = static_cast<int>(i);
                 break;
             }
@@ -375,20 +375,19 @@ public:
                 update_lights();
                 current_material = nullptr;
             }
-            if (ImGui::Combo("##heuristic", &selected_heuristic,
-                             "biggest axis\0box area\0box volume\0triangle area\0")) {
-                for (auto &mesh: scene->meshes) {
-                    mesh.generate_bvh(static_cast<Mesh::Heuristic>(selected_heuristic));
-                }
-                update_render();
-                update_aabb_wireframe();
-            }
+            // if (ImGui::Combo("##heuristic", &selected_heuristic,
+            //                  "biggest axis\0box area\0box volume\0triangle area\0")) {
+            //     for (auto &mesh: scene->meshes) {
+            //         mesh.generate_bvh(static_cast<Mesh::Heuristic>(selected_heuristic));
+            //     }
+            //     update_render();
+            //     update_aabb_wireframe();
+            // }
 
 
             ImGui::Text("Point Cloud Size:");
             if (ImGui::DragInt2("##Point Cloud Size", &scene->camera->point_cloud_screen_height_in_px, 10, 40, 1000)) {
                 scene->camera->update();
-                //point_cloud = scene->camera->compute_point_cloud(*scene);
                 update_render();
             }
 
@@ -406,14 +405,6 @@ public:
                     update_render();
                 }
             }
-            ImGui::PushItemWidth(ImGui::GetWindowWidth() / 2);
-            if (ImGui::SliderDouble("Sky##Sky factor", &scene->camera->sky_lighting_factor, 0, 1)) {
-                update_render();
-            }
-            if (ImGui::SliderDouble("Diffuse##diffuse factor", &scene->camera->diffuse_lighting_factor, 0, 1)) {
-                update_render();
-            }
-            ImGui::PopItemWidth();
 
             ImGui::PopItemWidth();
             ImGui::EndTabItem();
@@ -850,7 +841,9 @@ public:
         if (!enable_bdrf_viewer) return;
         constexpr auto samples = 1000;
         brdf_samples_texture.clear(sf::Color(0, 0, 0, 255));
-        wire_brdf_samples = sf::VertexArray(sf::PrimitiveType::LineStrip, samples);
+        auto wire_specular = sf::VertexArray(sf::PrimitiveType::LineStrip, samples);
+        auto wire_diffuse = sf::VertexArray(sf::PrimitiveType::LineStrip, samples);
+        auto wire_combined = sf::VertexArray(sf::PrimitiveType::LineStrip, samples);
 
         constexpr auto N = Vec{0, 0, 1};
         const auto V = Vec{cos(sf::degrees(brdf_viewer_angle).asRadians()), 0, sin(sf::degrees(brdf_viewer_angle).asRadians())}.normalize();
@@ -859,35 +852,56 @@ public:
             const auto L = Vec{cos(angle), 0, sin(angle)}.normalize();
 
             // Shows weight of the sampling technique
-            if (const auto ggx = std::get_if<GGXBRDF>(&brdf_viewer_material.brdf); ggx && true) {
-                const auto w = weight_ggx_vndf(ggx->roughness, dot(N, L), dot(N, V));
-                const auto f = luminance(schlick_fresnel(ggx->f0, dot(L, (L + V).normalize())));
-                wire_brdf_samples[i].position = sf::Vector2f{
-                    static_cast<float>(L.x * w * f * -200 + 300),
-                    static_cast<float>(L.z * w * f * -200 + 200)
+            if (const auto ggx = std::get_if<GGXBRDF>(&brdf_viewer_material.brdf); ggx && false) {
+                const auto w = ggx->roughness == 0
+                                   ? 1
+                                   : weight_ggx_vndf(ggx->roughness, dot(N, L), dot(N, V));
+                const auto f = schlick_fresnel(ggx->f0, dot(L, (L + V).normalize()));
+                const auto fl = luminance(f);
+                wire_specular[i].position = sf::Vector2f{
+                    static_cast<float>(L.x * w * fl * -200 + 300),
+                    static_cast<float>(L.z * w * fl * -200 + 200)
                 };
-                wire_brdf_samples[i].color = sf::Color{255, 255, 255, 255};
-                if (i == samples / 4) {
-                    printf("w: %f\n", w * f);
-                }
+                wire_specular[i].color = sf::Color{255, 255, 255, 255};
+                const auto w2 = luminance(ggx->diffuse_reflectance) * (1 - fl);
+                wire_diffuse[i].position = sf::Vector2f{
+                    static_cast<float>(L.x * w2 * -200 + 300),
+                    static_cast<float>(L.z * w2 * -200 + 200)
+                };
+                wire_diffuse[i].color = sf::Color{255, 255, 255, 255};
             } else { // Shows the brdf luminance at all outgoing directions
-                const auto c = brdf_viewer_material.BRDF(L, V, N);
-                const auto cl = luminance(c);
-                wire_brdf_samples[i].position = sf::Vector2f{
+                auto c = brdf_viewer_material.BRDF(L, V, N);
+                auto cl = luminance(c);
+                wire_combined[i].position = sf::Vector2f{
                     static_cast<float>(L.x * cl * -200 + 300),
                     static_cast<float>(L.z * cl * -200 + 200)
                 };
-                wire_brdf_samples[i].color = sf::Color{255, 255, 255, 255};
+                wire_combined[i].color = sf::Color{255, 255, 255, 255};
+                c = brdf_viewer_material.diffuseBRDF(L, V, N);
+                cl = luminance(c);
+                wire_diffuse[i].position = sf::Vector2f{
+                    static_cast<float>(L.x * cl * -200 + 300),
+                    static_cast<float>(L.z * cl * -200 + 200)
+                };
+                wire_diffuse[i].color = sf::Color{255, 100, 255, 255};
+                c = brdf_viewer_material.specularBRDF(L, V, N);
+                cl = luminance(c);
+                wire_specular[i].position = sf::Vector2f{
+                    static_cast<float>(L.x * cl * -200 + 300),
+                    static_cast<float>(L.z * cl * -200 + 200)
+                };
+                wire_specular[i].color = sf::Color{100, 255, 255, 255};
             }
         }
-        brdf_samples_texture.draw(wire_brdf_samples);
+        brdf_samples_texture.draw(wire_specular);
+        brdf_samples_texture.draw(wire_diffuse);
+        brdf_samples_texture.draw(wire_combined);
 
 
         auto floor = sf::RectangleShape({600, 1});
         floor.setPosition({0, 200});
         floor.setFillColor(sf::Color(0xffffffff));
         auto normal = sf::RectangleShape({1, 2000});
-        //normal.setOrigin({0, -200});
         normal.setPosition({300, 200});
         normal.setFillColor(sf::Color(0xa00000ff));
         normal.rotate(sf::degrees(brdf_viewer_angle + 90));

@@ -24,7 +24,7 @@ static std::array<float, 4> get_rotation_to_z_axis(const Vecf &v) {
     }
 
     const std::array<float, 4> res = {v.y, -v.x, 0, 1 + v.z};
-    const auto len = std::sqrt(res[0] * res[0] + res[1] * res[1] * res[2] * res[2] * res[3] * res[3]);
+    const auto len = std::sqrt(res[0] * res[0] + res[1] * res[1] + res[2] * res[2] + res[3] * res[3]);
 
     return {res[0] / len, res[1] / len, res[2] / len, res[3] / len};
 }
@@ -38,7 +38,7 @@ static std::array<float, 4> get_rotation_from_z_axis(const Vecf &v) {
     }
 
     const std::array<float, 4> res = {-v.y, v.x, 0, 1 + v.z};
-    const auto len = std::sqrt(res[0] * res[0] + res[1] * res[1] * res[2] * res[2] * res[3] * res[3]);
+    const auto len = std::sqrt(res[0] * res[0] + res[1] * res[1] + res[2] * res[2] + res[3] * res[3]);
 
     return {res[0] / len, res[1] / len, res[2] / len, res[3] / len};
 }
@@ -71,7 +71,7 @@ static Color lambertian_diffuse_brdf(const Color &diffuse_reflectance, const flo
  * @param v_dot_h Cosine of the angle between the view and the half vector (AKA V.H).
  * @return The fresnel reflectance factor.
  */
-static Color schlick_fresnel(const Color f0, const float v_dot_h) {
+static Color schlick_fresnel(const Color &f0, const float v_dot_h) {
     return f0 + (Color{1, 1, 1} - f0) * std::pow(1 - v_dot_h, 5);
 }
 
@@ -187,23 +187,23 @@ static float smith_beckman_g1(const float roughness, const float n_dot_x) {
 }
 
 static float smith_ggx_g1(const float roughness, const float n_dot_x) {
-    //return 1 / (1 + smith_ggx_lambda(smith_a(roughness, n_dot_x))); // unoptimized
-    const auto roughness2 = roughness * roughness;
-    const auto n_dot_x2 = n_dot_x * n_dot_x;
-    return 2 / (std::sqrt(((roughness2 * (1 - n_dot_x2)) + n_dot_x2) * n_dot_x2) + 1);
+    return 1 / (1 + smith_ggx_lambda(smith_a(roughness, n_dot_x)));
 }
 
-static float smith_beckman_g(const float roughness, const float n_dot_l, const float n_dot_v) {
-    //return smith_beckman_g1(roughness, n_dot_l) * smith_beckman_g1(roughness, n_dot_v);
+static float smith_beckman_g2(const float roughness, const float n_dot_l, const float n_dot_v) {
+    // Separable:
+    // return smith_beckman_g1(roughness, n_dot_l) * smith_beckman_g1(roughness, n_dot_v);
+    // Height correlated:
     return 1 / (1 + smith_beckman_lambda(smith_a(roughness, n_dot_l)) + smith_beckman_lambda(smith_a(roughness, n_dot_v)));
 }
 
 /**
- * Smith's shadowing-masking function for the GGX distribution.
+ * (Lagarde) Smith's shadowing-masking function for the GGX distribution.
  * Height correlated. Includes division by 4 * N.L * N.V.
+ *
  * @return
  */
-static float smith_ggx_g(const float roughness, const float n_dot_l, const float n_dot_v) {
+static float smith_ggx_g2(const float roughness, const float n_dot_l, const float n_dot_v) {
     const auto roughness2 = roughness * roughness;
     const auto a = n_dot_v * sqrt(roughness2 + n_dot_l * (n_dot_l - roughness2 * n_dot_l));
     const auto b = n_dot_l * sqrt(roughness2 + n_dot_v * (n_dot_v - roughness2 * n_dot_v));
@@ -215,7 +215,7 @@ static float smith_ggx_g(const float roughness, const float n_dot_l, const float
 static Color cook_torrance_brdf(const float n_dot_h, const float n_dot_l, const float n_dot_v, const float v_dot_h, const float f, const Color &base_color, const float roughness, const bool use_smith_g = false) {
     const auto d = beckmann_d(roughness, n_dot_h);
     const auto g = use_smith_g
-                       ? smith_beckman_g(roughness, n_dot_l, n_dot_v)
+                       ? smith_beckman_g2(roughness, n_dot_l, n_dot_v)
                        : cook_torrance_g(n_dot_h, n_dot_v, n_dot_l, v_dot_h);
 
     return base_color * (f * d * g) / (4 * n_dot_v);
@@ -223,7 +223,7 @@ static Color cook_torrance_brdf(const float n_dot_h, const float n_dot_l, const 
 
 static Color ggx_brdf(const float n_dot_h, const float n_dot_l, const float n_dot_v, const float v_dot_h, const Color f, const Color &base_color, const float roughness) {
     const auto d = ggx_d(roughness, n_dot_h);
-    const auto g = smith_ggx_g(roughness, n_dot_l, n_dot_v);
+    const auto g = smith_ggx_g2(roughness, n_dot_l, n_dot_v);
 
     return (f * d * g) * n_dot_l;
 }
@@ -232,14 +232,24 @@ static Color ggx_brdf(const float n_dot_h, const float n_dot_l, const float n_do
  * @return The weight of the sample (l) for the Beckman-Walter distribution.
  */
 static float weight_beckman_walter(const float roughness, const float h_dot_l, const float n_dot_l, const float n_dot_v, const float n_dot_h) {
-    return (h_dot_l * smith_beckman_g(roughness, n_dot_l, n_dot_v)) / (n_dot_v * n_dot_h);
+    return (h_dot_l * smith_beckman_g2(roughness, n_dot_l, n_dot_v)) / (n_dot_v * n_dot_h);
 }
 
 // correlated g
 static float weight_ggx_vndf(const float roughness, const float n_dot_l, const float n_dot_v) {
     const auto g1v = smith_ggx_g1(roughness, n_dot_v);
     const auto g1l = smith_ggx_g1(roughness, n_dot_l);
-    return g1l / (g1v + g1l - g1v * g1l);
+    const auto w = g1l / (g1v + g1l - g1v * g1l);
+    //assert(w.x >= 0 && w.y >= 0 && w.z >= 0 && w.x <= 1 && w.y <= 1 && w.z <= 1);
+    return w;
+}
+
+static Vecf sample_hemisphere() {
+    const auto r = rand_real();
+    const auto a = sqrt(r);
+    const auto b = 2 * M_PI * rand_real();
+
+    return Vecf{a * cos(b), a * sin(b), sqrt(1 - r)};
 }
 
 /**
@@ -354,62 +364,75 @@ static std::pair<Vecf, Color> indirect_ggx_brdf(const Vecf &N, const Vecf &V, co
     return {l_global, w};
 }
 
-static std::pair<Vecf, float> test(const Vecf &N, const Vecf &V, const float roughness) {
+static std::pair<Vecf, Color> indirect_ggx_lambert_brdf(const Vecf &N, const Vecf &V, const float roughness, const Color &f0, const Color &diffuse_reflectance, const float metallicness) {
     if (dot(N, V) <= 0) {
+        return {{0, 0, 0}, {0, 0, 0}};
         assert(false && "V must be in the same hemisphere as N");
-        exit(1);
     }
 
-    if (roughness == 0) {
-        return {reflect(-V, N), 1};
+    bool is_specular_sample;
+    float p = 1;
+    if (metallicness == 1 && roughness == 0) {
+        is_specular_sample = true;
+    } else {
+        auto f_approx = schlick_fresnel(f0, dot(V, N));
+        const auto specular = luminance(f_approx);
+        const auto diffuse = luminance(diffuse_reflectance) * (1 - specular);
+        p = std::clamp(specular / std::max(0.00001f, specular + diffuse), 0.1f, 0.9f);
+
+        is_specular_sample = rand_real() < p;
     }
 
-    // View direction to local space
     const auto q_rotation_to_z = get_rotation_to_z_axis(N);
     const auto v_local = rotate_point(q_rotation_to_z, V);
-    const auto n_local = Vecf{0, 0, 1};
 
-    // Sample the distribution (walter ggx)
-    const auto roughness2 = roughness * roughness;
+    Vecf l_local;
+    Color w;
 
-    const auto cos_theta2 = (1 - rand_real()) / ((roughness2 - 1) * rand_real() + 1);
-    const auto cos_theta = std::sqrt(cos_theta2);
-    const auto sin_theta = std::sqrt(1 - cos_theta2);
-    const auto phi = 2 * M_PI * rand_real();
+    if (is_specular_sample) {
+        std::tie(l_local, w) = sample_ggx_vndf(v_local, roughness, f0);
+        w /= p;
+    } else {
+        // Sample diffuse (lambert)
+        l_local = sample_hemisphere();
+        w = diffuse_reflectance * 1;
 
-    const auto h_local = Vecf{sin_theta * std::cos(phi), sin_theta * std::sin(phi), cos_theta}.normalize();
-    const auto l_local = reflect(-v_local, h_local);
+        // Sample specular (ggx vndf)
+        // Section 3.2: transforming the view direction to the hemisphere configuration
+        const Vecf v_hemi = normalize(Vecf{roughness * v_local.x, roughness * v_local.y, v_local.z});
 
-    // Get the weight of the sample (walter ggx)
-    const auto h_dot_l = std::max(0.00001, std::min(1., dot(h_local, l_local)));
-    const auto n_dot_l = std::max(0.00001, std::min(1., dot(n_local, l_local)));
-    const auto n_dot_v = std::max(0.00001, std::min(1., dot(n_local, v_local)));
-    const auto n_dot_h = std::max(0.00001, std::min(1., dot(n_local, h_local)));
+        // Source: "Sampling Visible GGX Normals with Spherical Caps" by Dupuy & Benyoub
+        const auto phi = 2.0f * M_PI * rand_real();
+        const auto z = ((1 - rand_real()) * (1.0f + v_hemi.z)) - v_hemi.z;
+        const auto sinTheta = std::sqrt(std::clamp<double>(1 - z * z, 0.0f, 1.0f));
+        const auto x = sinTheta * std::cos(phi);
+        const auto y = sinTheta * std::sin(phi);
 
-    // todo: falta fresnel?
-    const auto weight = (h_dot_l * smith_ggx_g(roughness, n_dot_l, n_dot_v)) / (n_dot_v * n_dot_h);
+        const Vecf n_h = Vecf(x, y, z) + v_hemi;
 
-    if (luminance({weight, weight, weight}) == 0) {
+        // Section 3.4: transforming the normal back to the ellipsoid configuration
+        const auto h_local = normalize(Vecf{roughness * n_h.x, roughness * n_h.y, std::max(0.f, n_h.z)});
+
+        const auto v_dot_h = std::max(0.00001, std::min(1., dot(v_local, h_local)));
+        w *= Color{1, 1, 1} - schlick_fresnel(f0, v_dot_h);
+        w /= 1 - p;
+    }
+
+    if (luminance(w) == 0) {
+        return {{0, 0, 0}, {0, 0, 0}};
         assert(false && "No luminance");
-        exit(1);
     }
 
-    // Return the sample in world space
-    const auto world_l = normalize(rotate_point(invert_rotation(q_rotation_to_z), l_local));
-
-    if (dot(N, world_l) <= 0) {
-        return {{0, 0, 0}, 0};
+    const auto l_global = normalize(rotate_point(invert_rotation(q_rotation_to_z), l_local));
+    if (dot(N, l_global) <= 0) {
+        return {{0, 0, 0}, {0, 0, 0}};
         assert(false && "Out ray must be in the same hemisphere as N");
-        exit(1);
     }
 
-    return {world_l, weight};
+    return {l_global, w};
 }
 
 
-/**
- * Cook-Torrance BRDF combined with Lambert diffuse BRDF.
- */
 class CookTorranceBRDF final : BRDF {
 public:
     Color base_color;
@@ -460,8 +483,9 @@ public:
         const auto v_dot_h = dot(V, h);
 
         const auto f = schlick_fresnel(f0, v_dot_h);
+        const auto diffuse = lambertian_diffuse_brdf(diffuse_reflectance, n_dot_l);
         const auto specular = ggx_brdf(n_dot_h, n_dot_l, n_dot_v, v_dot_h, f, base_color, roughness);
 
-        return specular;
+        return specular + diffuse * (Color{1, 1, 1} - f);
     }
 };

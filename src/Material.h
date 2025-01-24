@@ -49,11 +49,36 @@ public:
     }
 
     [[nodiscard]] constexpr Color diffuseBRDF(const Vec &L, const Vec &V, const Vec &N) const {
-        return {0, 0, 0};
+        if (std::holds_alternative<GGXBRDF>(brdf)) {
+            const auto h = normalize(L + V);
+            const auto n_dot_l = dot(N, L);
+            const auto v_dot_h = dot(V, h);
+
+            const auto ggx = std::get_if<GGXBRDF>(&brdf);
+            const auto f = schlick_fresnel(ggx->f0, v_dot_h);
+            const auto diffuse = lambertian_diffuse_brdf(ggx->diffuse_reflectance, n_dot_l);
+
+            return diffuse * (Color{1, 1, 1} - f);
+        }
+        assert(false && "Material::diffuseBRDF() called on unsupported BRDF type");
     }
 
     [[nodiscard]] constexpr Color specularBRDF(const Vec &L, const Vec &V, const Vec &N) const {
-        return {0, 0, 0};
+        if (std::holds_alternative<GGXBRDF>(brdf)) {
+            const auto h = normalize(L + V);
+            const auto n_dot_h = dot(N, h);
+            const auto n_dot_l = dot(N, L);
+            const auto n_dot_v = dot(N, V);
+            const auto v_dot_h = dot(V, h);
+
+            const auto ggx = std::get_if<GGXBRDF>(&brdf);
+            const auto f = schlick_fresnel(ggx->f0, v_dot_h);
+            const auto specular = ggx_brdf(n_dot_h, n_dot_l, n_dot_v, v_dot_h, f, ggx->base_color, ggx->roughness);
+
+            return specular;
+        }
+        assert(false && "Material::specularBRDF() called on unsupported BRDF type");
+
     }
 
     [[nodiscard]] constexpr Color BRDF(const Vec &L, const Vec &V, const Vec &N) const {
@@ -89,9 +114,9 @@ public:
         }
         if (std::holds_alternative<GGXBRDF>(brdf)) {
             const auto &ggxBRDF = std::get_if<GGXBRDF>(&brdf);
-            return indirect_ggx_brdf(Vecf{normal.data}, Vecf{wi.data}, ggxBRDF->roughness, ggxBRDF->f0);
+            return indirect_ggx_lambert_brdf(Vecf{normal.data}, Vecf{wi.data}, ggxBRDF->roughness, ggxBRDF->f0, ggxBRDF->diffuse_reflectance, ggxBRDF->metalness);
         }
-        return {Vecf{(normal + Vec::random_unit_vector()).data}, {1 / M_PI, 1 / M_PI, 1 / M_PI}};
+        return {sample_hemisphere(), {1, 1, 1}};
         assert(false && "Material::sample() called on unsupported BRDF type");
         __builtin_unreachable();
     }
