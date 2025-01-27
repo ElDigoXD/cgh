@@ -126,7 +126,7 @@ const Scene *multi_mesh(const int image_width, const int image_height) {
 
     auto cornell_box_mesh = load("../resources/cornell_box_multimaterial.obj");
     auto teapot_mesh = load("../resources/teapot.obj");
-    auto dragon_mesh = load("../resources/teapot.obj");
+    auto dragon_mesh = load("../resources/dragon.obj");
     cornell_box_mesh.flip(Axis::Z);
     cornell_box_mesh.normalize();
     cornell_box_mesh.scale(2.25);
@@ -144,7 +144,7 @@ const Scene *multi_mesh(const int image_width, const int image_height) {
     dragon_mesh.normalize();
     dragon_mesh.scale(0.8);
     dragon_mesh.flip(Axis::X);
-    dragon_mesh.move(Vecf{0.35, 0.255, -0.35});
+    dragon_mesh.move(Vecf{0.35, 0.355, -0.35});
     dragon_mesh.move(center);
     dragon_mesh.scale(factor);
 
@@ -155,7 +155,8 @@ const Scene *multi_mesh(const int image_width, const int image_height) {
     scene->add_mesh(teapot_mesh);
     scene->add_mesh(dragon_mesh);
 
-    scene->point_lights.emplace_back(Point{0, 1, 0} + Point{center.x, center.y, center.z}, Color{1, 1, 1});
+    scene->point_lights.emplace_back(Point{2, 2, 2} + Point{center.x, center.y, center.z}, Color{1, 1, 1});
+    scene->point_lights.emplace_back(Point{-2, 2, -2} + Point{center.x, center.y, center.z}, Color{1, 1, 1});
     return scene;
 }
 
