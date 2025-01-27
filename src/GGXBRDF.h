@@ -142,7 +142,7 @@ struct GGXBRDF final : BRDF {
 
         const Vecf n_h = Vecf(x, y, z) + v_hemi;
 
-        // Section 3.4: transforming the normal back to the ellipsoid configuration}
+        // Section 3.4: transforming the normal back to the ellipsoid configuration
         return normalize(Vecf{roughness * n_h.x, roughness * n_h.y, std::max(0.f, n_h.z)});
     }
 

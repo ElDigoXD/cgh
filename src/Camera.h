@@ -252,9 +252,9 @@ public:
                 Color color;
                 for (int i = 0; i < samples_per_pixel; i++) {
                     const auto ray = get_random_orthogonal_ray_at(x, y);
-                    color += compute_ray_color(ray, scene, max_depth);
+                    color += compute_ray_color(ray, scene, max_depth).clamp(0, 1);
                 }
-                color = (color / samples_per_pixel).clamp(0, 1);
+                color = color / samples_per_pixel;
 
                 pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
                 pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);

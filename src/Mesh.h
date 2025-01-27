@@ -277,16 +277,19 @@ public:
     }
 
     constexpr void flip(const Axis axis) {
-        switch (axis) {
-            case Axis::X:
-                scale(Vecf{-1, 1, 1});
-                break;
-            case Axis::Y:
-                scale(Vecf{1, -1, 1});
-                break;
-            case Axis::Z:
-                scale(Vecf{1, 1, -1});
-                break;
+        constexpr Vecf factor = Axis::X
+                                    ? Vecf{-1, 1, 1}
+                                    : Axis::Y
+                                          ? Vecf{1, -1, 1}
+                                          : Vecf{1, 1, -1};
+
+        for (auto &t: triangles) {
+            t.a_data *= factor;
+            t.b_data *= factor;
+            t.c_data *= factor;
+            t.a_normal_data *= factor;
+            t.b_normal_data *= factor;
+            t.c_normal_data *= factor;
         }
         flip_faces();
     }

@@ -49,7 +49,7 @@ public:
     sf::VertexArray wire_aabb;
     sf::VertexArray wire_depth_aabb;
     int aabb_depth = 1;
-    sf::CircleShape light_circle;
+    std::vector<sf::CircleShape> light_circles;
     std::vector<sf::CircleShape> brdf_samples;
     sf::RenderTexture brdf_samples_texture{max_window_size};
     Material brdf_viewer_material = Material{GGXBRDF{Color{1, 1, 1}, 0.5, 0.5}};
@@ -223,7 +223,9 @@ public:
                 window.draw(wire_depth_aabb, render_states);
             }
             if (enable_lights) {
-                window.draw(light_circle, render_states);
+                for (const auto &light_circle: light_circles) {
+                    window.draw(light_circle, render_states);
+                }
             }
             if (enable_bdrf_viewer) {
                 window.clear();
@@ -706,18 +708,22 @@ public:
     }
 
     void update_lights() {
+        light_circles.clear();
         if (scene->point_lights.empty()) {
-            light_circle.setRadius(0);
             return;
         }
 
-        auto [px, py] = scene->camera->project(scene->point_lights[0].first);
-        light_circle.setPosition({static_cast<float>(px), static_cast<float>(py)});
-        light_circle.setOrigin(light_circle.getGeometricCenter());
-        light_circle.setRadius(
-            1000 / static_cast<float>((scene->camera->look_from - scene->point_lights[0].first).length()));
-        light_circle.setPointCount(100);
-        light_circle.setFillColor(sf::Color::Yellow);
+        for (const auto &[position, color]: scene->point_lights) {
+            auto [px, py] = scene->camera->project(position);
+            sf::CircleShape light_circle;
+            light_circle.setPosition({static_cast<float>(px), static_cast<float>(py)});
+            light_circle.setOrigin(light_circle.getGeometricCenter());
+            light_circle.setRadius(
+                1000 / static_cast<float>((scene->camera->look_from - position).length()));
+            light_circle.setPointCount(100);
+            light_circle.setFillColor(sf::Color::Yellow);
+            light_circles.push_back(light_circle);
+        }
     }
 
     void sample_material() {
