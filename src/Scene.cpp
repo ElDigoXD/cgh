@@ -37,7 +37,7 @@ const Scene *cornell_box(const int image_width, const int image_height) {
     camera->look_from = {50, 50, 290};
     camera->update();
 
-    auto mesh = load("../resources/cornell_box_multimaterial.obj");
+    auto mesh = load("../resources/cornell_box_2.obj");
     mesh.flip(Axis::Z);
     mesh.normalize();
     mesh.scale(2.25);
@@ -124,7 +124,7 @@ const Scene *multi_mesh(const int image_width, const int image_height) {
     //factor = 1.f;
     constexpr auto center = Vecf{0, 0, 0};
 
-    auto cornell_box_mesh = load("../resources/cornell_box_multimaterial.obj");
+    auto cornell_box_mesh = load("../resources/cornell_box_2.obj");
     auto teapot_mesh = load("../resources/teapot.obj");
     auto dragon_mesh = load("../resources/dragon.obj");
     cornell_box_mesh.flip(Axis::Z);
@@ -262,5 +262,66 @@ const Scene *knob(const int image_width, const int image_height) {
     scene->add_mesh(floor_mesh);
     scene->point_lights.emplace_back(Point{0, 0, -2.3}, Color{1, 1, 1} * 5);
     //scene->point_lights.emplace_back(Point{-5, 5, -8}, Color{1, 1, 1});
+    return scene;
+}
+
+const Scene *cornell_juan(const int image_width, const int image_height) {
+    auto *camera = new Camera(image_width, image_height);
+    camera->look_from = {50, 50, 290};
+    camera->update();
+
+    const auto factor = 1 * static_cast<float>(image_height) / 400.f;
+    constexpr auto center = Vecf{0, 0, 0};
+
+    auto cornell_box_mesh = load("../resources/cornell_box_2.obj");
+    auto teapot_mesh = load("../resources/teapot.obj");
+    auto dragon_mesh = load("../resources/dragon.obj");
+    auto cylinder_teapot_mesh = load("../resources/cylinder.obj");
+    auto cylinder_dragon_mesh = load("../resources/cylinder.obj");
+    cornell_box_mesh.flip(Axis::Z);
+    cornell_box_mesh.normalize();
+    cornell_box_mesh.scale(Vecf{4, 2, 4});
+    cornell_box_mesh.move(center);
+    cornell_box_mesh.scale(factor);
+
+    teapot_mesh.flip(Axis::X);
+    teapot_mesh.normalize();
+    teapot_mesh.move(Vecf{0.5, 0.248, -0.5});
+    teapot_mesh.move(center);
+    teapot_mesh.scale(factor);
+
+    dragon_mesh.normalize();
+    dragon_mesh.scale(0.8);
+    dragon_mesh.move(Vecf{-0.5, 0.325, 0.5});
+    dragon_mesh.move(center);
+    dragon_mesh.scale(factor);
+
+    cylinder_teapot_mesh.normalize();
+    cylinder_teapot_mesh.scale(Vecf{0.8, 1, 0.8});
+    cylinder_teapot_mesh.move(Vecf{-0.5, -0.5, 0.5});
+    cylinder_teapot_mesh.move(center);
+    cylinder_teapot_mesh.scale(factor);
+
+    cylinder_dragon_mesh.normalize();
+    cylinder_dragon_mesh.scale(Vecf{0.8, 1, 0.8});
+    cylinder_dragon_mesh.move(Vecf{0.5, -0.5, -0.5});
+    cylinder_dragon_mesh.move(center);
+    cylinder_dragon_mesh.scale(factor);
+
+    cornell_box_mesh.materials[4] = Material{GGXBRDF{Color{.3, .3, .3}, 0.08, 1}};
+    teapot_mesh.materials[0] = Material{GGXBRDF{Color{1, .4, .0}, 0.1, 1}};
+    dragon_mesh.materials[0] = Material{GGXBRDF{Color::cyan(), 0.2, 0}};
+
+    const auto scene = new Scene(camera);
+    scene->add_mesh(cornell_box_mesh);
+    scene->add_mesh(teapot_mesh);
+    scene->add_mesh(dragon_mesh);
+    scene->add_mesh(cylinder_teapot_mesh);
+    scene->add_mesh(cylinder_dragon_mesh);
+
+    scene->point_lights.emplace_back((Point{+2 - 0.1, 1 - 0.1, +2 - 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1} / 2);
+    scene->point_lights.emplace_back((Point{-2 + 0.1, 1 - 0.1, -2 + 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1} / 2);
+    scene->point_lights.emplace_back((Point{-2 + 0.1, 1 - 0.1, +2 - 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1} / 2);
+    scene->point_lights.emplace_back((Point{+2 - 0.1, 1 - 0.1, -2 + 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1} / 2);
     return scene;
 }

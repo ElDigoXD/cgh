@@ -277,9 +277,9 @@ public:
     }
 
     constexpr void flip(const Axis axis) {
-        constexpr Vecf factor = Axis::X
+        const Vecf factor = Axis::X == axis
                                     ? Vecf{-1, 1, 1}
-                                    : Axis::Y
+                                    : Axis::Y == axis
                                           ? Vecf{1, -1, 1}
                                           : Vecf{1, 1, -1};
 

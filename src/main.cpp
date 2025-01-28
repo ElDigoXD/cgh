@@ -38,11 +38,11 @@ public:
     std::complex<Real> *complex_pixels = new std::complex<Real> [max_window_size.x * max_window_size.y * 4];
     Scene *scene = nullptr;
     std::vector<std::pair<Point, Color> > point_cloud;
-    sf::Vector2u camera_image_size;
     int max_depth = 10;
     int samples_per_pixel = 100;
-    int width = 600;
-    int height = 400;
+    static constexpr int width = IMAGE_WIDTH;
+    static constexpr int height = IMAGE_HEIGHT;
+    const sf::Vector2u camera_image_size {width, height};
 
 
     sf::VertexArray wire;
@@ -90,7 +90,7 @@ public:
 
         enable_wireframe = false;
         enable_only_visible_wireframe = true;
-        enable_auto_wireframe = true;
+        enable_auto_wireframe = false;
         enable_aabb = false;
         enable_lights = true;
         enable_render = true;
@@ -99,15 +99,15 @@ public:
         enable_camera_movement = true;
         enable_bdrf_viewer = false;
 
-        aabb_depth = 3;
-        samples_per_pixel = 50;
+        aabb_depth = 1;
+        samples_per_pixel = 10;
         max_depth = 10;
         // width = 1920;
         // height = 1080;
 
 
         for (uint i = 0; i < sizeof(scene_names) / sizeof(char *); i++) {
-            if (strcmp(scene_names[i], "multi_mesh") == 0) {
+            if (strcmp(scene_names[i], "cornell_juan") == 0) {
                 selected_scene_idx = static_cast<int>(i);
                 break;
             }
@@ -123,12 +123,6 @@ public:
         update_aabb_wireframe();
         update_lights();
         update_render();
-
-
-        camera_image_size = sf::Vector2u{
-            static_cast<unsigned int>(scene->camera->image_width),
-            static_cast<unsigned int>(scene->camera->image_height)
-        };
 
         texture.update(pixels, camera_image_size, {0, 0});
         // sprite.setScale({(float) image_size.x / (float) camera_image_size.x,

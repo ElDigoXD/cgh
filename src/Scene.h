@@ -70,7 +70,10 @@ const Scene *dragon(int image_width, int image_height);
 const Scene *tree(int image_width, int image_height);
 
 const Scene *bmw(int image_width, int image_height);
+
 const Scene *knob(int image_width, int image_height);
+
+const Scene *cornell_juan(int image_width, int image_height);
 
 static constexpr const char *scene_names[] = {
     "basic_triangle",
@@ -83,6 +86,7 @@ static constexpr const char *scene_names[] = {
     "tree",
     "bmw",
     "knob",
+    "cornell_juan",
 };
 
 static const std::function<const Scene *(int, int)> scenes[] = {
@@ -96,4 +100,5 @@ static const std::function<const Scene *(int, int)> scenes[] = {
     tree,
     bmw,
     knob,
+    cornell_juan,
 };

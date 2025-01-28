@@ -19,6 +19,9 @@
 #define IMAGE_WIDTH 600
 #define IMAGE_HEIGHT 400
 
+#define IMAGE_WIDTH 1920
+#define IMAGE_HEIGHT 1080
+
 class Camera {
 public:
     int image_width;
@@ -49,8 +52,14 @@ public:
 
     static constexpr Real slm_pixel_size = 8e-3;
 
-    int slm_height_in_pixels;
-    int slm_width_in_pixels;
+    static constexpr int slm_height_in_pixels = IMAGE_HEIGHT;
+    static constexpr int slm_width_in_pixels = IMAGE_WIDTH;
+
+    static constexpr Real h_slm_size = slm_pixel_size * slm_width_in_pixels;
+    static constexpr Real v_slm_size = slm_pixel_size * slm_height_in_pixels;
+
+    static constexpr Real h_point_cloud_screen_size = h_slm_size;
+    static constexpr Real v_point_cloud_screen_size = v_slm_size;
 
     Vec slm_pixel_delta_x;
     Vec slm_pixel_delta_y;
@@ -92,11 +101,11 @@ public:
         image_height = height;
 
         constexpr auto focus_dist = 1; //(look_from - look_at).length()
-        const auto theta = degrees_to_radians(fov);
-        const auto h = tan(theta / 2);
+        // const auto theta = degrees_to_radians(fov);
+        // const auto h = tan(theta / 2);
 
-        viewport_height = 2.0 * h * focus_dist;
-        viewport_width = viewport_height * (static_cast<Real>(IMAGE_WIDTH) / static_cast<Real>(IMAGE_HEIGHT));
+        // viewport_height = 2.0 * h * focus_dist;
+        // viewport_width = viewport_height * (IMAGE_WIDTH / IMAGE_HEIGHT);
 
         viewport_height = slm_pixel_size * height;
         viewport_width = slm_pixel_size * width;
@@ -109,23 +118,14 @@ public:
         viewport_x = u * viewport_width;
         viewport_y = -v * viewport_height;
 
-        pixel_delta_x = viewport_x / (Real) IMAGE_WIDTH;
-        pixel_delta_y = viewport_y / (Real) IMAGE_HEIGHT;
+        pixel_delta_x = viewport_x / IMAGE_WIDTH;
+        pixel_delta_y = viewport_y / IMAGE_HEIGHT;
 
         viewport_upper_left = look_from - (w * focus_dist) - viewport_x / 2 - viewport_y / 2;
 
         pixel_00_position = viewport_upper_left + (pixel_delta_x + pixel_delta_y) / 2;
 
         // cgh
-        slm_width_in_pixels = width;
-        slm_height_in_pixels = height;
-
-        const Real h_slm_size = slm_pixel_size * slm_width_in_pixels;
-        const Real v_slm_size = slm_pixel_size * slm_height_in_pixels;
-
-        const Real h_point_cloud_screen_size = h_slm_size;
-        const Real v_point_cloud_screen_size = v_slm_size;
-
         const Vec slm_x = u * h_slm_size;
         const Vec slm_y = -v * v_slm_size;
 
@@ -308,7 +308,7 @@ public:
             const auto ray = Ray{origin, point - origin};
             color = {0, 0, 0};
             for (int j = 0; j < samples_per_pixel; j++) {
-                color += compute_ray_color(ray, scene, max_depth);
+                color += compute_ray_color(ray, scene, max_depth).clamp(0, 1);
             }
             color /= samples_per_pixel;
         }
@@ -321,9 +321,8 @@ public:
 #pragma omp parallel for collapse(2) shared(pixels, complex_pixels, point_cloud_mut, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)
         for (int y = 0; y < slm_height_in_pixels; y++) {
             for (int x = 0; x < slm_width_in_pixels; x++) {
-                if (!st.stop_requested()) {
-                    [[likely]]
-                            const auto slm_pixel_center = slm_pixel_00_location + (slm_pixel_delta_x * x) + (slm_pixel_delta_y * y);
+                if (!st.stop_requested()) [[likely]] {
+                    const auto slm_pixel_center = slm_pixel_00_location + (slm_pixel_delta_x * x) + (slm_pixel_delta_y * y);
                     std::complex<Real> agg;
                     for (const auto &[point, color]: point_cloud_mut) {
                         const auto ray = Ray{slm_pixel_center, point - slm_pixel_center};
@@ -354,11 +353,7 @@ public:
                 return {0, 0};
             }
 
-            // const auto &triangle = hit_data->triangle;
-            const auto &material = hit_data->material;
-
-            // TODO: Compute a more accurate intensity value
-            const auto amplitude = color.r + color.g + color.b / 3;
+            const auto amplitude = luminance(color) * 1.0;
             const auto sub_phase = (2 * std::numbers::pi / wavelength) * ((ray.origin - expected_point).length());
             const auto sub_phase_c = std::polar(1.0, sub_phase);
 
