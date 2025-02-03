@@ -12,7 +12,6 @@ image = "ph_1gpu_1638s.png"
 if len(sys.argv) > 1:
     image = sys.argv[1]
 
-
 mm = 1
 um = 1e-3
 nm = 1e-6
@@ -32,12 +31,28 @@ dy = pixelsize
 # Import CGH
 if image.endswith(".csv"):
     data_im = np.recfromtxt(f"./{image}", delimiter=",", names=None)
+    print(data_im.dtype)
     complex_data = data_im
+elif image.endswith(".mat"):
+    from scipy.io import loadmat
+    data_im = loadmat(f'./{image}')
+    complex_data = data_im['data']
+    print(complex_data.dtype)
+elif image.endswith(".bin"):
+    data_im = np.fromfile(f"./{image}", dtype=complex)
+    if data_im.shape[0] == 1080 * 1920:
+        complex_data = np.reshape(data_im, (1080, 1920))
+    elif data_im.shape[0] == 400 * 600:
+        complex_data = np.reshape(data_im, (400, 600))
+    else:
+        print("Unknown image size.")
+        exit(1)
 else:
-    image = Image.open(f'./{image}')
-    data_im = np.array(image)
+    image_data = Image.open(f'./{image}')
+    data_im = np.array(image_data)
 
-    data_im = data_im[:, :, 0]
+    if data_im.ndim == 3:
+        data_im = data_im[:, :, 0]
     print("Imported image: ", data_im.shape, " pixels.")
 
     # [0, 255] --> [-1, 1]
@@ -50,6 +65,9 @@ else:
 
 nx = int(complex_data.shape[1])
 ny = int(complex_data.shape[0])
+
+nx = 2048
+ny = 2048
 
 lx = nx * dx
 ly = ny * dy
@@ -68,15 +86,17 @@ def propagation_kernel(slm_z):
     kernel = np.exp(1j * ((k * slm_z) * np.sqrt(1 - mod_fxfy)))
     kernel = fftshift(kernel)
 
-    propagated = ifft2(fft2(complex_data) * kernel)
+    propagated = ifft2((fft2(complex_data, (2048, 2048)) * kernel))[:1080, :1920]
 
     return propagated
 
+def imsave(z):
+    plt.imsave(f'output/propagation/{image}_{z}.png', np.abs(propagation_kernel(-z * mm)), cmap='gray')
 
-# plt.imsave('propagated_image_195.png', np.abs(propagation_kernel(-195 * mm)), cmap='gray')
-# plt.imsave('propagated_image_200.png', np.abs(propagation_kernel(-200 * mm)), cmap='gray')
-# plt.imsave('propagated_image_212.png', np.abs(propagation_kernel(-212 * mm)), cmap='gray')
-#exit(0)
+imsave(-294)
+imsave(-300)
+imsave(-306)
+exit(0)
 # Show an image with pyplot
 
 zs = range(600, 1001, 50)
@@ -84,9 +104,9 @@ zs = range(760, 850, 10)
 zs = range(200, 218, 2)
 zs = [299, 300, 301]
 zs = range(50, 600, 50)
-zs = range(296, 304, 2)
+zs = range(290, 310 , 2)
 
-max_columns = 2
+max_columns = 3
 num_rows = int(np.ceil(len(zs) / max_columns))
 num_cols = min(len(zs), max_columns)
 
@@ -115,5 +135,5 @@ for i, ax in enumerate(axes.flat):
         ax.axis('off')
 
 plt.tight_layout()
-plt.savefig("figure.png")
-#plt.show()
+plt.savefig("output/propagation/figure.png")
+plt.show()
