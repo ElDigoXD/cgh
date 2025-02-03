@@ -1,9 +1,10 @@
-#include "Scene.h"
-#include "Camera.h"
-#include "ObjReader.h"
+#pragma once
+#include <functional>
 
-const Scene *basic_triangle(const int image_width, const int image_height) {
-    auto *camera = new Camera(image_width, image_height);
+#include "Camera.h"
+
+constexpr static Scene *basic_triangle() {
+    auto *camera = new Camera();
     camera->look_from = {0, 1, 300};
     camera->update();
     const auto materials = std::vector{Material{Color{0.1, 0.1, 0.1}}};
@@ -32,8 +33,8 @@ const Scene *basic_triangle(const int image_width, const int image_height) {
 }
 
 
-const Scene *cornell_box(const int image_width, const int image_height) {
-    auto *camera = new Camera(image_width, image_height);
+constexpr static Scene *cornell_box() {
+    auto *camera = new Camera();
     camera->look_from = {50, 50, 290};
     camera->update();
 
@@ -48,8 +49,8 @@ const Scene *cornell_box(const int image_width, const int image_height) {
     return scene;
 }
 
-const Scene *sphere_mesh(const int image_width, const int image_height) {
-    auto *camera = new Camera(image_width, image_height);
+constexpr static Scene *sphere_mesh() {
+    auto *camera = new Camera();
     camera->look_from = {0, 0, 300};
     camera->update();
 
@@ -63,8 +64,8 @@ const Scene *sphere_mesh(const int image_width, const int image_height) {
     return scene;
 }
 
-const Scene *pumpkin(const int image_width, const int image_height) {
-    auto *camera = new Camera(image_width, image_height);
+constexpr static Scene *pumpkin() {
+    auto *camera = new Camera();
     camera->look_from = {40, 200, 300};
     camera->update();
 
@@ -82,8 +83,8 @@ const Scene *pumpkin(const int image_width, const int image_height) {
     return scene;
 }
 
-const Scene *teapot(const int image_width, const int image_height) {
-    auto *camera = new Camera(image_width, image_height);
+constexpr static Scene *teapot() {
+    auto *camera = new Camera();
     camera->look_from = {50, 50, 290};
     camera->update();
     auto mesh = load("../resources/teapot.obj");
@@ -115,8 +116,8 @@ const Scene *teapot(const int image_width, const int image_height) {
     return scene;
 }
 
-const Scene *multi_mesh(const int image_width, const int image_height) {
-    auto *camera = new Camera(image_width, image_height);
+constexpr static Scene *multi_mesh() {
+    auto *camera = new Camera();
     camera->look_from = {50, 0, 290};
     camera->update();
 
@@ -160,8 +161,8 @@ const Scene *multi_mesh(const int image_width, const int image_height) {
     return scene;
 }
 
-const Scene *dragon(const int image_width, const int image_height) {
-    auto *camera = new Camera(image_width, image_height);
+constexpr static Scene *dragon() {
+    auto *camera = new Camera();
     camera->look_from = {50, 50, 290};
     camera->update();
 
@@ -179,8 +180,8 @@ const Scene *dragon(const int image_width, const int image_height) {
     return scene;
 }
 
-const Scene *tree(const int image_width, const int image_height) {
-    auto *camera = new Camera(image_width, image_height);
+constexpr static Scene *tree() {
+    auto *camera = new Camera();
     camera->look_from = {50, 50, 290};
     camera->update();
 
@@ -189,7 +190,7 @@ const Scene *tree(const int image_width, const int image_height) {
     mesh.normalize();
     mesh.change_up_coord();
     mesh.flip(Axis::Y);
-    mesh.scale(3.f * static_cast<float>(image_height) / 400.f);
+    mesh.scale(3.f * static_cast<float>(IMAGE_HEIGHT) / 400.f);
 
     const auto scene = new Scene(camera);
     scene->add_mesh(mesh);
@@ -197,8 +198,8 @@ const Scene *tree(const int image_width, const int image_height) {
     return scene;
 }
 
-const Scene *bmw(const int image_width, const int image_height) {
-    auto *camera = new Camera(image_width, image_height);
+constexpr static Scene *bmw() {
+    auto *camera = new Camera();
     camera->look_from = {50, 50, 290};
     camera->update();
 
@@ -206,7 +207,7 @@ const Scene *bmw(const int image_width, const int image_height) {
     auto mesh = load("../resources/bmw.obj");
 
     mesh.normalize();
-    mesh.scale(5.f * static_cast<float>(image_height) / 400.f);
+    mesh.scale(5.f * static_cast<float>(IMAGE_HEIGHT) / 400.f);
 
     auto floor_mesh = Mesh{
         std::vector<Face>{
@@ -230,8 +231,8 @@ const Scene *bmw(const int image_width, const int image_height) {
     return scene;
 }
 
-const Scene *knob(const int image_width, const int image_height) {
-    auto *camera = new Camera(image_width, image_height);
+constexpr static Scene *knob() {
+    auto *camera = new Camera();
     camera->look_from = {-162, 100, -232};
     camera->update();
 
@@ -239,7 +240,7 @@ const Scene *knob(const int image_width, const int image_height) {
     auto mesh = load("../resources/testObj.obj");
 
     mesh.normalize();
-    mesh.scale(3.f * static_cast<float>(image_height) / 400.f);
+    mesh.scale(3.f * static_cast<float>(IMAGE_HEIGHT) / 400.f);
     //mesh.move((Vecf{0, -1.23, -0.73})*-1);
     //mesh.scale(10.f);
     auto floor_mesh = Mesh{
@@ -265,13 +266,13 @@ const Scene *knob(const int image_width, const int image_height) {
     return scene;
 }
 
-const Scene *cornell_juan(const int image_width, const int image_height) {
-    auto *camera = new Camera(image_width, image_height);
+constexpr static Scene *cornell_zoom() {
+    auto *camera = new Camera();
     camera->look_from = {50, 50, 290};
     camera->update();
 
-    const auto factor = 1 * static_cast<float>(image_height) / 400.f;
-    constexpr auto center = Vecf{0, 0, 0};
+    const auto factor = 2.6 * static_cast<float>(IMAGE_HEIGHT) / 400.f;
+    constexpr auto center = Vecf{0, -0.2, 0};
 
     auto cornell_box_mesh = load("../resources/cornell_box_2.obj");
     auto teapot_mesh = load("../resources/teapot.obj");
@@ -286,25 +287,25 @@ const Scene *cornell_juan(const int image_width, const int image_height) {
 
     teapot_mesh.flip(Axis::X);
     teapot_mesh.normalize();
-    teapot_mesh.move(Vecf{0.5, 0.248, -0.5});
+    teapot_mesh.move(Vecf{0.3, 0.248, -0.8});
     teapot_mesh.move(center);
     teapot_mesh.scale(factor);
 
     dragon_mesh.normalize();
-    dragon_mesh.scale(0.8);
-    dragon_mesh.move(Vecf{-0.5, 0.325, 0.5});
+    dragon_mesh.scale(1);
+    dragon_mesh.move(Vecf{-0.3, 0.325, 0.8});
     dragon_mesh.move(center);
     dragon_mesh.scale(factor);
 
     cylinder_teapot_mesh.normalize();
     cylinder_teapot_mesh.scale(Vecf{0.8, 1, 0.8});
-    cylinder_teapot_mesh.move(Vecf{-0.5, -0.5, 0.5});
+    cylinder_teapot_mesh.move(Vecf{0.3, -0.5, -0.8});
     cylinder_teapot_mesh.move(center);
     cylinder_teapot_mesh.scale(factor);
 
     cylinder_dragon_mesh.normalize();
-    cylinder_dragon_mesh.scale(Vecf{0.8, 1, 0.8});
-    cylinder_dragon_mesh.move(Vecf{0.5, -0.5, -0.5});
+    cylinder_dragon_mesh.scale(Vecf{1, 0.94, 1});
+    cylinder_dragon_mesh.move(Vecf{-0.3, -0.55, 0.8});
     cylinder_dragon_mesh.move(center);
     cylinder_dragon_mesh.scale(factor);
 
@@ -325,3 +326,31 @@ const Scene *cornell_juan(const int image_width, const int image_height) {
     scene->point_lights.emplace_back((Point{+2 - 0.1, 1 - 0.1, -2 + 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1} / 2);
     return scene;
 }
+
+static constexpr const char *scene_names[] = {
+    "basic_triangle",
+    "cornell_box",
+    "sphere_mesh",
+    "pumpkin",
+    "teapot",
+    "multi_mesh",
+    "dragon",
+    "tree",
+    "bmw",
+    "knob",
+    "cornell_zoom",
+};
+
+static const std::function<const Scene *()> scenes[] = {
+    basic_triangle,
+    cornell_box,
+    sphere_mesh,
+    pumpkin,
+    teapot,
+    multi_mesh,
+    dragon,
+    tree,
+    bmw,
+    knob,
+    cornell_zoom,
+};

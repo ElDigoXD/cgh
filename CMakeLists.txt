@@ -72,8 +72,8 @@ add_executable(untitled
         src/ObjReader.h
         src/Random.h
         src/Ray.h
-        src/Scene.cpp
         src/Scene.h
+        src/Scenes.h
         src/Triangle.h
         src/Vector.h
         src/main.cpp
@@ -87,11 +87,3 @@ target_link_libraries(untitled PRIVATE ImGui-SFML::ImGui-SFML OpenMP::OpenMP_CXX
 set_target_properties(untitled PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON)
 
-# Embree test
-add_executable(test
-        src/test.cpp
-)
-
-
-find_package(embree REQUIRED)
-target_link_libraries(test PRIVATE embree)

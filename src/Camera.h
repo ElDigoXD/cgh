@@ -2,7 +2,6 @@
 
 #include <complex>
 #include <iostream>
-#include <optional>
 #include <stop_token>
 #include <vector>
 
@@ -16,16 +15,8 @@
 #include "utils.h"
 #include "Vector.h"
 
-#define IMAGE_WIDTH 600
-#define IMAGE_HEIGHT 400
-
-#define IMAGE_WIDTH 1920
-#define IMAGE_HEIGHT 1080
-
 class Camera {
 public:
-    int image_width;
-    int image_height;
     int samples_per_pixel;
     int max_depth;
     Real fov;
@@ -69,8 +60,8 @@ public:
     // int point_cloud_screen_height_in_px = 1080 / 2.7;
     // int point_cloud_screen_width_in_px = point_cloud_screen_height_in_px * (16 / 9.0);
 
-    int point_cloud_screen_height_in_px = 40;
-    int point_cloud_screen_width_in_px = 60;
+    int point_cloud_screen_height_in_px = 400;
+    int point_cloud_screen_width_in_px = 600;
 
     Vec point_cloud_screen_pixel_delta_x;
     Vec point_cloud_screen_pixel_delta_y;
@@ -80,25 +71,17 @@ public:
     int computed_pixels = 0;
     int MAX_THREADS = 16;
 
-    Camera(const int image_weight, const int image_height) : Camera(image_weight, image_height, 10, 10, 90) {
+    Camera() : Camera(10, 10, 90) {
     }
 
 
-    Camera(const int image_weight, const int image_height, const int samples_per_pixel, const int max_depth, const Real fov)
-        : image_width{IMAGE_WIDTH},
-          image_height{IMAGE_HEIGHT},
-          samples_per_pixel{samples_per_pixel},
+    Camera(const int samples_per_pixel, const int max_depth, const Real fov)
+        : samples_per_pixel{samples_per_pixel},
           max_depth{max_depth}, fov{fov} {
         update();
     }
 
     void update() {
-        update(IMAGE_WIDTH, IMAGE_HEIGHT);
-    }
-
-    void update(const int width, const int height) {
-        image_width = width;
-        image_height = height;
 
         constexpr auto focus_dist = 1; //(look_from - look_at).length()
         // const auto theta = degrees_to_radians(fov);
@@ -107,8 +90,8 @@ public:
         // viewport_height = 2.0 * h * focus_dist;
         // viewport_width = viewport_height * (IMAGE_WIDTH / IMAGE_HEIGHT);
 
-        viewport_height = slm_pixel_size * height;
-        viewport_width = slm_pixel_size * width;
+        viewport_width = slm_pixel_size * IMAGE_WIDTH;
+        viewport_height = slm_pixel_size * IMAGE_HEIGHT;
 
 
         w = (look_from - look_at).normalize();
@@ -158,7 +141,7 @@ public:
         return Ray{pixel_00_position + pixel_delta_x * x + pixel_delta_y * y, -w};
     }
 
-    [[nodiscard]] Ray get_random_orthogonal_ray_at(int x, int y) const {
+    [[nodiscard]] Ray get_random_orthogonal_ray_at(const int x, const int y) const {
         const auto pixel_center = pixel_00_position + pixel_delta_x * x + pixel_delta_y * y;
 
         return Ray{
@@ -265,8 +248,8 @@ public:
         printf("[ INFO ] Finished cgi render in %.1fs\n", (now() - start) / 1000.0);
     }
 
-    [[nodiscard]] std::vector<std::pair<Point, Color> > compute_point_cloud(const Scene &scene) const {
-        std::vector<std::pair<Point, Color> > point_cloud;
+    [[nodiscard]] std::vector<std::tuple<Point, Color, Real> > compute_point_cloud(const Scene &scene) const {
+        std::vector<std::tuple<Point, Color, Real> > point_cloud;
 
         for (int y = 0; y < point_cloud_screen_height_in_px; y++) {
             for (int x = 0; x < point_cloud_screen_width_in_px; x++) {
@@ -274,7 +257,7 @@ public:
 
                 if (const auto &hit_data = scene.intersect(ray)) {
                     //point_cloud.emplace_back(std::pair{ray.at(hit_data.value().t), rand_real() * 2 * std::numbers::pi});
-                    point_cloud.emplace_back(ray.at(hit_data.value().t), Color::black());
+                    point_cloud.emplace_back(ray.at(hit_data.value().t), Color::black(), rand_real() * 2 * std::numbers::pi);
                 }
             }
         }
@@ -295,14 +278,14 @@ public:
     }
 
     // __attribute__((flatten))
-    void render_cgh(unsigned char pixels[], std::complex<Real> complex_pixels[], const Scene &scene, const std::vector<std::pair<Point, Color> > &point_cloud,
+    void render_cgh(unsigned char pixels[], std::complex<Real> complex_pixels[], const Scene &scene, const std::vector<std::tuple<Point, Color, Real> > &point_cloud,
                     const std::stop_token &st = {}) {
         auto start = now();
         printf("[ INFO ] Starting color generation for the point cloud\n");
 
         auto point_cloud_mut = point_cloud;
 #pragma omp parallel for collapse(1) shared(point_cloud_mut, scene) default(none) num_threads(MAX_THREADS) schedule(dynamic)
-        for (auto &[point, color]: point_cloud_mut) {
+        for (auto &[point, color, phase]: point_cloud_mut) {
             auto [x, y] = project(point);
             const auto origin = slm_pixel_00_location + (slm_pixel_delta_x * std::floor(x)) + (slm_pixel_delta_y * std::floor(y));
             const auto ray = Ray{origin, point - origin};
@@ -313,7 +296,8 @@ public:
             color /= samples_per_pixel;
         }
         assert(point_cloud.size() > 0);
-        printf("[ INFO ] Ended color generation for the point cloud in %.1fs (%ld ms/point)\n", (now() - start) / 1000.0, (now() - start) / point_cloud.size());
+        const auto t = now() - start;
+        printf("[ INFO ] Ended color generation for the point cloud in %.1fs (%ld ms/point)\n", t / 1000.0, t / point_cloud.size());
         printf("[ INFO ] Starting wave computation\n");
 
         start = now();
@@ -324,10 +308,10 @@ public:
                 if (!st.stop_requested()) [[likely]] {
                     const auto slm_pixel_center = slm_pixel_00_location + (slm_pixel_delta_x * x) + (slm_pixel_delta_y * y);
                     std::complex<Real> agg;
-                    for (const auto &[point, color]: point_cloud_mut) {
+                    for (const auto &[point, color, phase]: point_cloud_mut) {
                         const auto ray = Ray{slm_pixel_center, point - slm_pixel_center};
                         //auto wave = compute_wave(ray, scene, point, color, max_depth);
-                        const auto wave = compute_wave_2(ray, scene, point, color);
+                        const auto wave = compute_wave_2(ray, scene, point, color, phase);
                         agg += wave;
                     }
 
@@ -347,14 +331,15 @@ public:
         printf("[ INFO ] Ended wave computation in %.1fs (%ld ms/point)\n", (now() - start) / 1000.0, (now() - start) / point_cloud.size());
     }
 
-    static std::complex<Real> compute_wave_2(const Ray &ray, const Scene &scene, const Point &expected_point, const Color &color) {
+    static std::complex<Real> compute_wave_2(const Ray &ray, const Scene &scene, const Point &expected_point, const Color &color, const Real phase) {
+        // Test visibility of the point
         if (const auto &hit_data = scene.intersect(ray)) {
             if (!(ray.at(hit_data->t) - expected_point).is_close_to_0()) {
                 return {0, 0};
             }
 
             const auto amplitude = luminance(color) * 1.0;
-            const auto sub_phase = (2 * std::numbers::pi / wavelength) * ((ray.origin - expected_point).length());
+            const auto sub_phase = (2 * std::numbers::pi / wavelength) * ((ray.origin - expected_point).length()) + phase;
             const auto sub_phase_c = std::polar(1.0, sub_phase);
 
             return amplitude * sub_phase_c;

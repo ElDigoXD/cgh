@@ -23,7 +23,7 @@ public:
 
     const int log_n;
 
-    explicit Mesh(const std::vector<Face> &faces, const std::vector<Vecf> &vertices, const std::vector<Vecf> &normals, const std::vector<Material> &materials)
+    explicit constexpr Mesh(const std::vector<Face> &faces, const std::vector<Vecf> &vertices, const std::vector<Vecf> &normals, const std::vector<Material> &materials)
         : tree(static_cast<int>(std::pow(2, static_cast<int>(std::ceil(std::log2(faces.size()) + 1))))),
           materials(materials), log_n(static_cast<int>(log2(tree.size()))) {
         triangles.reserve(faces.size());

@@ -1,14 +1,15 @@
 #pragma once
 
 
-class Camera;
-
 #include <functional>
 
 #include "AABB.h"
 #include "Material.h"
 #include "Mesh.h"
+#include "ObjReader.h"
 #include "Triangle.h"
+
+class Camera;
 
 class Scene {
 public:
@@ -51,54 +52,4 @@ public:
         }
         return count;
     }
-};
-
-const Scene *basic_triangle(int image_width, int image_height);
-
-const Scene *cornell_box(int image_width, int image_height);
-
-const Scene *sphere_mesh(int image_width, int image_height);
-
-const Scene *pumpkin(int image_width, int image_height);
-
-const Scene *teapot(int image_width, int image_height);
-
-const Scene *multi_mesh(int image_width, int image_height);
-
-const Scene *dragon(int image_width, int image_height);
-
-const Scene *tree(int image_width, int image_height);
-
-const Scene *bmw(int image_width, int image_height);
-
-const Scene *knob(int image_width, int image_height);
-
-const Scene *cornell_juan(int image_width, int image_height);
-
-static constexpr const char *scene_names[] = {
-    "basic_triangle",
-    "cornell_box",
-    "sphere_mesh",
-    "pumpkin",
-    "teapot",
-    "multi_mesh",
-    "dragon",
-    "tree",
-    "bmw",
-    "knob",
-    "cornell_juan",
-};
-
-static const std::function<const Scene *(int, int)> scenes[] = {
-    basic_triangle,
-    cornell_box,
-    sphere_mesh,
-    pumpkin,
-    teapot,
-    multi_mesh,
-    dragon,
-    tree,
-    bmw,
-    knob,
-    cornell_juan,
 };

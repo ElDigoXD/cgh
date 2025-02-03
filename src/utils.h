@@ -15,8 +15,12 @@ constexpr Real degrees_to_radians(const Real degrees) {
     return degrees * std::numbers::pi / 180.0;
 }
 
-static int now() {
-    return static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+static uint now() {
+    return static_cast<uint>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+}
+
+static std::chrono::year_month_day get_current_date() {
+    return std::chrono::year_month_day{std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now())};
 }
 
 // Todo: Find a better place
@@ -33,6 +37,21 @@ constexpr Vector cross(const VecTypeA &a, const VecTypeB &b) {
 template<typename Real, class VecType> requires std::is_floating_point_v<Real> || std::is_same_v<VecType, Vec> || std::is_same_v<VecType, Vecf>
 constexpr static VecType mix(const VecType &a, const VecType &b, const Real t) {
     return a * (1 - t) + b * t;
+}
+
+static void save_binary(const Complex *complex_pixels, const char *path) {
+    FILE *fd = std::fopen(path, "w");
+    if (fd == nullptr) {
+        path = "BAD_PATH.bin";
+        fd = std::fopen(path, "w");
+    }
+    const auto a = std::fwrite(complex_pixels, sizeof(Complex), IMAGE_WIDTH * IMAGE_HEIGHT, fd);
+    if (a != IMAGE_WIDTH * IMAGE_HEIGHT) {
+        printf("expected %d, got %lu\n", IMAGE_WIDTH * IMAGE_HEIGHT, a);
+        std::fwrite(&complex_pixels[a], sizeof(Complex), a, fd);
+    }
+    fflush(fd);
+    std::fclose(fd);
 }
 
 namespace sf {

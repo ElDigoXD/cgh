@@ -1,1 +1,1 @@
-source gdb-pretty-printers/PrettyPrinters.py
+source .gdb-pretty-printers/PrettyPrinters.py

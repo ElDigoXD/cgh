@@ -6,6 +6,9 @@
 #include "imgui.h"
 #include "SFML/Graphics.hpp"
 
+#define IMAGE_WIDTH 1920
+#define IMAGE_HEIGHT 1080
+
 #include "Camera.h"
 #include "Scene.h"
 #include "typedefs.h"
@@ -13,7 +16,9 @@
 
 #define TINYOBJLOADER_IMPLEMENTATION
 
+#include "Scenes.h"
 #include "tiny_obj_loader.h"
+
 
 class GUI {
 public:
@@ -37,12 +42,10 @@ public:
     unsigned char *pixels = new unsigned char[max_window_size.x * max_window_size.y * 4];
     std::complex<Real> *complex_pixels = new std::complex<Real> [max_window_size.x * max_window_size.y * 4];
     Scene *scene = nullptr;
-    std::vector<std::pair<Point, Color> > point_cloud;
+    std::vector<std::tuple<Point, Color, Real> > point_cloud;
     int max_depth = 10;
     int samples_per_pixel = 100;
-    static constexpr int width = IMAGE_WIDTH;
-    static constexpr int height = IMAGE_HEIGHT;
-    const sf::Vector2u camera_image_size {width, height};
+    const sf::Vector2u camera_image_size{IMAGE_WIDTH, IMAGE_HEIGHT};
 
 
     sf::VertexArray wire;
@@ -52,7 +55,6 @@ public:
     std::vector<sf::CircleShape> light_circles;
     std::vector<sf::CircleShape> brdf_samples;
     sf::RenderTexture brdf_samples_texture{max_window_size};
-    Material brdf_viewer_material = Material{GGXBRDF{Color{1, 1, 1}, 0.5, 0.5}};
     float brdf_viewer_angle = 45; // Degrees
     std::jthread render_thread;
 
@@ -68,6 +70,7 @@ public:
     bool enable_render_cgh = false;
     bool enable_camera_movement = true;
     bool enable_bdrf_viewer = false;
+    bool enable_bdrf_viewer_sample_weights = false;
     int selected_heuristic = 1;
 
 
@@ -78,7 +81,7 @@ public:
 
     std::optional<sf::Mouse::Button> mouse_button_pressed;
     sf::Vector2i old_mouse_position;
-    Material *current_material = nullptr;
+    Material *current_material = nullptr; // TODO: change to optional
 
     int selected_scene_idx = 0;
     int selected_material_idx = 0;
@@ -102,12 +105,14 @@ public:
         aabb_depth = 1;
         samples_per_pixel = 10;
         max_depth = 10;
-        // width = 1920;
-        // height = 1080;
+
+        //enable_render_cgh = true;
+        //samples_per_pixel = 1000;
+        //max_depth = 1000;
 
 
         for (uint i = 0; i < sizeof(scene_names) / sizeof(char *); i++) {
-            if (strcmp(scene_names[i], "cornell_juan") == 0) {
+            if (strcmp(scene_names[i], "cornell_zoom") == 0) {
                 selected_scene_idx = static_cast<int>(i);
                 break;
             }
@@ -148,8 +153,8 @@ public:
                     image_size = window.getSize() - sf::Vector2u{200, 0};
                     window.setView(sf::View(sf::FloatRect{{0, 0}, sf::to_vector2f(window.getSize())}));
                     sprite.setScale({
-                        static_cast<float>(image_size.x) / static_cast<float>(camera_image_size.x),
-                        static_cast<float>(image_size.y) / static_cast<float>(camera_image_size.y)
+                        static_cast<float>(image_size.x) / static_cast<float>(IMAGE_WIDTH),
+                        static_cast<float>(image_size.y) / static_cast<float>(IMAGE_HEIGHT)
                     });
                 } else if (auto *event_mp = event->getIf<sf::Event::MouseButtonPressed>()) {
                     if (event_mp->button == sf::Mouse::Button::Left
@@ -195,13 +200,13 @@ public:
 
             auto render_states = sf::RenderStates::Default;
             render_states.transform.scale({
-                image_size.x / (float) camera_image_size.x, image_size.y / (float) camera_image_size.y
+                image_size.x / static_cast<float>(camera_image_size.x), image_size.y / static_cast<float>(camera_image_size.y)
             });
 
             if (enable_render) {
                 // ReSharper disable once CppDFAUnreachableCode
                 // ReSharper disable once CppDFAConstantConditions
-                if (rendering && update_texture_clock.getElapsedTime().asSeconds() > .1) {
+                if (rendering && update_texture_clock.getElapsedTime().asSeconds() > (enable_render_cgh ? 1 : 0.1)) {
                     // ReSharper disable once CppDFAUnreachableCode
                     texture.update(pixels, camera_image_size, {0, 0});
                     update_texture_clock.restart();
@@ -248,7 +253,7 @@ public:
         im::SetNextWindowPos({static_cast<float>(window.getSize().x - 200), 0});
         im::SetNextWindowSize({200, static_cast<float>(window.getSize().y)});
 
-
+        enable_camera_movement = true;
         im::Begin("GUI", nullptr, window_flags);
         ImGui::BeginTabBar("TB");
         if (ImGui::BeginTabItem("Main")) {
@@ -288,16 +293,10 @@ public:
                 if (ImGui::Checkbox("Enable render cgh", &enable_render_cgh)) {
                     update_render();
                 }
-                im::Unindent(5);
-                if (ImGui::Checkbox("Enable normals", &enable_render_normals)) {
+                if (ImGui::Checkbox("Enable render normals", &enable_render_normals)) {
                     update_render();
                 }
-            }
-            if (ImGui::Checkbox("Enable brdf viewer", &enable_bdrf_viewer) && !enable_bdrf_viewer) {
-                sprite.setTexture(texture);
-            }
-            if (enable_bdrf_viewer && im::Button("Sample material")) {
-                sample_material();
+                im::Unindent(5);
             }
 
             ImGui::PushItemWidth(ImGui::GetWindowWidth() / 2);
@@ -314,35 +313,13 @@ public:
             }
             ImGui::PopItemWidth();
 
-            ImGui::Text("Look From:");
-            if (im::DragDouble3("##Look From", scene->camera->look_from.data.data(), 1, -300, 300)) {
-                update_render();
-                update_wireframe();
-                update_aabb_wireframe();
-                update_lights();
-            }
-            ImGui::Text("Look At:");
-            if (im::DragDouble3("##Look At", scene->camera->look_at.data.data(), 0.01, -100, 100)) {
-                update_render();
-                update_wireframe();
-                update_aabb_wireframe();
-                update_lights();
-            }
-
             if (im::Button("Save")) {
-                const auto image = sf::Image(camera_image_size, pixels);
-                [[maybe_unused]] auto _ = image.saveToFile("../output.png");
-            }
-            ImGui::SameLine();
-            if (im::Button("Export")) {
-                FILE *fd = std::fopen("../output.csv", "w");
-                for (uint y = 0; y < camera_image_size.y; y++) {
-                    for (uint x = 0; x < camera_image_size.x; x++) {
-                        fprintf(fd, "(%e%+ej)", complex_pixels[y * camera_image_size.x + x].real(), complex_pixels[y * camera_image_size.x + x].imag());
-                        fprintf(fd, x == camera_image_size.x - 1 ? "\n" : ",");
-                    }
+                const auto date = get_current_date();
+                if (enable_render_cgh) {
+                    save_binary(complex_pixels, std::format("../output/{:%m}_{:%d}_{}.bin", date.month(), date.day(), scene_names[selected_scene_idx]).c_str());
                 }
-                fflush(fd);
+                const auto image = sf::Image(camera_image_size, pixels);
+                [[maybe_unused]] auto _ = image.saveToFile(std::format("../output/{:%m}_{:%d}_{}.png", date.month(), date.day(), scene_names[selected_scene_idx]).c_str());
             }
 
             const float tmp_render_time = rendering ? timer.getElapsedTime().asSeconds() - start_time.asSeconds() : render_time;
@@ -353,7 +330,7 @@ public:
 
             if (enable_render_cgh) {
                 ImGui::Text("Expected time: %.1fs", expected_time);
-                const auto percent = static_cast<Real>(scene->camera->computed_pixels) / (height * width);
+                const auto percent = static_cast<Real>(scene->camera->computed_pixels) / (IMAGE_HEIGHT * IMAGE_WIDTH);
                 ImGui::Text("%3.1f%%: %.1fs", percent * 100, tmp_render_time / percent);
             }
 
@@ -400,25 +377,46 @@ public:
                     scene->point_lights[0].second = Color{c};
                     update_render();
                 }
+                ImGui::Text("Look From:");
+                if (im::DragDouble3("##Look From", scene->camera->look_from.data.data(), 1, -300, 300)) {
+                    update_render();
+                    update_wireframe();
+                    update_aabb_wireframe();
+                    update_lights();
+                }
+                ImGui::Text("Look At:");
+                if (im::DragDouble3("##Look At", scene->camera->look_at.data.data(), 0.01, -100, 100)) {
+                    update_render();
+                    update_wireframe();
+                    update_aabb_wireframe();
+                    update_lights();
+                }
             }
 
             ImGui::PopItemWidth();
             ImGui::EndTabItem();
         }
-        enable_camera_movement = true;
         if (ImGui::BeginTabItem("Material")) {
             ImGui::PushItemWidth(-1);
             ImGui::PushItemWidth(100);
 
             enable_camera_movement = false;
-            if (!current_material && !enable_bdrf_viewer) {
+            if (!current_material) {
                 ImGui::Text("No material selected\nclick on a mesh");
             } else {
+                if (ImGui::Checkbox("Enable brdf viewer", &enable_bdrf_viewer) && !enable_bdrf_viewer) {
+                    sprite.setTexture(texture);
+                    sample_material();
+                }
                 if (enable_bdrf_viewer) {
-                    current_material = &brdf_viewer_material;
+                    im::Indent(10);
+                    if (ImGui::Checkbox("Sample weights", &enable_bdrf_viewer_sample_weights)) {
+                        sample_material();
+                    }
                     if (im::SliderFloat("Angle", &brdf_viewer_angle, 0.01, 90)) {
                         sample_material();
                     }
+                    im::Unindent(10);
                 }
 
                 if (ImGui::Combo("BDRF", &selected_material_idx, "D2\0D\0Phong\0Cook\0GGX\0")) {
@@ -443,7 +441,6 @@ public:
                     auto perceptual_roughness = std::sqrt(ggxBRDF->roughness);
                     if (ImGui::SliderFloat("roughness", &perceptual_roughness, 0.000, 1)
                         | ImGui::SliderFloat("metalness", &ggxBRDF->metalness, 0, 1)) {
-
                         ggxBRDF->roughness = perceptual_roughness * perceptual_roughness;
                         ggxBRDF->f0 = mix(GGXBRDF::f0_dielectrics, ggxBRDF->base_color, ggxBRDF->metalness);
                         ggxBRDF->diffuse_reflectance = ggxBRDF->base_color * (1 - ggxBRDF->metalness);
@@ -456,6 +453,18 @@ public:
 
             ImGui::PopItemWidth();
             ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("|")) {
+            enable_camera_movement = false;
+            const float tmp_render_time = rendering ? timer.getElapsedTime().asSeconds() - start_time.asSeconds() : render_time;
+            im::Text("Render time: %.1fs", tmp_render_time);
+
+            if (enable_render_cgh) {
+                ImGui::Text("Expected time: %.1fs", expected_time);
+                const auto percent = static_cast<Real>(scene->camera->computed_pixels) / (IMAGE_HEIGHT * IMAGE_WIDTH);
+                ImGui::Text("%3.1f%%: %.1fs", percent * 100, tmp_render_time / percent);
+            }
+            im::EndTabItem();
         }
 
         im::EndTabBar();
@@ -502,7 +511,7 @@ public:
     void update_render() {
         if (!enable_render) return;
         stop_render_and_wait();
-        for (uint i = 0; i < camera_image_size.x * camera_image_size.y * 4; i += 4) {
+        for (uint i = 0; i < IMAGE_WIDTH * IMAGE_HEIGHT * 4; i += 4) {
             pixels[i + 0] = 3;
             pixels[i + 1] = 62;
             pixels[i + 2] = 114;
@@ -525,10 +534,16 @@ public:
                 const auto start = now();
                 tmp_camera.render_cgh(pixels, complex_pixels, *scene, tmp_point_cloud, st);
                 const auto mspp = (now() - start) / tmp_point_cloud.size();
-                expected_time = mspp * point_cloud.size() / 1000;
-                printf("[ INFO ] Renderer computing at %ld ms/point (expected render time: %.0fs)\n", mspp, expected_time);
-                memset(pixels, 0, camera_image_size.x * camera_image_size.y * 4);
+                memset(pixels, 0, IMAGE_WIDTH * IMAGE_HEIGHT * 4);
                 point_cloud = scene->camera->compute_point_cloud(*scene);
+                expected_time = mspp * point_cloud.size() / 1000;
+                if (expected_time < 60) {
+                    printf("[ INFO ] Renderer computing at %ld ms/point (expected render time: %.0fs)\n", mspp, expected_time);
+                } else if (expected_time < 3600) {
+                    printf("[ INFO ] Renderer computing at %ld ms/point (expected render time: %.2fm)\n", mspp, expected_time / 60);
+                } else {
+                    printf("[ INFO ] Renderer computing at %ld ms/point (expected render time: %.2fh)\n", mspp, expected_time / 3600);
+                }
                 scene->camera->render_cgh(pixels, complex_pixels, *scene, point_cloud, st);
             } else {
                 if (enable_render_normals) {
@@ -542,6 +557,12 @@ public:
             if (!st.stop_requested()) {
                 render_time = timer.getElapsedTime().asSeconds() - start_time.asSeconds();
                 render_has_finished = true;
+                const auto date = get_current_date();
+                if (enable_render_cgh) {
+                    save_binary(complex_pixels, std::format("../backups/{:%m}_{:%d}_{}_{}.bin", date.month(), date.day(), scene_names[selected_scene_idx], now()).c_str());
+                }
+                const auto image = sf::Image(camera_image_size, pixels);
+                [[maybe_unused]] auto _ = image.saveToFile(std::format("../backups/{:%m}_{:%d}_{}_{}.png", date.month(), date.day(), scene_names[selected_scene_idx], now()).c_str());
             }
         });
     }
@@ -693,7 +714,7 @@ public:
             delete scene;
         }
 
-        scene = const_cast<Scene *>(scenes[selected_scene_idx](width, height));
+        scene = const_cast<Scene *>(scenes[selected_scene_idx]());
 
         assert(scene != nullptr);
 
@@ -721,7 +742,7 @@ public:
     }
 
     void sample_material() {
-        if (!enable_bdrf_viewer) return;
+        if (!enable_bdrf_viewer || current_material == nullptr) return;
         constexpr auto samples = 1000;
         brdf_samples_texture.clear(sf::Color(0, 0, 0, 255));
         auto wire_specular = sf::VertexArray(sf::PrimitiveType::LineStrip, samples);
@@ -735,7 +756,7 @@ public:
             const auto L = Vec{cos(angle), 0, sin(angle)}.normalize();
 
             // Shows weight of the sampling technique
-            if (const auto ggx = std::get_if<GGXBRDF>(&brdf_viewer_material.brdf); ggx && false) {
+            if (const auto ggx = std::get_if<GGXBRDF>(&current_material->brdf); ggx && enable_bdrf_viewer_sample_weights) {
                 const auto w = ggx->roughness == 0
                                    ? 1
                                    : ggx->weight_ggx_vndf(dot(N, L), dot(N, V));
@@ -753,21 +774,21 @@ public:
                 };
                 wire_diffuse[i].color = sf::Color{255, 255, 255, 255};
             } else { // Shows the brdf luminance at all outgoing directions
-                auto c = brdf_viewer_material.BRDF(L, V, N);
+                auto c = current_material->BRDF(L, V, N);
                 auto cl = luminance(c);
                 wire_combined[i].position = sf::Vector2f{
                     static_cast<float>(L.x * cl * -200 + 300),
                     static_cast<float>(L.z * cl * -200 + 200)
                 };
                 wire_combined[i].color = sf::Color{255, 255, 255, 255};
-                c = brdf_viewer_material.diffuseBRDF(L, V, N);
+                c = current_material->diffuseBRDF(L, V, N);
                 cl = luminance(c);
                 wire_diffuse[i].position = sf::Vector2f{
                     static_cast<float>(L.x * cl * -200 + 300),
                     static_cast<float>(L.z * cl * -200 + 200)
                 };
                 wire_diffuse[i].color = sf::Color{255, 100, 255, 255};
-                c = brdf_viewer_material.specularBRDF(L, V, N);
+                c = current_material->specularBRDF(L, V, N);
                 cl = luminance(c);
                 wire_specular[i].position = sf::Vector2f{
                     static_cast<float>(L.x * cl * -200 + 300),
