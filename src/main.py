@@ -91,11 +91,11 @@ def propagation_kernel(slm_z):
     return propagated
 
 def imsave(z):
-    plt.imsave(f'output/propagation/{image}_{z}.png', np.abs(propagation_kernel(-z * mm)), cmap='gray')
+    plt.imsave(f'output/propagation/{image.split("/")[-1]}_{z}.png', np.sqrt(np.abs(propagation_kernel(-z * mm))), cmap='gray')
 
-imsave(-294)
-imsave(-300)
-imsave(-306)
+imsave(294)
+imsave(300)
+imsave(306)
 exit(0)
 # Show an image with pyplot
 

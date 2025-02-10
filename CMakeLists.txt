@@ -79,6 +79,7 @@ add_executable(untitled
         src/main.cpp
         src/typedefs.h
         src/utils.h
+        src/test.cu
 )
 
 target_link_libraries(untitled PRIVATE ImGui-SFML::ImGui-SFML OpenMP::OpenMP_CXX tinyobjloader-lib)

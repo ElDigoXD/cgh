@@ -5,6 +5,11 @@
 
 #include "Random.h"
 
+template<typename _Tp>
+constexpr _Tp nostd_clamp(const _Tp &_val, const _Tp &_lo, const _Tp &_hi) {
+    return std::min(std::max(_val, _lo), _hi);
+}
+
 struct Vecf;
 
 class Vector {
@@ -50,8 +55,8 @@ public:
         return Vector{-x, -y, -z};
     }
 
-    template<class T>
-    constexpr Vector operator-(const T &other) const {
+    template<class VecType> requires std::is_same_v<VecType, Vector> || std::is_same_v<VecType, Vecf>
+    constexpr Vector operator-(const VecType &other) const {
         return Vector{x - other.x, y - other.y, z - other.z};
     }
 
@@ -138,7 +143,7 @@ public:
     }
 
     [[nodiscard]] constexpr Vector clamp(const Vector &a, const Vector &b) const {
-        return Vector{std::clamp(x, a.x, b.x), std::clamp(y, a.y, b.y), std::clamp(z, a.z, b.z)};
+        return Vector{nostd_clamp(x, a.x, b.x), nostd_clamp(y, a.y, b.y), nostd_clamp(z, a.z, b.z)};
     }
 
     static Vector random_in_unit_sphere() {

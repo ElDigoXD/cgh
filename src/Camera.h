@@ -11,6 +11,7 @@
 #include "Material.h"
 #include "Ray.h"
 #include "Scene.h"
+#include "test.h"
 #include "Triangle.h"
 #include "utils.h"
 #include "Vector.h"
@@ -38,16 +39,14 @@ public:
 
     Point pixel_00_position;
 
+    static constexpr Real slm_pixel_size = 8e-3;
     static constexpr Real wavelength = 0.6328e-3;
+    static constexpr Real two_pi_over_wavelength = 2 * std::numbers::pi / wavelength;
     static constexpr Real slm_z = 200;
 
-    static constexpr Real slm_pixel_size = 8e-3;
 
-    static constexpr int slm_height_in_pixels = IMAGE_HEIGHT;
-    static constexpr int slm_width_in_pixels = IMAGE_WIDTH;
-
-    static constexpr Real h_slm_size = slm_pixel_size * slm_width_in_pixels;
-    static constexpr Real v_slm_size = slm_pixel_size * slm_height_in_pixels;
+    static constexpr Real h_slm_size = slm_pixel_size * IMAGE_WIDTH;
+    static constexpr Real v_slm_size = slm_pixel_size * IMAGE_HEIGHT;
 
     static constexpr Real h_point_cloud_screen_size = h_slm_size;
     static constexpr Real v_point_cloud_screen_size = v_slm_size;
@@ -60,8 +59,8 @@ public:
     // int point_cloud_screen_height_in_px = 1080 / 2.7;
     // int point_cloud_screen_width_in_px = point_cloud_screen_height_in_px * (16 / 9.0);
 
-    int point_cloud_screen_height_in_px = 400;
-    int point_cloud_screen_width_in_px = 600;
+    int point_cloud_screen_height_in_px = 200;
+    int point_cloud_screen_width_in_px = point_cloud_screen_height_in_px * (16 / 9.0);
 
     Vec point_cloud_screen_pixel_delta_x;
     Vec point_cloud_screen_pixel_delta_y;
@@ -82,7 +81,6 @@ public:
     }
 
     void update() {
-
         constexpr auto focus_dist = 1; //(look_from - look_at).length()
         // const auto theta = degrees_to_radians(fov);
         // const auto h = tan(theta / 2);
@@ -112,8 +110,8 @@ public:
         const Vec slm_x = u * h_slm_size;
         const Vec slm_y = -v * v_slm_size;
 
-        slm_pixel_delta_x = slm_x / slm_width_in_pixels;
-        slm_pixel_delta_y = slm_y / slm_height_in_pixels;
+        slm_pixel_delta_x = slm_x / IMAGE_WIDTH;
+        slm_pixel_delta_y = slm_y / IMAGE_HEIGHT;
 
         const Vec slm_upper_left = look_from - slm_x / 2 - slm_y / 2;
 
@@ -192,7 +190,7 @@ public:
             const auto &material = hit_data->material;
 
             const auto &normal = triangle.normal(hit_data->u, hit_data->v);
-            const auto [scatter_direction, w] = material.sample(normal, -current_ray.direction.normalize());
+            const auto [scatter_direction, w] = material.sample(normal, -current_ray.direction.normalize()); // todo: bajar donde se usa
             const Point p = current_ray.at(hit_data->t);
 
             for (const auto &[light_position, light_color]: scene.point_lights) {
@@ -248,8 +246,8 @@ public:
         printf("[ INFO ] Finished cgi render in %.1fs\n", (now() - start) / 1000.0);
     }
 
-    [[nodiscard]] std::vector<std::tuple<Point, Color, Real> > compute_point_cloud(const Scene &scene) const {
-        std::vector<std::tuple<Point, Color, Real> > point_cloud;
+    [[nodiscard]] std::vector<std::tuple<Point, Color, float> > compute_point_cloud(const Scene &scene) const {
+        std::vector<std::tuple<Point, Color, float> > point_cloud;
 
         for (int y = 0; y < point_cloud_screen_height_in_px; y++) {
             for (int x = 0; x < point_cloud_screen_width_in_px; x++) {
@@ -271,14 +269,15 @@ public:
         auto ax = (p - o).dot(u);
         auto ay = (p - o).dot(-v);
 
-        ax = ax / slm_pixel_size + slm_width_in_pixels / 2.0;
-        ay = ay / slm_pixel_size + slm_height_in_pixels / 2.0;
+        ax = ax / slm_pixel_size + IMAGE_WIDTH / 2.0;
+        ay = ay / slm_pixel_size + IMAGE_HEIGHT / 2.0;
 
         return {ax, ay};
     }
 
     // __attribute__((flatten))
-    void render_cgh(unsigned char pixels[], std::complex<Real> complex_pixels[], const Scene &scene, const std::vector<std::tuple<Point, Color, Real> > &point_cloud,
+    // TODO: hacer que la nube de puntos se calcule aqí.
+    void render_cgh(unsigned char pixels[], std::complex<Real> complex_pixels[], const Scene &scene, const std::vector<std::tuple<Point, Color, float> > &point_cloud,
                     const std::stop_token &st = {}) {
         auto start = now();
         printf("[ INFO ] Starting color generation for the point cloud\n");
@@ -294,36 +293,43 @@ public:
                 color += compute_ray_color(ray, scene, max_depth).clamp(0, 1);
             }
             color /= samples_per_pixel;
+            color = {std::sqrt(color.r), std::sqrt(color.g), std::sqrt(color.b)};
         }
-        assert(point_cloud.size() > 0);
+        assert(!point_cloud.empty());
         const auto t = now() - start;
         printf("[ INFO ] Ended color generation for the point cloud in %.1fs (%ld ms/point)\n", t / 1000.0, t / point_cloud.size());
         printf("[ INFO ] Starting wave computation\n");
 
         start = now();
         computed_pixels = 0;
+        if constexpr (true) {
+            use_cuda(pixels, complex_pixels, point_cloud_mut, slm_pixel_00_location, slm_pixel_delta_x, slm_pixel_delta_y);
+        } else {
 #pragma omp parallel for collapse(2) shared(pixels, complex_pixels, point_cloud_mut, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)
-        for (int y = 0; y < slm_height_in_pixels; y++) {
-            for (int x = 0; x < slm_width_in_pixels; x++) {
-                if (!st.stop_requested()) [[likely]] {
-                    const auto slm_pixel_center = slm_pixel_00_location + (slm_pixel_delta_x * x) + (slm_pixel_delta_y * y);
-                    std::complex<Real> agg;
-                    for (const auto &[point, color, phase]: point_cloud_mut) {
+            for (int y = 0; y < IMAGE_HEIGHT; y++) {
+                for (int x = 0; x < IMAGE_WIDTH; x++) {
+                    if (!st.stop_requested()) [[likely]] {
+                        const auto slm_pixel_center = slm_pixel_00_location + (slm_pixel_delta_x * x) + (slm_pixel_delta_y * y);
+                        std::complex<Real> agg;
+                        for (const auto &[point, color, phase]: point_cloud_mut) {
+#ifdef ENABLE_OCCLUSION
                         const auto ray = Ray{slm_pixel_center, point - slm_pixel_center};
-                        //auto wave = compute_wave(ray, scene, point, color, max_depth);
-                        const auto wave = compute_wave_2(ray, scene, point, color, phase);
-                        agg += wave;
-                    }
+                        //const auto wave = compute_wave_2(ray, scene, point, color, phase);
+#else
+                            const auto wave = compute_wave_no_occlusion(slm_pixel_center, point, color, phase);
+#endif
+                            agg += wave;
+                        }
 
-                    // Todo: divide by number of effective points
-                    agg /= static_cast<Real>(point_cloud_mut.size());
-                    complex_pixels[(y * slm_width_in_pixels + x)] = agg;
-                    const auto a = static_cast<unsigned char>((arg(agg) + std::numbers::pi) / (2 * std::numbers::pi) * 255);
-                    pixels[(y * slm_width_in_pixels + x) * 4 + 0] = a;
-                    pixels[(y * slm_width_in_pixels + x) * 4 + 1] = a;
-                    pixels[(y * slm_width_in_pixels + x) * 4 + 2] = a;
-                    pixels[(y * slm_width_in_pixels + x) * 4 + 3] = 255;
-                    ++computed_pixels;
+                        agg /= static_cast<Real>(point_cloud_mut.size());
+                        complex_pixels[(y * IMAGE_WIDTH + x)] = agg;
+                        const auto a = static_cast<unsigned char>((arg(agg) + std::numbers::pi) / (2 * std::numbers::pi) * 255);
+                        pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = a;
+                        pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = a;
+                        pixels[(y * IMAGE_WIDTH + x) * 4 + 2] = a;
+                        pixels[(y * IMAGE_WIDTH + x) * 4 + 3] = 255;
+                        ++computed_pixels;
+                    }
                 }
             }
         }
@@ -339,12 +345,20 @@ public:
             }
 
             const auto amplitude = luminance(color) * 1.0;
-            const auto sub_phase = (2 * std::numbers::pi / wavelength) * ((ray.origin - expected_point).length()) + phase;
+            const auto sub_phase = two_pi_over_wavelength * (ray.origin - expected_point).length() + phase;
             const auto sub_phase_c = std::polar(1.0, sub_phase);
 
             return amplitude * sub_phase_c;
         }
         return {0, 0};
+    }
+
+    static std::complex<Real> compute_wave_no_occlusion(const Point &origin, const Point &point, const Color &color, const Real phase) {
+        const auto amplitude = static_cast<double>(luminance(color));
+        const auto sub_phase = two_pi_over_wavelength * (origin - point).length() + phase;
+        const auto sub_phase_c = std::polar(1.0, sub_phase);
+
+        return amplitude * sub_phase_c;
     }
 
     //__attribute__((flatten))
@@ -396,7 +410,7 @@ public:
         // Wave computation
         const auto final_color = accumulated_lighting.clamp(0, 1);
         auto intensity = final_color.r + final_color.g + final_color.b / 3;
-        auto sub_phase = (2 * std::numbers::pi / wavelength) * (ray.origin - expected_point).length();
+        auto sub_phase = two_pi_over_wavelength * (ray.origin - expected_point).length();
         auto sub_phase_c = std::polar(1.0, sub_phase);
 
         return intensity * sub_phase_c;

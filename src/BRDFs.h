@@ -13,10 +13,6 @@ constexpr static Real mix(const Real a, const Real b, const Real t) {
     return a * (1 - t) + b * t;
 }
 
-static float luminance(const Color &c) {
-    return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
-}
-
 template<class VecType> requires std::is_same_v<VecType, Vec> || std::is_same_v<VecType, Vecf>
 static std::array<float, 4> get_rotation_to_z_axis(const VecType &v) {
     if (v.z < -0.9999999) {
@@ -49,7 +45,7 @@ static Vecf rotate_point(const std::array<float, 4> &q, const VecType &v) {
  * @param v_dot_h Cosine of the angle between the view and the half vector (AKA V.H).
  * @return The fresnel reflectance factor.
  */
-static Color schlick_fresnel(const Color &f0, const float v_dot_h) {
+static constexpr Color schlick_fresnel(const Color &f0, const float v_dot_h) {
     return f0 + (Color{1, 1, 1} - f0) * std::pow(1 - v_dot_h, 5);
 }
 
@@ -60,7 +56,7 @@ static Color schlick_fresnel(const Color &f0, const float v_dot_h) {
  * @param n_dot_l Cosine of the angle between the normal and the light vector (AKA N.L).
  * @return The evaluation of the Lambert diffuse brdf.
  */
-static Color lambert_diffuse_brdf(const Color &diffuse_reflectance, const float n_dot_l) {
+static constexpr Color lambert_diffuse_brdf(const Color &diffuse_reflectance, const float n_dot_l) {
     return (diffuse_reflectance / M_PI) * n_dot_l;
 }
 
@@ -71,15 +67,15 @@ static Color lambert_diffuse_brdf(const Color &diffuse_reflectance, const float 
  * @param n_dot_x Cosine of the angle between the normal and the view or the light vector.
  * @return a = (α_b tan(θ_x))^-1
  */
-static float smith_a(const float roughness, const float n_dot_x) {
+static constexpr float smith_a(const float roughness, const float n_dot_x) {
     return n_dot_x / (roughness * std::sqrt(1 - n_dot_x * n_dot_x));
 }
 
-static Vecf reflect(const Vecf &i, const Vecf &n) {
+static constexpr Vecf reflect(const Vecf &i, const Vecf &n) {
     return i - 2 * n * dot(i, n);
 }
 
-static Vecf sample_hemisphere() {
+static constexpr Vecf sample_hemisphere() {
     const auto r = rand_real();
     const auto a = sqrt(r);
     const auto b = 2 * M_PI * rand_real();
