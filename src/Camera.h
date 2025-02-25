@@ -217,17 +217,17 @@ public:
                 if (dot_product >= 0) {
                     const auto shadow_ray = Ray{p, light_direction};
                     if (!scene.intersects(shadow_ray, light_distance)) {
-                        const auto &c = material.BRDF(light_direction, -current_ray.direction.normalize(), normal);
+                        const auto &c = material.BRDF(light_direction, -current_ray.direction, normal);
                         accumulated_lighting += attenuation * c * light_color;
                     }
                 }
             }
-            const auto [scatter_direction, w, is_specular_sample] = material.sample(normal, -current_ray.direction.normalize());
-            current_ray = Ray{p, Vec{scatter_direction}};
+            const auto [scatter_direction, w, is_specular_sample] = material.sample(normal, -current_ray.direction);
             attenuation *= w;
             if (luminance(attenuation) <= 1e-3f || --current_depth == 0) {
                 break;
             }
+            current_ray = Ray{p, Vec{scatter_direction}};
             any_non_specular_bounces |= !is_specular_sample;
         }
 
@@ -316,7 +316,8 @@ public:
             for (int x = 0; x < IMAGE_WIDTH; x++) {
                 Color color;
                 for (int i = 0; i < samples_per_pixel; i++) {
-                    const auto ray = get_ray_at(x, y);
+                    auto ray = get_random_ray_at(x, y);
+                    ray.direction = normalize(ray.direction);
 #if RECURSIVE
                     color += compute_ray_color_recursive(ray, scene, max_depth, from + 1);
 #else

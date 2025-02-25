@@ -294,7 +294,7 @@ constexpr static Scene *cornell_zoom() {
 
     dragon_mesh.normalize();
     dragon_mesh.scale(0.9);
-    dragon_mesh.move(Vecf{-0.3, 0.325, 0.8});
+    dragon_mesh.move(Vecf{-0.3, 0.315, 0.8});
     dragon_mesh.move(center);
     dragon_mesh.scale(factor);
 
