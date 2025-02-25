@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 
@@ -8,7 +9,7 @@
 
 class Color {
 public:
-    template <typename RealT> requires std::is_floating_point_v<RealT>
+    template<typename RealT> requires std::is_floating_point_v<RealT>
     explicit constexpr Color(const RealT array[3]) { // NOLINT(*-pro-type-member-init)
         data = {array[0], array[1], array[2]};
     }
@@ -137,3 +138,7 @@ public:
                     static_cast<int>(r * 255), static_cast<int>(g * 255), static_cast<int>(b * 255));
     }
 };
+
+static constexpr float luminance(const Color &color) {
+    return 0.2126f * static_cast<float>(color.x) + 0.7152f * static_cast<float>(color.y) + 0.0722f * static_cast<float>(color.z);
+}

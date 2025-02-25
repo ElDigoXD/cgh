@@ -70,7 +70,7 @@ public:
     int computed_pixels = 0;
     int MAX_THREADS = 16;
 
-    Camera() : Camera(10, 10, 90) {
+    Camera() : Camera(10, 10, 3) {
     }
 
 
@@ -82,22 +82,23 @@ public:
 
     void update() {
         constexpr auto focus_dist = 1; //(look_from - look_at).length()
-        // const auto theta = degrees_to_radians(fov);
-        // const auto h = tan(theta / 2);
+        const auto theta = degrees_to_radians(fov);
+        constexpr auto aspect_ratio = static_cast<float>(IMAGE_WIDTH) / static_cast<float>(IMAGE_HEIGHT);
+        const auto h = tan(theta / 2.f);
 
-        // viewport_height = 2.0 * h * focus_dist;
-        // viewport_width = viewport_height * (IMAGE_WIDTH / IMAGE_HEIGHT);
+        viewport_height = 2.0 * h;
+        viewport_width = viewport_height * aspect_ratio;
 
-        viewport_width = slm_pixel_size * IMAGE_WIDTH;
-        viewport_height = slm_pixel_size * IMAGE_HEIGHT;
+        // viewport_width = slm_pixel_size * IMAGE_WIDTH;
+        // viewport_height = slm_pixel_size * IMAGE_HEIGHT;
 
 
         w = (look_from - look_at).normalize();
         u = cross({0, 1, 0}, w).normalize();
         v = cross(w, u);
 
-        viewport_x = u * viewport_width;
-        viewport_y = -v * viewport_height;
+        viewport_x = u * viewport_width * focus_dist;
+        viewport_y = -v * viewport_height * focus_dist;
 
         pixel_delta_x = viewport_x / IMAGE_WIDTH;
         pixel_delta_y = viewport_y / IMAGE_HEIGHT;
@@ -133,6 +134,16 @@ public:
 
     [[nodiscard]] constexpr Ray get_ray_at(const int x, const int y) const {
         return Ray{look_from, (pixel_00_position + pixel_delta_x * x + pixel_delta_y * y) - look_from};
+    }
+
+    [[nodiscard]] constexpr Ray get_random_ray_at(const int x, const int y) const {
+        return Ray{
+            look_from,
+            viewport_upper_left
+            + (x + rand_real()) * (viewport_x) / IMAGE_WIDTH
+            + (y + rand_real()) * (viewport_y) / IMAGE_HEIGHT
+            - look_from
+        };
     }
 
     [[nodiscard]] constexpr Ray get_orthogonal_ray_at(const int x, const int y) const {
@@ -183,14 +194,18 @@ public:
         int current_depth = max_depth;
         Color accumulated_lighting(0, 0, 0);
         Color attenuation(1, 1, 1);
+        bool any_non_specular_bounces = false;
 
-
-        while (auto hit_data = scene.intersect(current_ray, Triangle::CullBackfaces::YES)) {
+        while (const auto &hit_data = scene.intersect(current_ray, Triangle::CullBackfaces::YES)) {
             const auto &triangle = hit_data->triangle;
-            const auto &material = hit_data->material;
+            Material material = hit_data->material;
+            // Path regularization
+            // https://pbr-book.org/4ed/Light_Transport_I_Surface_Reflection/A_Better_Path_Tracer#PathIntegrator::regularize
+            // if (any_non_specular_bounces) {
+            //     material.regularize();
+            // }
 
             const auto &normal = triangle.normal(hit_data->u, hit_data->v);
-            const auto [scatter_direction, w] = material.sample(normal, -current_ray.direction.normalize()); // todo: bajar donde se usa
             const Point p = current_ray.at(hit_data->t);
 
             for (const auto &[light_position, light_color]: scene.point_lights) {
@@ -207,35 +222,108 @@ public:
                     }
                 }
             }
+            const auto [scatter_direction, w, is_specular_sample] = material.sample(normal, -current_ray.direction.normalize());
             current_ray = Ray{p, Vec{scatter_direction}};
             attenuation *= w;
-            if (luminance(attenuation) <= 0.0001 || current_depth-- == 0) {
+            if (luminance(attenuation) <= 1e-3f || --current_depth == 0) {
                 break;
             }
-        }
-
-        // bg color
-        if (current_depth == max_depth) {
-            return Color::black();
+            any_non_specular_bounces |= !is_specular_sample;
         }
 
         const auto final_color = accumulated_lighting;
         return final_color;
     }
 
+
+    [[nodiscard]] static Color compute_ray_color_recursive(const Ray &ray, const Scene &scene, const int max_depth, int current_depth, Color attenuation = {1, 1, 1}, bool any_non_specular_bounces = false) {
+        Color direct_lighting(0, 0, 0);
+        Color indirect_lighting(0, 0, 0);
+
+        auto outgoing_rays = static_cast<int>(std::pow<int, int>(2, current_depth - 1));
+        if (max_depth <= 1) {
+            outgoing_rays = 1;
+        }
+
+        if (auto hit_data = scene.intersect(ray, Triangle::CullBackfaces::YES)) {
+            const auto &triangle = hit_data->triangle;
+            Material material = hit_data->material;
+            // Path regularization
+            // https://pbr-book.org/4ed/Light_Transport_I_Surface_Reflection/A_Better_Path_Tracer#PathIntegrator::regularize
+            if (any_non_specular_bounces) {
+                material.regularize();
+            }
+
+
+            const auto &normal = triangle.normal(hit_data->u, hit_data->v);
+            const Point p = ray.at(hit_data->t);
+
+            for (const auto &[light_position, light_color]: scene.point_lights) {
+                const auto &light_offset = light_position - p;
+                const auto &light_distance = light_offset.length();
+                const auto &light_direction = light_offset.normalize();
+                const auto &dot_product = dot(light_direction, normal);
+
+                if (dot_product >= 0) {
+                    const auto shadow_ray = Ray{p, light_direction};
+                    if (!scene.intersects(shadow_ray, light_distance)) {
+                        const auto &c = material.BRDF(light_direction, -ray.direction.normalize(), normal);
+                        direct_lighting += attenuation * c * light_color;
+                    }
+                }
+            }
+            for (int i = 0; i < outgoing_rays; i++) {
+                const auto [scatter_direction, w, is_specular_sample] = material.sample(normal, -ray.direction.normalize());
+                auto new_ray = Ray{p, Vec{scatter_direction}};
+                auto new_attenuation = w * attenuation;
+                if (luminance(new_attenuation) <= 0.01) {
+                    continue;
+                }
+                any_non_specular_bounces |= !is_specular_sample;
+                indirect_lighting += compute_ray_color_recursive(new_ray, scene, max_depth - 1, current_depth - 1, new_attenuation, any_non_specular_bounces);
+            }
+        }
+
+        const auto final_color = outgoing_rays != 0
+                                     ? direct_lighting + (indirect_lighting / outgoing_rays)
+                                     : direct_lighting;
+        return final_color;
+    }
+
     void render(unsigned char pixels[], const Scene &scene, const std::stop_token &st = {}) const {
         const auto start = now();
         printf("[ INFO ] Starting cgi render with %dx%d pixels, %d spp, %d max depth, %d threads\n", IMAGE_WIDTH, IMAGE_HEIGHT, samples_per_pixel, max_depth, MAX_THREADS);
-#pragma omp parallel for collapse(1) shared(pixels, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)
+
+        int from = 7 - 1;
+        int to = std::max(from + 1 - max_depth, -1);
+        int total = 1;
+        int prev = 1;
+        for (int i = from; i >= to; i--) {
+            const int tmp = prev * static_cast<int>(std::pow(2, i));
+            total += prev * static_cast<int>(std::pow(2, i));
+            prev = tmp;
+        }
+        total += prev * std::max(0, to);
+#define RECURSIVE 0
+#if RECURSIVE
+        printf("[ INFO ] [ RECURSIVE ] From 2^%d=%d to 2^%d=%d, total: %d\n", from, static_cast<int>(std::pow(2, from)), to, static_cast<int>(std::pow(2, to)), total);
+#else
+        printf("[ INFO ] [ITERATIVE] Total: %d*%d=%d\n", samples_per_pixel, max_depth, samples_per_pixel * max_depth);
+#endif
+#pragma omp parallel for collapse(1) shared(pixels, scene, st, from) default(none) num_threads(MAX_THREADS) schedule(dynamic)
         for (int y = 0; y < IMAGE_HEIGHT; y++) {
             if (st.stop_requested()) [[unlikely]] continue;
             for (int x = 0; x < IMAGE_WIDTH; x++) {
                 Color color;
                 for (int i = 0; i < samples_per_pixel; i++) {
-                    const auto ray = get_random_orthogonal_ray_at(x, y);
+                    const auto ray = get_ray_at(x, y);
+#if RECURSIVE
+                    color += compute_ray_color_recursive(ray, scene, max_depth, from + 1);
+#else
                     color += compute_ray_color(ray, scene, max_depth).clamp(0, 1);
+#endif
                 }
-                color = color / samples_per_pixel;
+                color = (color / samples_per_pixel).clamp(0, 1);
 
                 pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
                 pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
@@ -302,7 +390,7 @@ public:
 
         start = now();
         computed_pixels = 0;
-        if constexpr (true) {
+        if constexpr (false) {
             use_cuda(pixels, complex_pixels, point_cloud_mut, slm_pixel_00_location, slm_pixel_delta_x, slm_pixel_delta_y);
         } else {
 #pragma omp parallel for collapse(2) shared(pixels, complex_pixels, point_cloud_mut, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)

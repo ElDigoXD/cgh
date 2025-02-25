@@ -7,6 +7,9 @@
 #include "Vector.h"
 #include "SFML/Graphics.hpp"
 
+#define T_MIN 1e-1
+#define T_MAX 1e20
+
 enum class Axis {
     X, Y, Z
 };

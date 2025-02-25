@@ -30,7 +30,7 @@ public:
     [[nodiscard]] constexpr std::optional<TriangleIntersection> intersect(const Ray &ray, const Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
         std::optional<TriangleIntersection> closest_hit;
         for (const auto &mesh: meshes) {
-            if (const auto &hit = mesh.intersect(ray, closest_hit ? closest_hit->t : std::numeric_limits<Real>::infinity(), cull_backfaces)) {
+            if (const auto &hit = mesh.intersect(ray, closest_hit ? closest_hit->t : T_MAX, cull_backfaces)) {
                 if (!closest_hit || hit->t < closest_hit->t) {
                     closest_hit = hit;
                     closest_hit->material = mesh.materials[hit->triangle.material_idx];

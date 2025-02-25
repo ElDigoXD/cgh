@@ -271,7 +271,7 @@ constexpr static Scene *cornell_zoom() {
     camera->look_from = {50, 50, 290};
     camera->update();
 
-    const auto factor = 2.6 * static_cast<float>(IMAGE_HEIGHT) / 400.f;
+    constexpr auto factor = 2.6 * static_cast<float>(1920) / 400.f;
     constexpr auto center = Vecf{0, -0.2, 0};
 
     auto cornell_box_mesh = load("../resources/cornell_box_2.obj");
@@ -279,6 +279,7 @@ constexpr static Scene *cornell_zoom() {
     auto dragon_mesh = load("../resources/dragon.obj");
     auto cylinder_teapot_mesh = load("../resources/cylinder.obj");
     auto cylinder_dragon_mesh = load("../resources/cylinder.obj");
+
     cornell_box_mesh.flip(Axis::Z);
     cornell_box_mesh.normalize();
     cornell_box_mesh.scale(Vecf{4, 2, 4});
@@ -292,7 +293,7 @@ constexpr static Scene *cornell_zoom() {
     teapot_mesh.scale(factor);
 
     dragon_mesh.normalize();
-    dragon_mesh.scale(1);
+    dragon_mesh.scale(0.9);
     dragon_mesh.move(Vecf{-0.3, 0.325, 0.8});
     dragon_mesh.move(center);
     dragon_mesh.scale(factor);

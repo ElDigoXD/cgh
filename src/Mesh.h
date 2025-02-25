@@ -245,6 +245,9 @@ public:
             t.a_data *= factor;
             t.b_data *= factor;
             t.c_data *= factor;
+            t.a_normal_data *= factor;
+            t.b_normal_data *= factor;
+            t.c_normal_data *= factor;
         }
     }
 
@@ -278,19 +281,12 @@ public:
 
     constexpr void flip(const Axis axis) {
         const Vecf factor = Axis::X == axis
-                                    ? Vecf{-1, 1, 1}
-                                    : Axis::Y == axis
-                                          ? Vecf{1, -1, 1}
-                                          : Vecf{1, 1, -1};
+                                ? Vecf{-1, 1, 1}
+                                : Axis::Y == axis
+                                      ? Vecf{1, -1, 1}
+                                      : Vecf{1, 1, -1};
 
-        for (auto &t: triangles) {
-            t.a_data *= factor;
-            t.b_data *= factor;
-            t.c_data *= factor;
-            t.a_normal_data *= factor;
-            t.b_normal_data *= factor;
-            t.c_normal_data *= factor;
-        }
+        scale(factor);
         flip_faces();
     }
 
@@ -306,6 +302,9 @@ public:
             std::swap(t.a_data.z, t.a_data.y);
             std::swap(t.b_data.z, t.b_data.y);
             std::swap(t.c_data.z, t.c_data.y);
+            std::swap(t.a_normal_data.z, t.a_normal_data.y);
+            std::swap(t.b_normal_data.z, t.b_normal_data.y);
+            std::swap(t.c_normal_data.z, t.c_normal_data.y);
         }
         scale(Vecf{1, -1, 1});
     }

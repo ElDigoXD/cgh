@@ -70,11 +70,20 @@ struct Material {
         __builtin_unreachable();
     }
 
-    [[nodiscard]] constexpr std::pair<Vecf, Color> sample(const Vec &normal, const Vec &wi) const {
+    [[nodiscard]] constexpr std::tuple<Vecf, Color, bool> sample(const Vec &normal, const Vec &wi) const {
         if (std::holds_alternative<GGXBRDF>(brdf)) {
             return std::get_if<GGXBRDF>(&brdf)->sample(normal, wi);
         }
         assert(false && "Material::sample() called on unsupported BRDF type");
+        __builtin_unreachable();
+    }
+
+    void regularize() {
+        if (std::holds_alternative<GGXBRDF>(brdf)) {
+            std::get_if<GGXBRDF>(&brdf)->regularize();
+            return;
+        }
+        assert(false && "Material::regularize() called on unsupported BRDF type");
         __builtin_unreachable();
     }
 };

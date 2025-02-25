@@ -128,10 +128,10 @@ static float smith_beckman_g2(const float roughness, const float n_dot_l, const 
 
 static float smith_ggx_g2(const float roughness, const float n_dot_l, const float n_dot_v) {
     const auto roughness2 = roughness * roughness;
-    const auto a = n_dot_v * sqrt(roughness2 + n_dot_l * (n_dot_l - roughness2 * n_dot_l));
-    const auto b = n_dot_l * sqrt(roughness2 + n_dot_v * (n_dot_v - roughness2 * n_dot_v));
+    const auto a = n_dot_v * std::sqrt(roughness2 + n_dot_l * (n_dot_l - roughness2 * n_dot_l));
+    const auto b = n_dot_l * std::sqrt(roughness2 + n_dot_v * (n_dot_v - roughness2 * n_dot_v));
 
-    return 0.5 / (a + b);
+    return 0.5f / (a + b);
 }
 
 /** Built with beckmann d and cook-torrance g or smith g. Unoptimized. */

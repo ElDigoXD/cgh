@@ -88,7 +88,7 @@ struct BRDF {
 
     [[nodiscard]] virtual constexpr Color brdf(const Vec &L, const Vec &V, const Vec &N) const = 0;
 
-    [[nodiscard]] virtual constexpr std::pair<Vecf, Color> sample(const Vec &N, const Vec &V) const = 0;
+    [[nodiscard]] virtual constexpr std::tuple<Vecf, Color, bool> sample(const Vec &N, const Vec &V) const = 0;
 };
 
 static_assert(std::is_abstract_v<BRDF>);

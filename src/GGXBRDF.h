@@ -32,9 +32,9 @@ struct GGXBRDF final : BRDF {
         return specular + diffuse * (Color{1, 1, 1} - f);
     }
 
-    [[nodiscard]] constexpr std::pair<Vecf, Color> sample(const Vec &N, const Vec &V) const override {
+    [[nodiscard]] constexpr std::tuple<Vecf, Color, bool> sample(const Vec &N, const Vec &V) const override {
         if (dot(N, V) <= 0) {
-            return {{0, 0, 0}, {0, 0, 0}};
+            return {{0, 0, 0}, {0, 0, 0}, false};
             assert(false && "V must be in the same hemisphere as N");
         }
 
@@ -74,17 +74,17 @@ struct GGXBRDF final : BRDF {
         }
 
         if (luminance(w) == 0) {
-            return {{0, 0, 0}, {0, 0, 0}};
+            return {{0, 0, 0}, {0, 0, 0}, is_specular_sample};
             assert(false && "No luminance");
         }
 
         const auto l_global = normalize(rotate_point(invert_rotation(q_rotation_to_z), l_local));
         if (dot(N, l_global) <= 0) {
-            return {{0, 0, 0}, {0, 0, 0}};
+            return {{0, 0, 0}, {0, 0, 0}, is_specular_sample};
             assert(false && "Out ray must be in the same hemisphere as N");
         }
 
-        return {l_global, w};
+        return {l_global, w, is_specular_sample};
     }
 
 
@@ -108,11 +108,15 @@ struct GGXBRDF final : BRDF {
     }
 
     [[nodiscard]] static constexpr float smith_ggx_lambda(const float a) {
-        return (-1 + std::sqrt(1 + (1 / (a * a)))) / 2;
+        return (-1 + std::sqrt(1 + (1 / (a * a)))) * 0.5f;
     }
 
+    // Smith G1 term (masking function) further optimized for GGX distribution (by substituting a and lambda into smith_ggx_g1)
     [[nodiscard]] constexpr float smith_ggx_g1(const float n_dot_x) const {
-        return 1 / (1 + smith_ggx_lambda(smith_a(roughness, n_dot_x)));
+        //return 1 / (1 + smith_ggx_lambda(smith_a(roughness, n_dot_x)));
+        const auto roughness2 = roughness * roughness;
+        const auto n_dot_x2 = n_dot_x * n_dot_x;
+        return 2.0f / (std::sqrt(((roughness2 * (1.0f - n_dot_x2)) + n_dot_x2) / n_dot_x2) + 1.0f);
     }
 
     /**
@@ -123,10 +127,10 @@ struct GGXBRDF final : BRDF {
      */
     [[nodiscard]] constexpr float smith_ggx_g2(const float n_dot_l, const float n_dot_v) const {
         const auto roughness2 = roughness * roughness;
-        const auto a = n_dot_v * sqrt(roughness2 + n_dot_l * (n_dot_l - roughness2 * n_dot_l));
-        const auto b = n_dot_l * sqrt(roughness2 + n_dot_v * (n_dot_v - roughness2 * n_dot_v));
+        const auto a = n_dot_v * std::sqrt(roughness2 + n_dot_l * (n_dot_l - roughness2 * n_dot_l));
+        const auto b = n_dot_l * std::sqrt(roughness2 + n_dot_v * (n_dot_v - roughness2 * n_dot_v));
 
-        return 0.5 / (a + b);
+        return 0.5f / (a + b);
     }
 
     [[nodiscard]] constexpr Vecf sample_half_vector_ggx(const Vecf &v_local) const {
@@ -164,11 +168,17 @@ struct GGXBRDF final : BRDF {
         return {l_local, w};
     }
 
-    // correlated g
+    // Weight for the reflection ray sampled from GGX distribution using VNDF method
     [[nodiscard]] constexpr float weight_ggx_vndf(const float n_dot_l, const float n_dot_v) const {
+        // Smith g2 over g1 height correlated
         const auto g1v = smith_ggx_g1(n_dot_v);
         const auto g1l = smith_ggx_g1(n_dot_l);
-        const auto w = g1l / (g1v + g1l - g1v * g1l);
-        return w;
+        return g1l / (g1v + g1l - g1v * g1l);
+    }
+
+    void regularize() {
+        if (roughness < 0.3f) {
+            roughness = std::clamp(2 * roughness, 0.1f, 0.3f);
+        }
     }
 };
