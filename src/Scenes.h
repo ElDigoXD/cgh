@@ -271,7 +271,7 @@ constexpr static Scene *cornell_zoom() {
     camera->look_from = {50, 50, 290};
     camera->update();
 
-    constexpr auto factor = 2.6 * static_cast<float>(1920) / 400.f;
+    constexpr auto factor = 2.6 * static_cast<float>(IMAGE_HEIGHT) / 400.f;
     constexpr auto center = Vecf{0, -0.2, 0};
 
     auto cornell_box_mesh = load("../resources/cornell_box_2.obj");
@@ -310,7 +310,7 @@ constexpr static Scene *cornell_zoom() {
     cylinder_dragon_mesh.move(center);
     cylinder_dragon_mesh.scale(factor);
 
-    cornell_box_mesh.materials[4] = Material{GGXBRDF{Color{.3, .3, .3}, 0.08, 1}};
+    cornell_box_mesh.materials[4] = Material{GGXBRDF{Color{.1, .1, .1}, 0.08, 1}};
     teapot_mesh.materials[0] = Material{GGXBRDF{Color{1, .4, .0}, 0.1, 1}};
     dragon_mesh.materials[0] = Material{GGXBRDF{Color::cyan(), 0.2, 0}};
 
@@ -321,10 +321,10 @@ constexpr static Scene *cornell_zoom() {
     scene->add_mesh(cylinder_teapot_mesh);
     scene->add_mesh(cylinder_dragon_mesh);
 
-    scene->point_lights.emplace_back((Point{+2 - 0.1, 1 - 0.1, +2 - 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1} / 2);
-    scene->point_lights.emplace_back((Point{-2 + 0.1, 1 - 0.1, -2 + 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1} / 2);
-    scene->point_lights.emplace_back((Point{-2 + 0.1, 1 - 0.1, +2 - 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1} / 2);
-    scene->point_lights.emplace_back((Point{+2 - 0.1, 1 - 0.1, -2 + 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1} / 2);
+    scene->point_lights.emplace_back((Point{+2 - 0.1, 1 - 0.1, +2 - 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1}*0.8);
+    scene->point_lights.emplace_back((Point{-2 + 0.1, 1 - 0.1, -2 + 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1}*0.8);
+    scene->point_lights.emplace_back((Point{-2 + 0.1, 1 - 0.1, +2 - 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1}*0.8);
+    scene->point_lights.emplace_back((Point{+2 - 0.1, 1 - 0.1, -2 + 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1}*0.8);
     return scene;
 }
 

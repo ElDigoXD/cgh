@@ -59,7 +59,7 @@ public:
     // int point_cloud_screen_height_in_px = 1080 / 2.7;
     // int point_cloud_screen_width_in_px = point_cloud_screen_height_in_px * (16 / 9.0);
 
-    int point_cloud_screen_height_in_px = 200;
+    int point_cloud_screen_height_in_px = 1080;
     int point_cloud_screen_width_in_px = point_cloud_screen_height_in_px * (16 / 9.0);
 
     Vec point_cloud_screen_pixel_delta_x;
@@ -82,15 +82,15 @@ public:
 
     void update() {
         constexpr auto focus_dist = 1; //(look_from - look_at).length()
-        const auto theta = degrees_to_radians(fov);
-        constexpr auto aspect_ratio = static_cast<float>(IMAGE_WIDTH) / static_cast<float>(IMAGE_HEIGHT);
-        const auto h = tan(theta / 2.f);
+        // const auto theta = degrees_to_radians(fov);
+        // constexpr auto aspect_ratio = static_cast<float>(IMAGE_WIDTH) / static_cast<float>(IMAGE_HEIGHT);
+        // const auto h = tan(theta / 2.f);
 
-        viewport_height = 2.0 * h;
-        viewport_width = viewport_height * aspect_ratio;
+        // viewport_height = 2.0 * h;
+        // viewpo rt_width = viewport_height * aspect_ratio;
 
-        // viewport_width = slm_pixel_size * IMAGE_WIDTH;
-        // viewport_height = slm_pixel_size * IMAGE_HEIGHT;
+        viewport_width = slm_pixel_size * IMAGE_WIDTH;
+        viewport_height = slm_pixel_size * IMAGE_HEIGHT;
 
 
         w = (look_from - look_at).normalize();
@@ -182,7 +182,7 @@ public:
     }
 
     [[nodiscard]] constexpr Ray get_orthogonal_ray_at_screen(const int x, const int y) const {
-        return {
+        return Ray{
             point_cloud_screen_pixel_00_position + (point_cloud_screen_pixel_delta_x * x) +
             (point_cloud_screen_pixel_delta_y * y),
             {0, 0, -1}
@@ -316,7 +316,7 @@ public:
             for (int x = 0; x < IMAGE_WIDTH; x++) {
                 Color color;
                 for (int i = 0; i < samples_per_pixel; i++) {
-                    auto ray = get_random_ray_at(x, y);
+                    auto ray = get_random_orthogonal_ray_at(x, y);
                     ray.direction = normalize(ray.direction);
 #if RECURSIVE
                     color += compute_ray_color_recursive(ray, scene, max_depth, from + 1);
@@ -372,18 +372,40 @@ public:
         printf("[ INFO ] Starting color generation for the point cloud\n");
 
         auto point_cloud_mut = point_cloud;
-#pragma omp parallel for collapse(1) shared(point_cloud_mut, scene) default(none) num_threads(MAX_THREADS) schedule(dynamic)
+#pragma omp parallel for collapse(1) shared(point_cloud_mut, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)
         for (auto &[point, color, phase]: point_cloud_mut) {
             auto [x, y] = project(point);
             const auto origin = slm_pixel_00_location + (slm_pixel_delta_x * std::floor(x)) + (slm_pixel_delta_y * std::floor(y));
-            const auto ray = Ray{origin, point - origin};
+            const auto ray = Ray{origin, normalize(point - origin)};
             color = {0, 0, 0};
             for (int j = 0; j < samples_per_pixel; j++) {
                 color += compute_ray_color(ray, scene, max_depth).clamp(0, 1);
             }
             color /= samples_per_pixel;
-            color = {std::sqrt(color.r), std::sqrt(color.g), std::sqrt(color.b)};
+            color = {(color.r), (color.g), (color.b)};
         }
+        for (int x = 0; x < IMAGE_WIDTH; x++) {
+            for (int y = 0; y < IMAGE_HEIGHT; y++) {
+                pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = 0;
+                pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = 0;
+                pixels[(y * IMAGE_WIDTH + x) * 4 + 2] = 0;
+                pixels[(y * IMAGE_WIDTH + x) * 4 + 3] = 255;
+            }
+        }
+        std::erase_if(point_cloud_mut, [](const auto &p) {
+            auto color = std::get<1>(p);
+            return color.r < 0.01 && color.g < 0.01 && color.b < 0.01;
+        });
+
+        for (auto &[point, color, phase]: point_cloud_mut) {
+            const auto [x, y] = project(point);
+            pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
+            pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
+            pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 2] = static_cast<unsigned char>(std::sqrt(color.b) * 255);
+            pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 3] = 255;
+        }
+
+        printf("Trimmed %ld points with less than 1%% in all channels\n", point_cloud.size() - point_cloud_mut.size());
         assert(!point_cloud.empty());
         const auto t = now() - start;
         printf("[ INFO ] Ended color generation for the point cloud in %.1fs (%ld ms/point)\n", t / 1000.0, t / point_cloud.size());
@@ -391,7 +413,7 @@ public:
 
         start = now();
         computed_pixels = 0;
-        if constexpr (false) {
+        if constexpr (true) {
             use_cuda(pixels, complex_pixels, point_cloud_mut, slm_pixel_00_location, slm_pixel_delta_x, slm_pixel_delta_y);
         } else {
 #pragma omp parallel for collapse(2) shared(pixels, complex_pixels, point_cloud_mut, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)
@@ -452,6 +474,8 @@ public:
 
     //__attribute__((flatten))
     [[nodiscard]] static std::complex<Real> compute_wave(Ray ray, const Scene &scene, const Point &expected_point, [[maybe_unused]] const Color &color, int max_depth) {
+        printf("[ ERROR ] compute_wave is deprecated\n");
+        exit(1);
         Ray current_ray = ray;
         int current_depth = max_depth;
         Color attenuation(1, 1, 1);

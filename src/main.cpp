@@ -103,7 +103,7 @@ public:
         enable_bdrf_viewer = false;
 
         aabb_depth = 1;
-        samples_per_pixel = 1;
+        samples_per_pixel = 10;
         max_depth = 6;
 
         //enable_render_cgh = true;
@@ -330,8 +330,8 @@ public:
 
             if (enable_render_cgh) {
                 ImGui::Text("Expected time: %.1fs", expected_time);
-                const auto percent = static_cast<Real>(scene->camera->computed_pixels) / (IMAGE_HEIGHT * IMAGE_WIDTH);
-                ImGui::Text("%3.1f%%: %.1fs", percent * 100, tmp_render_time / percent);
+                const auto percent = 1 - (expected_time - tmp_render_time) / expected_time;
+                ImGui::Text("%3.1f%% | %.1fs remaining", percent * 100, expected_time - tmp_render_time);
             }
 
             ImGui::PopItemWidth();
@@ -461,8 +461,8 @@ public:
 
             if (enable_render_cgh) {
                 ImGui::Text("Expected time: %.1fs", expected_time);
-                const auto percent = static_cast<Real>(scene->camera->computed_pixels) / (IMAGE_HEIGHT * IMAGE_WIDTH);
-                ImGui::Text("%3.1f%%: %.1fs", percent * 100, tmp_render_time / percent);
+                const auto percent = 1 - (expected_time - tmp_render_time) / expected_time;
+                ImGui::Text("%3.1f%%", percent * 100);
             }
             im::EndTabItem();
         }
@@ -529,14 +529,14 @@ public:
                 auto tmp_camera = Camera(*scene->camera);
                 tmp_camera.point_cloud_screen_height_in_px = 50; // 50
                 tmp_camera.point_cloud_screen_width_in_px = 100; // 100
-                tmp_camera.samples_per_pixel = 100;
-                tmp_camera.max_depth = 100;
+                tmp_camera.samples_per_pixel = samples_per_pixel;
+                tmp_camera.max_depth = max_depth;
                 tmp_camera.update();
                 const auto tmp_point_cloud = tmp_camera.compute_point_cloud(*scene);
                 const auto start = now();
                 tmp_camera.render_cgh(pixels, complex_pixels, *scene, tmp_point_cloud, st);
                 const auto mspp = (now() - start) / static_cast<double>(tmp_point_cloud.size());
-                save_binary(complex_pixels, "../test.bin");
+                //save_binary(complex_pixels, "../test.bin");
                 //return;
                 ////memset(pixels, 0, IMAGE_WIDTH * IMAGE_HEIGHT * 4);
                 point_cloud = scene->camera->compute_point_cloud(*scene);

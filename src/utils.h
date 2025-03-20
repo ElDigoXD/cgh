@@ -45,6 +45,7 @@ constexpr static VecType mix(const VecType &a, const VecType &b, const Real t) {
 static void save_binary(const Complex *complex_pixels, const char *path) {
     FILE *fd = std::fopen(path, "w");
     if (fd == nullptr) {
+        std::fprintf(stderr, "Failed to open file %s, using BAD_PATH.bin\n", path);
         path = "BAD_PATH.bin";
         fd = std::fopen(path, "w");
     }

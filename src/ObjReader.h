@@ -20,7 +20,7 @@ static Mesh load(const char *filename) {
     if (!reader.Warning().empty()) {
         std::fprintf(stderr, "[WARN] %s\n", reader.Warning().c_str());
     };
-    printf("[ INFO ] Finished obj load in %.1fs\n", (now() - start) / 1000.0);
+    printf("[ INFO ] Finished obj load in %.1fs ", (now() - start) / 1000.0);
 
 
     const auto &attrib = reader.GetAttrib();
@@ -76,9 +76,9 @@ static Mesh load(const char *filename) {
     }
 
     if (materials.empty()) {
-        printf("no materials found, using Material{Color{1, 1, 1}}\n");
+        // printf("no materials found, using Material{Color{1, 1, 1}}\n");
         materials.emplace_back(Color{1, 1, 1});
     }
-
+    printf("of %zu faces\n", faces.size());
     return Mesh{faces, vertices, normals, materials};
 }
