@@ -6,8 +6,8 @@ set(CMAKE_CUDA_ARCHITECTURES native)
 set(CMAKE_CUDA_FLAGS "-march=native -Wall -Wextra --expt-relaxed-constexpr")
 set(CMAKE_CUDA_COMPILER "/usr/local/cuda-12.8/bin/nvcc")
 
-set(CMAKE_CXX_STANDARD_REQUIRED 20)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED 23)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_FLAGS "-march=native -Wall -Wextra")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
@@ -82,7 +82,8 @@ add_executable(untitled
         src/main.cpp
         src/typedefs.h
         src/utils.h
-        src/test.cu
+        src/main.cu
+        src/PointCloud.h
 )
 
 target_link_libraries(untitled PRIVATE ImGui-SFML::ImGui-SFML OpenMP::OpenMP_CXX tinyobjloader-lib)

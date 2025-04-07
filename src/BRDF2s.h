@@ -16,7 +16,7 @@
 static constexpr auto f0_dielectrics = Color{0.04f, 0.04f, 0.04f};
 
 
-static std::array<float, 4> get_rotation_from_z_axis(const Vecf &v) {
+[[maybe_unused]] static std::array<float, 4> get_rotation_from_z_axis(const Vecf &v) {
     if (v.z < -0.9999999) {
         return {1, 0, 0, 0};
     }
@@ -38,7 +38,7 @@ static std::array<float, 4> get_rotation_from_z_axis(const Vecf &v) {
  * @param n_dot_h Cosine of the angle between the normal and the half vector (AKA N.H or cos(alpha)).
  * @return The probability of a microfacet having a normal in the direction of the half vector, given a shininess parameter.
  */
-static float phong_d(const float shininess, const float n_dot_h) {
+[[maybe_unused]] static float phong_d(const float shininess, const float n_dot_h) {
     return (shininess + 2) / (2 * M_PI) * std::pow(n_dot_h, shininess);
 }
 
@@ -62,7 +62,7 @@ static float beckmann_d(const float roughness, const float n_dot_h) {
  * @param n_dot_v Cosine of the angle between the normal and the view vector (AKA N.V).
  * @return The probability of a microfacet being visible from both the light and the view directions.
  */
-static float implicit_g(const float n_dot_l, const float n_dot_v) {
+[[maybe_unused]] static float implicit_g(const float n_dot_l, const float n_dot_v) {
     return n_dot_l * n_dot_v;
 }
 
@@ -85,7 +85,7 @@ static float cook_torrance_g(const float n_dot_h, const float n_dot_v, const flo
  * @param v_dot_h Cosine of the angle between the view and the half vector (AKA V.H).
  * @return The probability of a microfacet being visible from both the light and the view directions.
  */
-static float cook_torrance_kelemen_approx_g(const float v_dot_h) {
+[[maybe_unused]] static float cook_torrance_kelemen_approx_g(const float v_dot_h) {
     return 1 / (v_dot_h * v_dot_h);
 }
 
@@ -110,11 +110,11 @@ static float smith_beckman_lambda(const float a) {
  * @param a Smith's shadowing-masking function component.
  * @return Lambda component of the Smith's shadowing-masking function.
  */
-static float smith_ggx_lambda(const float a) {
+[[maybe_unused]] static float smith_ggx_lambda(const float a) {
     return (-1 + std::sqrt(1 + (1 / (a * a)))) / 2;
 }
 
-static float smith_beckman_g1(const float roughness, const float n_dot_x) {
+[[maybe_unused]] static float smith_beckman_g1(const float roughness, const float n_dot_x) {
     return 1 / (1 + smith_beckman_lambda(smith_a(roughness, n_dot_x)));
 }
 
@@ -126,7 +126,7 @@ static float smith_beckman_g2(const float roughness, const float n_dot_l, const 
     return 1 / (1 + smith_beckman_lambda(smith_a(roughness, n_dot_l)) + smith_beckman_lambda(smith_a(roughness, n_dot_v)));
 }
 
-static float smith_ggx_g2(const float roughness, const float n_dot_l, const float n_dot_v) {
+[[maybe_unused]] static float smith_ggx_g2(const float roughness, const float n_dot_l, const float n_dot_v) {
     const auto roughness2 = roughness * roughness;
     const auto a = n_dot_v * std::sqrt(roughness2 + n_dot_l * (n_dot_l - roughness2 * n_dot_l));
     const auto b = n_dot_l * std::sqrt(roughness2 + n_dot_v * (n_dot_v - roughness2 * n_dot_v));
@@ -135,7 +135,7 @@ static float smith_ggx_g2(const float roughness, const float n_dot_l, const floa
 }
 
 /** Built with beckmann d and cook-torrance g or smith g. Unoptimized. */
-static Color cook_torrance_brdf(const float n_dot_h, const float n_dot_l, const float n_dot_v, const float v_dot_h, const float f, const Color &base_color, const float roughness, const bool use_smith_g = false) {
+[[maybe_unused]] static Color cook_torrance_brdf(const float n_dot_h, const float n_dot_l, const float n_dot_v, const float v_dot_h, const float f, const Color &base_color, const float roughness, const bool use_smith_g = false) {
     const auto d = beckmann_d(roughness, n_dot_h);
     const auto g = use_smith_g
                        ? smith_beckman_g2(roughness, n_dot_l, n_dot_v)
@@ -157,7 +157,7 @@ static float weight_beckman_walter(const float roughness, const float h_dot_l, c
  *
  * @return A pair of a normalized vector sampled from the Beckman distribution and the weight of the sample (including *n.l).
  */
-static std::tuple<Vecf, float> sample_beckman_walter(const Vecf &v_local, const float roughness, const float f0) {
+[[maybe_unused]] static std::tuple<Vecf, float> sample_beckman_walter(const Vecf &v_local, const float roughness/*, const float f0*/) {
     Vecf h_local;
     if (roughness == 0) {
         h_local = Vecf{0, 0, 1};
@@ -184,7 +184,7 @@ static std::tuple<Vecf, float> sample_beckman_walter(const Vecf &v_local, const 
 }
 
 
-static std::pair<Vecf, float> indirect_cook_torrance_brdf(const Vecf &N, const Vecf &V, const float roughness, const float f0) {
+[[maybe_unused]] static std::pair<Vecf, float> indirect_cook_torrance_brdf(const Vecf &N, const Vecf &V, const float roughness/*, const float f0*/) {
     if (dot(N, V) <= 0) {
         return {{0, 0, 0}, 0};
         assert(false && "V must be in the same hemisphere as N");
@@ -192,9 +192,9 @@ static std::pair<Vecf, float> indirect_cook_torrance_brdf(const Vecf &N, const V
     const auto q_rotation_to_z = get_rotation_to_z_axis(N);
     const auto v_local = rotate_point(q_rotation_to_z, V);
 
-    const auto [l_local, w] = sample_beckman_walter(v_local, roughness, f0);
+    const auto [l_local, w] = sample_beckman_walter(v_local, roughness/*, f0*/);
 
-    if (luminance({w, w, w}) == 0) {
+    if (luminance(Vecf{w, w, w}) == 0) {
         assert(false && "No luminance");
     }
 

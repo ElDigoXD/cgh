@@ -22,7 +22,7 @@ static std::array<float, 4> get_rotation_to_z_axis(const VecType &v) {
         return {0, 0, 0, 1};
     }
 
-    const std::array<float, 4> res = {v.y, -v.x, 0, 1 + v.z};
+    const std::array<float, 4> res = {static_cast<float>(v.y), static_cast<float>(-v.x), 0, static_cast<float>(1 + v.z)};
     const auto len = std::sqrt(res[0] * res[0] + res[1] * res[1] + res[2] * res[2] + res[3] * res[3]);
 
     return {res[0] / len, res[1] / len, res[2] / len, res[3] / len};

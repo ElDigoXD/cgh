@@ -58,6 +58,28 @@ static void save_binary(const Complex *complex_pixels, const char *path) {
     std::fclose(fd);
 }
 
+
+
+/**
+ *
+ * @param seconds seconds to format
+ * @return String in the form "%.1f[s|m|h|d]"
+ */
+[[maybe_unused]] static std::string get_human_time(double seconds) {
+    if (seconds < 60) {
+        return std::format("{:.1f}s", seconds);
+    }
+    if (seconds < 60 * 60) {
+        return std::format("{:.1f}m", seconds / 60);
+    }
+    if (seconds < 60 * 60 * 24) {
+        return std::format("{:.1f}h", seconds / 60 / 60);
+    }
+    return std::format("{:.1f}d", seconds / 60 / 60 / 24);
+}
+
+#include "imgui.h"
+
 namespace sf {
     constexpr Vector2f to_vector2f(const Vector2u &v) { return {static_cast<float>(v.x), static_cast<float>(v.y)}; }
 }
