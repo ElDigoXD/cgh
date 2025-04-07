@@ -157,7 +157,7 @@ public:
                 } else if (auto *event_mp = event->getIf<sf::Event::MouseButtonPressed>()) {
                     if (event_mp->button == sf::Mouse::Button::Left
                         && sprite.getGlobalBounds().contains(sf::Vector2<float>(event_mp->position))
-                        && static_cast<int>(event_mp->position.x) < image_size.x) {
+                        && event_mp->position.x <  static_cast<int>(image_size.x)) {
                         if (enable_camera_movement) {
                             mouse_button_pressed = sf::Mouse::Button::Left;
                             old_mouse_position = event_mp->position;
