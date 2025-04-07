@@ -5,13 +5,11 @@
 #include <stop_token>
 #include <vector>
 
-#include "omp.h"
-
 #include "BRDFs.h"
+#include "cuda.h"
 #include "Material.h"
 #include "Ray.h"
 #include "Scene.h"
-#include "test.h"
 #include "Triangle.h"
 #include "utils.h"
 #include "Vector.h"
@@ -39,7 +37,7 @@ public:
 
     Point pixel_00_position;
 
-    static constexpr Real slm_pixel_size = 8e-3;
+    static constexpr Real slm_pixel_size = 8e-3 / VIRTUAL_SLM_FACTOR;
     static constexpr Real wavelength = 0.6328e-3;
     static constexpr Real two_pi_over_wavelength = 2 * std::numbers::pi / wavelength;
     static constexpr Real slm_z = 200;
@@ -59,8 +57,8 @@ public:
     // int point_cloud_screen_height_in_px = 1080 / 2.7;
     // int point_cloud_screen_width_in_px = point_cloud_screen_height_in_px * (16 / 9.0);
 
-    int point_cloud_screen_height_in_px = 1080;
-    int point_cloud_screen_width_in_px = point_cloud_screen_height_in_px * (16 / 9.0);
+    int point_cloud_screen_height_in_px = IMAGE_WIDTH;
+    int point_cloud_screen_width_in_px = IMAGE_HEIGHT;
 
     Vec point_cloud_screen_pixel_delta_x;
     Vec point_cloud_screen_pixel_delta_y;
@@ -335,8 +333,8 @@ public:
         printf("[ INFO ] Finished cgi render in %.1fs\n", (now() - start) / 1000.0);
     }
 
-    [[nodiscard]] std::vector<std::tuple<Point, Color, float> > compute_point_cloud(const Scene &scene) const {
-        std::vector<std::tuple<Point, Color, float> > point_cloud;
+    [[nodiscard]] PointCloud compute_point_cloud(const Scene &scene) const {
+        PointCloud point_cloud;
 
         for (int y = 0; y < point_cloud_screen_height_in_px; y++) {
             for (int x = 0; x < point_cloud_screen_width_in_px; x++) {
@@ -344,7 +342,7 @@ public:
 
                 if (const auto &hit_data = scene.intersect(ray)) {
                     //point_cloud.emplace_back(std::pair{ray.at(hit_data.value().t), rand_real() * 2 * std::numbers::pi});
-                    point_cloud.emplace_back(ray.at(hit_data.value().t), Color::black(), rand_real() * 2 * std::numbers::pi);
+                    point_cloud.emplace_back(ray.at(hit_data.value().t), Vecf{0, 0, 0}, static_cast<float>(rand_real() * 2 * std::numbers::pi));
                 }
             }
         }
@@ -366,14 +364,14 @@ public:
 
     // __attribute__((flatten))
     // TODO: hacer que la nube de puntos se calcule aqí.
-    void render_cgh(unsigned char pixels[], std::complex<Real> complex_pixels[], const Scene &scene, const std::vector<std::tuple<Point, Color, float> > &point_cloud,
+    void render_cgh(unsigned char pixels[], std::complex<Real> complex_pixels[], const Scene &scene, PointCloud &point_cloud,
                     const std::stop_token &st = {}) {
         auto start = now();
         printf("[ INFO ] Starting color generation for the point cloud\n");
 
-        auto point_cloud_mut = point_cloud;
-#pragma omp parallel for collapse(1) shared(point_cloud_mut, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)
-        for (auto &[point, color, phase]: point_cloud_mut) {
+#pragma omp parallel for collapse(1) shared(point_cloud, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)
+        for (auto &[point, color, phase]: point_cloud) {
+            if (st.stop_requested()) [[unlikely]] continue;
             auto [x, y] = project(point);
             const auto origin = slm_pixel_00_location + (slm_pixel_delta_x * std::floor(x)) + (slm_pixel_delta_y * std::floor(y));
             const auto ray = Ray{origin, normalize(point - origin)};
@@ -384,6 +382,7 @@ public:
             color /= samples_per_pixel;
             color = {(color.r), (color.g), (color.b)};
         }
+        // Clear the pixels
         for (int x = 0; x < IMAGE_WIDTH; x++) {
             for (int y = 0; y < IMAGE_HEIGHT; y++) {
                 pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = 0;
@@ -392,20 +391,21 @@ public:
                 pixels[(y * IMAGE_WIDTH + x) * 4 + 3] = 255;
             }
         }
-        std::erase_if(point_cloud_mut, [](const auto &p) {
-            auto color = std::get<1>(p);
-            return color.r < 0.01 && color.g < 0.01 && color.b < 0.01;
-        });
+        //const auto og_size = point_cloud.size();
+        //std::erase_if(point_cloud, [](const auto &p) {
+        //    auto color = std::get<1>(p);
+        //    return color.r < 0.01 && color.g < 0.01 && color.b < 0.01;
+        //});
+        //printf("Trimmed %ld points with less than 1%% in all channels\n", point_cloud.size() - og_size);
 
-        for (auto &[point, color, phase]: point_cloud_mut) {
+        for (auto &[point, color, phase]: point_cloud) {
             const auto [x, y] = project(point);
             pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
             pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
             pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 2] = static_cast<unsigned char>(std::sqrt(color.b) * 255);
             pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 3] = 255;
         }
-
-        printf("Trimmed %ld points with less than 1%% in all channels\n", point_cloud.size() - point_cloud_mut.size());
+        if (st.stop_requested()) [[unlikely]] return;
         assert(!point_cloud.empty());
         const auto t = now() - start;
         printf("[ INFO ] Ended color generation for the point cloud in %.1fs (%ld ms/point)\n", t / 1000.0, t / point_cloud.size());
@@ -413,42 +413,44 @@ public:
 
         start = now();
         computed_pixels = 0;
-        if constexpr (true) {
-            use_cuda(pixels, complex_pixels, point_cloud_mut, slm_pixel_00_location, slm_pixel_delta_x, slm_pixel_delta_y);
-        } else {
-#pragma omp parallel for collapse(2) shared(pixels, complex_pixels, point_cloud_mut, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)
-            for (int y = 0; y < IMAGE_HEIGHT; y++) {
-                for (int x = 0; x < IMAGE_WIDTH; x++) {
-                    if (!st.stop_requested()) [[likely]] {
-                        const auto slm_pixel_center = slm_pixel_00_location + (slm_pixel_delta_x * x) + (slm_pixel_delta_y * y);
-                        std::complex<Real> agg;
-                        for (const auto &[point, color, phase]: point_cloud_mut) {
-#ifdef ENABLE_OCCLUSION
+#if USE_GPU_FOR_CGH
+#if ENABLE_OCCLUSION
+        std::fprintf(stdout, "[ ERROR ] ENABLE_OCCLUSION not implemented in GPU. Ignoring option\n");
+#endif // #if #ENABLE_OCCLUSION
+        use_cuda(pixels, complex_pixels, point_cloud, slm_pixel_00_location, slm_pixel_delta_x, slm_pixel_delta_y);
+#else // #if USE_GPU_FOR_CGH
+#pragma omp parallel for collapse(2) shared(pixels, complex_pixels, point_cloud, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)
+        for (int y = 0; y < IMAGE_HEIGHT; y++) {
+            for (int x = 0; x < IMAGE_WIDTH; x++) {
+                if (!st.stop_requested()) [[likely]] {
+                    const auto slm_pixel_center = slm_pixel_00_location + (slm_pixel_delta_x * x) + (slm_pixel_delta_y * y);
+                    std::complex<Real> agg;
+                    for (const auto &[point, color, phase]: point_cloud) {
+#if ENABLE_OCCLUSION
                         const auto ray = Ray{slm_pixel_center, point - slm_pixel_center};
-                        //const auto wave = compute_wave_2(ray, scene, point, color, phase);
-#else
-                            const auto wave = compute_wave_no_occlusion(slm_pixel_center, point, color, phase);
-#endif
-                            agg += wave;
-                        }
-
-                        agg /= static_cast<Real>(point_cloud_mut.size());
-                        complex_pixels[(y * IMAGE_WIDTH + x)] = agg;
-                        const auto a = static_cast<unsigned char>((arg(agg) + std::numbers::pi) / (2 * std::numbers::pi) * 255);
-                        pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = a;
-                        pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = a;
-                        pixels[(y * IMAGE_WIDTH + x) * 4 + 2] = a;
-                        pixels[(y * IMAGE_WIDTH + x) * 4 + 3] = 255;
-                        ++computed_pixels;
+                        const auto wave = compute_wave_2(ray, scene, point, color, phase);
+#else // #if ENABLE_OCCLUSION
+                        const auto wave = compute_wave_no_occlusion(slm_pixel_center, point, color, phase);
+#endif // #if ENABLE_OCCLUSION #else
+                        agg += wave;
                     }
+
+                    agg /= static_cast<Real>(point_cloud.size());
+                    complex_pixels[(y * IMAGE_WIDTH + x)] = agg;
+                    const auto a = static_cast<unsigned char>((arg(agg) + std::numbers::pi) / (2 * std::numbers::pi) * 255);
+                    pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = a;
+                    pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = a;
+                    pixels[(y * IMAGE_WIDTH + x) * 4 + 2] = a;
+                    pixels[(y * IMAGE_WIDTH + x) * 4 + 3] = 255;
+                    ++computed_pixels;
                 }
             }
         }
-
+#endif // #if USE_GPU_FOR_CGH #else
         printf("[ INFO ] Ended wave computation in %.1fs (%ld ms/point)\n", (now() - start) / 1000.0, (now() - start) / point_cloud.size());
     }
 
-    static std::complex<Real> compute_wave_2(const Ray &ray, const Scene &scene, const Point &expected_point, const Color &color, const Real phase) {
+    static std::complex<Real> compute_wave_2(const Ray &ray, const Scene &scene, const Point &expected_point, const Vecf &color, const Real phase) {
         // Test visibility of the point
         if (const auto &hit_data = scene.intersect(ray)) {
             if (!(ray.at(hit_data->t) - expected_point).is_close_to_0()) {
@@ -464,7 +466,7 @@ public:
         return {0, 0};
     }
 
-    static std::complex<Real> compute_wave_no_occlusion(const Point &origin, const Point &point, const Color &color, const Real phase) {
+    static std::complex<Real> compute_wave_no_occlusion(const Point &origin, const Point &point, const Vecf &color, const Real phase) {
         const auto amplitude = static_cast<double>(luminance(color));
         const auto sub_phase = two_pi_over_wavelength * (origin - point).length() + phase;
         const auto sub_phase_c = std::polar(1.0, sub_phase);
@@ -473,61 +475,61 @@ public:
     }
 
     //__attribute__((flatten))
-    [[nodiscard]] static std::complex<Real> compute_wave(Ray ray, const Scene &scene, const Point &expected_point, [[maybe_unused]] const Color &color, int max_depth) {
-        printf("[ ERROR ] compute_wave is deprecated\n");
-        exit(1);
-        Ray current_ray = ray;
-        int current_depth = max_depth;
-        Color attenuation(1, 1, 1);
-        Color accumulated_lighting(0, 0, 0);
-
-        while (auto hit_data = scene.intersect(current_ray)) {
-            // First iteration checks if the intersection point is the expected point
-            if (current_depth == max_depth && !(ray.at(hit_data->t) - expected_point).is_close_to_0()) {
-                return {0, 0};
-            }
-
-            // Ray does not find an ambient source of light (trapped in the scene)
-            if (current_depth-- == 0) {
-                attenuation = Color::black();
-                break;
-            }
-
-
-            const auto &triangle = hit_data->triangle;
-            const auto &material = hit_data->material;
-
-            const auto normal = triangle.normal();
-            const auto scatter_direction = normal + Vec::random_unit_vector();
-            // attenuation *= material.albedo(); todo: update cgh to use brdf
-            const Point p = current_ray.at(hit_data->t);
-            current_ray = Ray{p, scatter_direction};
-            if (attenuation.is_close_to_0()) {
-                break;
-            }
-            for (const auto &[light_position, light_color]: scene.point_lights) {
-                const auto light_offset = light_position - p;
-                const auto light_distance = light_offset.length();
-                const auto light_direction = light_offset.normalize();
-                const auto dot_product = dot(light_direction, normal);
-
-                if (dot_product >= 0) {
-                    const auto shadow_ray = Ray{p, light_direction};
-                    if (!scene.intersects(shadow_ray, light_distance)) {
-                        accumulated_lighting += attenuation * light_color * dot_product;
-                    }
-                }
-            }
-        }
-
-        // Wave computation
-        const auto final_color = accumulated_lighting.clamp(0, 1);
-        auto intensity = final_color.r + final_color.g + final_color.b / 3;
-        auto sub_phase = two_pi_over_wavelength * (ray.origin - expected_point).length();
-        auto sub_phase_c = std::polar(1.0, sub_phase);
-
-        return intensity * sub_phase_c;
-    }
+    // [[nodiscard]] static std::complex<Real> compute_wave(Ray ray, const Scene &scene, const Point &expected_point, [[maybe_unused]] const Color &color, int max_depth) {
+    // printf("[ ERROR ] compute_wave is deprecated\n");
+    // exit(1);
+    // Ray current_ray = ray;
+    // int current_depth = max_depth;
+    // Color attenuation(1, 1, 1);
+    // Color accumulated_lighting(0, 0, 0);
+    //
+    // while (auto hit_data = scene.intersect(current_ray)) {
+    //     // First iteration checks if the intersection point is the expected point
+    //     if (current_depth == max_depth && !(ray.at(hit_data->t) - expected_point).is_close_to_0()) {
+    //         return {0, 0};
+    //     }
+    //
+    //     // Ray does not find an ambient source of light (trapped in the scene)
+    //     if (current_depth-- == 0) {
+    //         attenuation = Color::black();
+    //         break;
+    //     }
+    //
+    //
+    //     const auto &triangle = hit_data->triangle;
+    //     const auto &material = hit_data->material;
+    //
+    //     const auto normal = triangle.normal();
+    //     const auto scatter_direction = normal + Vec::random_unit_vector();
+    //     // attenuation *= material.albedo(); todo: update cgh to use brdf
+    //     const Point p = current_ray.at(hit_data->t);
+    //     current_ray = Ray{p, scatter_direction};
+    //     if (attenuation.is_close_to_0()) {
+    //         break;
+    //     }
+    //     for (const auto &[light_position, light_color]: scene.point_lights) {
+    //         const auto light_offset = light_position - p;
+    //         const auto light_distance = light_offset.length();
+    //         const auto light_direction = light_offset.normalize();
+    //         const auto dot_product = dot(light_direction, normal);
+    //
+    //         if (dot_product >= 0) {
+    //             const auto shadow_ray = Ray{p, light_direction};
+    //             if (!scene.intersects(shadow_ray, light_distance)) {
+    //                 accumulated_lighting += attenuation * light_color * dot_product;
+    //             }
+    //         }
+    //     }
+    // }
+    //
+    // // Wave computation
+    // const auto final_color = accumulated_lighting.clamp(0, 1);
+    // auto intensity = final_color.r + final_color.g + final_color.b / 3;
+    // auto sub_phase = two_pi_over_wavelength * (ray.origin - expected_point).length();
+    // auto sub_phase_c = std::polar(1.0, sub_phase);
+    //
+    // return intensity * sub_phase_c;
+    // }
 
     void render_normals(unsigned char pixels[], const Scene &scene, const std::stop_token &st = {}) const {
 #pragma omp parallel for shared(pixels, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)

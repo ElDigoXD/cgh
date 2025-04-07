@@ -63,27 +63,9 @@ FetchContent_MakeAvailable(tinyobjloader)
 add_library(tinyobjloader-lib INTERFACE ${tinyobjloader_SOURCE_DIR})
 target_include_directories(tinyobjloader-lib INTERFACE ${tinyobjloader_SOURCE_DIR})
 
-
+file(GLOB_RECURSE SRC_FILES src/*.cpp src/*.h src/*.cu)
 add_executable(untitled
-        src/AABB.h
-        src/BRDFs.h
-        src/Camera.h
-        src/Color.h
-        src/GGXBRDF.h
-        src/Material.h
-        src/Mesh.h
-        src/ObjReader.h
-        src/Random.h
-        src/Ray.h
-        src/Scene.h
-        src/Scenes.h
-        src/Triangle.h
-        src/Vector.h
-        src/main.cpp
-        src/typedefs.h
-        src/utils.h
-        src/main.cu
-        src/PointCloud.h
+        ${SRC_FILES}
 )
 
 target_link_libraries(untitled PRIVATE ImGui-SFML::ImGui-SFML OpenMP::OpenMP_CXX tinyobjloader-lib)

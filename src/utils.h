@@ -1,11 +1,12 @@
 #pragma once
 
+#include <chrono>
 #include <numbers>
 
-#include "imgui.h"
+
+#include "PointCloud.h"
 #include "Vecf.h"
 #include "Vector.h"
-#include "SFML/Graphics.hpp"
 
 #define T_MIN 1e-1
 #define T_MAX 1e20
@@ -42,7 +43,7 @@ constexpr static VecType mix(const VecType &a, const VecType &b, const Real t) {
     return a * (1 - t) + b * t;
 }
 
-static void save_binary(const Complex *complex_pixels, const char *path) {
+static void save_binary_cgh(const Complex *complex_pixels, const char *path) {
     FILE *fd = std::fopen(path, "w");
     if (fd == nullptr) {
         std::fprintf(stderr, "Failed to open file %s, using BAD_PATH.bin\n", path);

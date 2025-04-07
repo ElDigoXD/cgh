@@ -1,22 +1,20 @@
+#include "config.h"
+
 #include <functional>
 #include <thread>
-#include <unordered_set>
 
 #include "imgui-SFML.h"
 #include "imgui.h"
 #include "SFML/Graphics.hpp"
 
-#define IMAGE_WIDTH 1920
-#define IMAGE_HEIGHT 1080
-
 #include "Camera.h"
 #include "Scene.h"
+#include "Scenes.h"
 #include "typedefs.h"
 #include "Vector.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 
-#include "Scenes.h"
 #include "tiny_obj_loader.h"
 
 
@@ -25,7 +23,7 @@ public:
     // GUI data
     sf::RenderWindow window = sf::RenderWindow(sf::VideoMode({800, 400}), "Raytracer GUI");
     sf::Vector2u image_size = window.getSize() - sf::Vector2u{200, 0};
-    constexpr static sf::Vector2u max_window_size = {2120, 1080};
+    constexpr static sf::Vector2u max_window_size = {IMAGE_WIDTH + 200, IMAGE_HEIGHT};
 
     sf::Texture texture{max_window_size};
     sf::Sprite sprite{texture};
@@ -42,7 +40,7 @@ public:
     unsigned char *pixels = new unsigned char[max_window_size.x * max_window_size.y * 4];
     std::complex<Real> *complex_pixels = new std::complex<Real> [max_window_size.x * max_window_size.y * 4];
     Scene *scene = nullptr;
-    std::vector<std::tuple<Point, Color, float> > point_cloud;
+    PointCloud point_cloud;
     int max_depth = 10;
     int samples_per_pixel = 100;
     const sf::Vector2u camera_image_size{IMAGE_WIDTH, IMAGE_HEIGHT};
@@ -159,7 +157,7 @@ public:
                 } else if (auto *event_mp = event->getIf<sf::Event::MouseButtonPressed>()) {
                     if (event_mp->button == sf::Mouse::Button::Left
                         && sprite.getGlobalBounds().contains(sf::Vector2<float>(event_mp->position))
-                        && event_mp->position.x < image_size.x) {
+                        && static_cast<int>(event_mp->position.x) < image_size.x) {
                         if (enable_camera_movement) {
                             mouse_button_pressed = sf::Mouse::Button::Left;
                             old_mouse_position = event_mp->position;
@@ -316,10 +314,15 @@ public:
             if (im::Button("Save")) {
                 const auto date = get_current_date();
                 if (enable_render_cgh) {
-                    save_binary(complex_pixels, std::format("../output/{:%m}_{:%d}_{}.bin", date.month(), date.day(), scene_names[selected_scene_idx]).c_str());
+                    save_binary_cgh(complex_pixels, std::format("../output/{:%m}_{:%d}_{}.bin", date.month(), date.day(), scene_names[selected_scene_idx]).c_str());
                 }
                 const auto image = sf::Image(camera_image_size, pixels);
                 [[maybe_unused]] auto _ = image.saveToFile(std::format("../output/{:%m}_{:%d}_{}.png", date.month(), date.day(), scene_names[selected_scene_idx]).c_str());
+            }
+            if (enable_render_cgh) {
+                if (ImGui::Button("Save Point Cloud")) {
+                    point_cloud.save_binary_point_cloud("../point_cloud.bin");
+                }
             }
 
             const float tmp_render_time = rendering ? timer.getElapsedTime().asSeconds() - start_time.asSeconds() : render_time;
@@ -532,12 +535,12 @@ public:
                 tmp_camera.samples_per_pixel = samples_per_pixel;
                 tmp_camera.max_depth = max_depth;
                 tmp_camera.update();
-                const auto tmp_point_cloud = tmp_camera.compute_point_cloud(*scene);
+                auto tmp_point_cloud = tmp_camera.compute_point_cloud(*scene);
                 const auto start = now();
                 tmp_camera.render_cgh(pixels, complex_pixels, *scene, tmp_point_cloud, st);
                 const auto mspp = (now() - start) / static_cast<double>(tmp_point_cloud.size());
-                //save_binary(complex_pixels, "../test.bin");
-                //return;
+                tmp_point_cloud.save_binary_point_cloud("../point_cloud.bin");
+                // return;
                 ////memset(pixels, 0, IMAGE_WIDTH * IMAGE_HEIGHT * 4);
                 point_cloud = scene->camera->compute_point_cloud(*scene);
                 expected_time = mspp * point_cloud.size() / 1000;
@@ -563,7 +566,7 @@ public:
                 render_has_finished = true;
                 const auto date = get_current_date();
                 if (enable_render_cgh) {
-                    save_binary(complex_pixels, std::format("../backups/{:%m}_{:%d}_{}_{}.bin", date.month(), date.day(), scene_names[selected_scene_idx], now()).c_str());
+                    save_binary_cgh(complex_pixels, std::format("../backups/{:%m}_{:%d}_{}_{}.bin", date.month(), date.day(), scene_names[selected_scene_idx], now()).c_str());
                 }
                 const auto image = sf::Image(camera_image_size, pixels);
                 [[maybe_unused]] auto _ = image.saveToFile(std::format("../backups/{:%m}_{:%d}_{}_{}.png", date.month(), date.day(), scene_names[selected_scene_idx], now()).c_str());

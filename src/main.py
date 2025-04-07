@@ -36,13 +36,16 @@ def import_cgh(image_path: str, grayscale=False, phase_only=False) -> list[ndarr
         print(complex_data.dtype)
     elif image_path.endswith(".bin"):  # Raw binary Complex format
         data_im = np.fromfile(f"./{image_path}", dtype=complex)
-        if data_im.shape[0] == 1080 * 1920:
+        if data_im.shape[0] == 1080 * 1920 * 2 * 2:
+            complex_data = np.reshape(data_im, (1080*2, 1920*2))
+        elif data_im.shape[0] == 1080 * 1920:
             complex_data = np.reshape(data_im, (1080, 1920))
         elif data_im.shape[0] == 400 * 600:
             complex_data = np.reshape(data_im, (400, 600))
         else:
             print(f"Unknown image size for {image_path}: {data_im.shape[0]}")
             exit(1)
+        print(f"Image size: {complex_data.shape[0]}x{complex_data.shape[1]}")
         if phase_only:
             complex_data = np.exp(1j * np.angle(complex_data))
     elif image_path.endswith(".png"):  # PNG Phase format (grayscale and rgb)
@@ -82,7 +85,8 @@ def propagate(data: ndarray[complex], slm_z: float, wavelength: float):
     ny = 2048*2
 
     # Physical slm size
-    pixel_size = 8 * um
+    factor = 2
+    pixel_size = 8 * um/factor
     lx = nx * pixel_size
     ly = ny * pixel_size
 
@@ -96,7 +100,7 @@ def propagate(data: ndarray[complex], slm_z: float, wavelength: float):
     kernel = np.exp(1j * ((k * slm_z) * np.sqrt(1 - mod_fxfy)))
     kernel = fftshift(kernel)
 
-    propagated = ifft2((fft2(data, (nx, ny)) * kernel))[:1080, :1920]
+    propagated = ifft2((fft2(data, (nx, ny)) * kernel))[:1080*factor, :1920*factor]
 
     return propagated
 
