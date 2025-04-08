@@ -157,7 +157,7 @@ public:
                 } else if (auto *event_mp = event->getIf<sf::Event::MouseButtonPressed>()) {
                     if (event_mp->button == sf::Mouse::Button::Left
                         && sprite.getGlobalBounds().contains(sf::Vector2<float>(event_mp->position))
-                        && event_mp->position.x <  static_cast<int>(image_size.x)) {
+                        && event_mp->position.x < static_cast<int>(image_size.x)) {
                         if (enable_camera_movement) {
                             mouse_button_pressed = sf::Mouse::Button::Left;
                             old_mouse_position = event_mp->position;
@@ -306,7 +306,7 @@ public:
                 scene->camera->samples_per_pixel = samples_per_pixel;
                 update_render();
             }
-            if (ImGui::SliderInt("Threads", &scene->camera->MAX_THREADS, 1, static_cast<int>(std::thread::hardware_concurrency() * 2))) {
+            if (ImGui::SliderInt("Threads", &scene->camera->thread_count, 1, static_cast<int>(std::thread::hardware_concurrency() * 2))) {
                 update_render();
             }
             ImGui::PopItemWidth();
@@ -326,15 +326,23 @@ public:
             }
 
             const float tmp_render_time = rendering ? timer.getElapsedTime().asSeconds() - start_time.asSeconds() : render_time;
-            im::Text("Render time: %.1fs", tmp_render_time);
+            im::Text("Render time: %s", get_human_time(tmp_render_time).c_str());
             if (mouse_button_pressed) {
                 im::Text("FPS: %.1f", 1 / dt.asSeconds());
             }
 
             if (enable_render_cgh) {
-                ImGui::Text("Expected time: %.1fs", expected_time);
-                const auto percent = 1 - (expected_time - tmp_render_time) / expected_time;
-                ImGui::Text("%3.1f%% | %.1fs remaining", percent * 100, expected_time - tmp_render_time);
+                ImGui::Text("Number of points: %s", add_thousand_separator(point_cloud.size()).c_str());
+
+                if (expected_time != 0) {
+                    ImGui::Text("Expected time: %s", get_human_time(expected_time).c_str());
+                    const auto percent = 1 - (expected_time - tmp_render_time) / expected_time;
+                    if (percent >= .9985) {
+                        ImGui::Text("99.9%% | 1s remaining");
+                    } else {
+                        ImGui::Text("%3.1f%% | %s remaining", percent * 100, get_human_time(expected_time - tmp_render_time).c_str());
+                    }
+                }
             }
 
             ImGui::PopItemWidth();
@@ -364,7 +372,9 @@ public:
             ImGui::Text("Point Cloud Size:");
             if (ImGui::DragInt2("##Point Cloud Size", &scene->camera->point_cloud_screen_height_in_px, 10, 40, 1000)) {
                 scene->camera->update();
-                update_render();
+                if (enable_render_cgh) {
+                    update_render();
+                }
             }
 
             if (!scene->point_lights.empty()) {
@@ -457,18 +467,6 @@ public:
             ImGui::PopItemWidth();
             ImGui::EndTabItem();
         }
-        if (ImGui::BeginTabItem("|")) {
-            enable_camera_movement = false;
-            const float tmp_render_time = rendering ? timer.getElapsedTime().asSeconds() - start_time.asSeconds() : render_time;
-            im::Text("Render time: %.1fs", tmp_render_time);
-
-            if (enable_render_cgh) {
-                ImGui::Text("Expected time: %.1fs", expected_time);
-                const auto percent = 1 - (expected_time - tmp_render_time) / expected_time;
-                ImGui::Text("%3.1f%%", percent * 100);
-            }
-            im::EndTabItem();
-        }
 
         im::EndTabBar();
 
@@ -527,6 +525,7 @@ public:
             scene->camera->samples_per_pixel = samples_per_pixel;
             scene->camera->max_depth = max_depth;
             scene->camera->update();
+            expected_time = 0;
             if (enable_render_cgh) {
                 // Get an approximated render time
                 auto tmp_camera = Camera(*scene->camera);
@@ -535,23 +534,24 @@ public:
                 tmp_camera.samples_per_pixel = samples_per_pixel;
                 tmp_camera.max_depth = max_depth;
                 tmp_camera.update();
+                printf("\n[ INFO ] Computing a small CGH to get expected time...\n");
                 auto tmp_point_cloud = tmp_camera.compute_point_cloud(*scene);
-                const auto start = now();
+                printf("         Points: %s\n", add_thousand_separator(tmp_point_cloud.size()).c_str());
+                auto start = now();
                 tmp_camera.render_cgh(pixels, complex_pixels, *scene, tmp_point_cloud, st);
                 const auto mspp = (now() - start) / static_cast<double>(tmp_point_cloud.size());
-                tmp_point_cloud.save_binary_point_cloud("../point_cloud.bin");
-                // return;
+                printf("         Total render time: %s (%.2f ms/point)\n", get_human_time((now() - start) / 1000).c_str(), mspp);
+                //return;
+                //tmp_point_cloud.save_binary_point_cloud("../point_cloud.bin");
                 ////memset(pixels, 0, IMAGE_WIDTH * IMAGE_HEIGHT * 4);
+                printf("\n[ INFO ] Starting CGH render...\n");
                 point_cloud = scene->camera->compute_point_cloud(*scene);
+                start = now();
                 expected_time = mspp * point_cloud.size() / 1000;
-                if (expected_time < 60) {
-                    printf("[ INFO ] Renderer computing at %f ms/point (expected render time: %.0fs)\n", mspp, expected_time);
-                } else if (expected_time < 3600) {
-                    printf("[ INFO ] Renderer computing at %f ms/point (expected render time: %.2fm)\n", mspp, expected_time / 60);
-                } else {
-                    printf("[ INFO ] Renderer computing at %f ms/point (expected render time: %.2fh)\n", mspp, expected_time / 3600);
-                }
+                printf("         Points: %s\n", add_thousand_separator(point_cloud.size()).c_str());
+                printf("         Expected render time: \033[92;40m%s\033[0m\n", get_human_time(expected_time).c_str());
                 scene->camera->render_cgh(pixels, complex_pixels, *scene, point_cloud, st);
+                printf("         Total render time: \033[92;40m%s\033[0m\n", get_human_time((now() - start) / 1000).c_str());
             } else {
                 if (enable_render_normals) {
                     scene->camera->render_normals(pixels, *scene, st);
@@ -561,6 +561,7 @@ public:
             }
             texture.update(pixels, camera_image_size, {0, 0});
             rendering = false;
+            expected_time = 0;
             if (!st.stop_requested()) {
                 render_time = timer.getElapsedTime().asSeconds() - start_time.asSeconds();
                 render_has_finished = true;

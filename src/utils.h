@@ -19,6 +19,7 @@ constexpr Real degrees_to_radians(const Real degrees) {
     return degrees * std::numbers::pi / 180.0;
 }
 
+/** @return Time in milliseconds */
 static uint now() {
     return static_cast<uint>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
 }
@@ -60,13 +61,15 @@ static void save_binary_cgh(const Complex *complex_pixels, const char *path) {
 }
 
 
-
 /**
  *
  * @param seconds seconds to format
- * @return String in the form "%.1f[s|m|h|d]"
+ * @return String in the form "%.1f[ms|s|m|h|d]"
  */
 [[maybe_unused]] static std::string get_human_time(double seconds) {
+    if (seconds < 1) {
+        return std::format("{:.1f}ms", seconds * 1000);
+    }
     if (seconds < 60) {
         return std::format("{:.1f}s", seconds);
     }
@@ -77,6 +80,16 @@ static void save_binary_cgh(const Complex *complex_pixels, const char *path) {
         return std::format("{:.1f}h", seconds / 60 / 60);
     }
     return std::format("{:.1f}d", seconds / 60 / 60 / 24);
+}
+
+static std::string add_thousand_separator(const int n, const char *separator = " ", const bool separate_four_digits = false) {
+    auto ret = std::to_string(n);
+    if (ret.size() > 4 || separate_four_digits) {
+        for (int i = ret.size() - 3; i > 0; i -= 3) {
+            ret.insert(i, separator);
+        }
+    }
+    return ret;
 }
 
 #include "imgui.h"

@@ -8,6 +8,7 @@
 
 
 #include "PointCloud.h"
+#include "utils.h"
 #include "Vecf.h"
 #include "Vector.h"
 
@@ -49,7 +50,7 @@ __device__ inline cuda::std::complex<REAL_T> compute_wave(REAL_T two_pi_over_wav
     } else {
         sincos(sub_phase_red, &sin_val, &cos_val);
     }
-    return amplitude * cuda::std::complex<REAL_T>{ cos_val, sin_val};
+    return {cos_val * amplitude, sin_val * amplitude};
 }
 
 typedef float REAL_T;
@@ -102,6 +103,11 @@ __global__ void kernel(cuda::std::complex<double> *complex_pixels, unsigned char
 __host__ void use_cuda(unsigned char pixels[], std::complex<Real> complex_pixels[], const PointCloud &point_cloud, const Point &slm_pixel_00_location, const Vec &slm_pixel_delta_x, const Vec &slm_pixel_delta_y) {
     static constexpr uint num_pixels = IMAGE_WIDTH * IMAGE_HEIGHT;
 
+    printf("         Using: CUDA\n");
+    printf("         Precision: %s\n", sizeof(REAL_T) == sizeof(float) ? "single" : "double");
+    printf("         Image size: %s x %s (factor %d)\n", add_thousand_separator(IMAGE_WIDTH).c_str(), add_thousand_separator(IMAGE_HEIGHT).c_str(), VIRTUAL_SLM_FACTOR);
+    printf("         Num points: %s\n", add_thousand_separator(point_cloud.size()).c_str());
+    printf("         Enable color: %s\n", ENABLE_COLOR_CGH ? "true" : "false");
     dim3 block(32, 32);
     dim3 grid(IMAGE_WIDTH / block.x + 1, IMAGE_HEIGHT / block.y + 1);
 

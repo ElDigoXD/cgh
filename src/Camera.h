@@ -57,6 +57,7 @@ public:
     // int point_cloud_screen_height_in_px = 1080 / 2.7;
     // int point_cloud_screen_width_in_px = point_cloud_screen_height_in_px * (16 / 9.0);
 
+    // Note: These variables are used in the GUI as one.
     int point_cloud_screen_height_in_px = IMAGE_WIDTH;
     int point_cloud_screen_width_in_px = IMAGE_HEIGHT;
 
@@ -65,8 +66,7 @@ public:
 
     Point point_cloud_screen_pixel_00_position;
 
-    int computed_pixels = 0;
-    int MAX_THREADS = 16;
+    int thread_count = 16;
 
     Camera() : Camera(10, 10, 3) {
     }
@@ -233,82 +233,15 @@ public:
         return final_color;
     }
 
-
-    [[nodiscard]] static Color compute_ray_color_recursive(const Ray &ray, const Scene &scene, const int max_depth, int current_depth, Color attenuation = {1, 1, 1}, bool any_non_specular_bounces = false) {
-        Color direct_lighting(0, 0, 0);
-        Color indirect_lighting(0, 0, 0);
-
-        auto outgoing_rays = static_cast<int>(std::pow<int, int>(2, current_depth - 1));
-        if (max_depth <= 1) {
-            outgoing_rays = 1;
-        }
-
-        if (auto hit_data = scene.intersect(ray, Triangle::CullBackfaces::YES)) {
-            const auto &triangle = hit_data->triangle;
-            Material material = hit_data->material;
-            // Path regularization
-            // https://pbr-book.org/4ed/Light_Transport_I_Surface_Reflection/A_Better_Path_Tracer#PathIntegrator::regularize
-            if (any_non_specular_bounces) {
-                material.regularize();
-            }
-
-
-            const auto &normal = triangle.normal(hit_data->u, hit_data->v);
-            const Point p = ray.at(hit_data->t);
-
-            for (const auto &[light_position, light_color]: scene.point_lights) {
-                const auto &light_offset = light_position - p;
-                const auto &light_distance = light_offset.length();
-                const auto &light_direction = light_offset.normalize();
-                const auto &dot_product = dot(light_direction, normal);
-
-                if (dot_product >= 0) {
-                    const auto shadow_ray = Ray{p, light_direction};
-                    if (!scene.intersects(shadow_ray, light_distance)) {
-                        const auto &c = material.BRDF(light_direction, -ray.direction.normalize(), normal);
-                        direct_lighting += attenuation * c * light_color;
-                    }
-                }
-            }
-            for (int i = 0; i < outgoing_rays; i++) {
-                const auto [scatter_direction, w, is_specular_sample] = material.sample(normal, -ray.direction.normalize());
-                auto new_ray = Ray{p, Vec{scatter_direction}};
-                auto new_attenuation = w * attenuation;
-                if (luminance(new_attenuation) <= 0.01) {
-                    continue;
-                }
-                any_non_specular_bounces |= !is_specular_sample;
-                indirect_lighting += compute_ray_color_recursive(new_ray, scene, max_depth - 1, current_depth - 1, new_attenuation, any_non_specular_bounces);
-            }
-        }
-
-        const auto final_color = outgoing_rays != 0
-                                     ? direct_lighting + (indirect_lighting / outgoing_rays)
-                                     : direct_lighting;
-        return final_color;
-    }
-
     void render(unsigned char pixels[], const Scene &scene, const std::stop_token &st = {}) const {
         const auto start = now();
-        printf("[ INFO ] Starting cgi render with %dx%d pixels, %d spp, %d max depth, %d threads\n", IMAGE_WIDTH, IMAGE_HEIGHT, samples_per_pixel, max_depth, MAX_THREADS);
+        printf("\n[ INFO ] Starting cgi render...\n");
+        printf("         Using CPU (%d threads)\n", thread_count);
+        printf("         Image size: %s x %s (factor %d)\n", add_thousand_separator(IMAGE_WIDTH).c_str(), add_thousand_separator(IMAGE_HEIGHT).c_str(), VIRTUAL_SLM_FACTOR);
+        printf("         Samples: %d\n", samples_per_pixel);
+        printf("         Depth: %d\n", max_depth);
 
-        int from = 7 - 1;
-        int to = std::max(from + 1 - max_depth, -1);
-        int total = 1;
-        int prev = 1;
-        for (int i = from; i >= to; i--) {
-            const int tmp = prev * static_cast<int>(std::pow(2, i));
-            total += prev * static_cast<int>(std::pow(2, i));
-            prev = tmp;
-        }
-        total += prev * std::max(0, to);
-#define RECURSIVE 0
-#if RECURSIVE
-        printf("[ INFO ] [ RECURSIVE ] From 2^%d=%d to 2^%d=%d, total: %d\n", from, static_cast<int>(std::pow(2, from)), to, static_cast<int>(std::pow(2, to)), total);
-#else
-        printf("[ INFO ] [ITERATIVE] Total: %d*%d=%d\n", samples_per_pixel, max_depth, samples_per_pixel * max_depth);
-#endif
-#pragma omp parallel for collapse(1) shared(pixels, scene, st, from) default(none) num_threads(MAX_THREADS) schedule(dynamic)
+#pragma omp parallel for collapse(1) shared(pixels, scene, st) default(none) num_threads(thread_count) schedule(dynamic)
         for (int y = 0; y < IMAGE_HEIGHT; y++) {
             if (st.stop_requested()) [[unlikely]] continue;
             for (int x = 0; x < IMAGE_WIDTH; x++) {
@@ -316,11 +249,7 @@ public:
                 for (int i = 0; i < samples_per_pixel; i++) {
                     auto ray = get_random_orthogonal_ray_at(x, y);
                     ray.direction = normalize(ray.direction);
-#if RECURSIVE
-                    color += compute_ray_color_recursive(ray, scene, max_depth, from + 1);
-#else
                     color += compute_ray_color(ray, scene, max_depth).clamp(0, 1);
-#endif
                 }
                 color = (color / samples_per_pixel).clamp(0, 1);
 
@@ -330,7 +259,7 @@ public:
                 pixels[(y * IMAGE_WIDTH + x) * 4 + 3] = 255;
             }
         }
-        printf("[ INFO ] Finished cgi render in %.1fs\n", (now() - start) / 1000.0);
+        printf("         Finished cgi render in \033[92;40m%s\033[0m\n", get_human_time((now() - start) / 1000.f).c_str());
     }
 
     [[nodiscard]] PointCloud compute_point_cloud(const Scene &scene) const {
@@ -341,13 +270,10 @@ public:
                 const auto &ray = get_random_orthogonal_ray_at_screen(x, y);
 
                 if (const auto &hit_data = scene.intersect(ray)) {
-                    //point_cloud.emplace_back(std::pair{ray.at(hit_data.value().t), rand_real() * 2 * std::numbers::pi});
                     point_cloud.emplace_back(ray.at(hit_data.value().t), Vecf{0, 0, 0}, static_cast<float>(rand_real() * 2 * std::numbers::pi));
                 }
             }
         }
-
-        std::cout << "Point cloud size: " << point_cloud.size() << std::endl;
         return point_cloud;
     }
 
@@ -367,9 +293,9 @@ public:
     void render_cgh(unsigned char pixels[], std::complex<Real> complex_pixels[], const Scene &scene, PointCloud &point_cloud,
                     const std::stop_token &st = {}) {
         auto start = now();
-        printf("[ INFO ] Starting color generation for the point cloud\n");
+        printf("[ INFO ] Starting color generation for the point cloud...\n");
 
-#pragma omp parallel for collapse(1) shared(point_cloud, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)
+#pragma omp parallel for collapse(1) shared(point_cloud, scene, st) default(none) num_threads(thread_count) schedule(dynamic)
         for (auto &[point, color, phase]: point_cloud) {
             if (st.stop_requested()) [[unlikely]] continue;
             auto [x, y] = project(point);
@@ -382,6 +308,9 @@ public:
             color /= samples_per_pixel;
             color = {(color.r), (color.g), (color.b)};
         }
+        const auto t = now() - start;
+        printf("         Ended color generation for the point cloud in %s (%.2f ms/point)\n", get_human_time(t / 1000.f).c_str(), 1.f * t / point_cloud.size());
+
         // Clear the pixels
         for (int x = 0; x < IMAGE_WIDTH; x++) {
             for (int y = 0; y < IMAGE_HEIGHT; y++) {
@@ -407,12 +336,9 @@ public:
         }
         if (st.stop_requested()) [[unlikely]] return;
         assert(!point_cloud.empty());
-        const auto t = now() - start;
-        printf("[ INFO ] Ended color generation for the point cloud in %.1fs (%ld ms/point)\n", t / 1000.0, t / point_cloud.size());
-        printf("[ INFO ] Starting wave computation\n");
 
+        printf("[ INFO ] Starting wave computation...\n");
         start = now();
-        computed_pixels = 0;
 #if USE_GPU_FOR_CGH
 #if ENABLE_OCCLUSION
         std::fprintf(stdout, "[ ERROR ] ENABLE_OCCLUSION not implemented in GPU. Ignoring option\n");
@@ -442,15 +368,14 @@ public:
                     pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = a;
                     pixels[(y * IMAGE_WIDTH + x) * 4 + 2] = a;
                     pixels[(y * IMAGE_WIDTH + x) * 4 + 3] = 255;
-                    ++computed_pixels;
                 }
             }
         }
 #endif // #if USE_GPU_FOR_CGH #else
-        printf("[ INFO ] Ended wave computation in %.1fs (%ld ms/point)\n", (now() - start) / 1000.0, (now() - start) / point_cloud.size());
+        printf("         Ended wave computation in %s (%.2f ms/point)\n", get_human_time((now() - start) / 1000.f).c_str(), 1.f * (now() - start) / point_cloud.size());
     }
 
-    static std::complex<Real> compute_wave_2(const Ray &ray, const Scene &scene, const Point &expected_point, const Vecf &color, const Real phase) {
+    static std::complex<Real> compute_wave_occlusion(const Ray &ray, const Scene &scene, const Point &expected_point, const Vecf &color, const Real phase) {
         // Test visibility of the point
         if (const auto &hit_data = scene.intersect(ray)) {
             if (!(ray.at(hit_data->t) - expected_point).is_close_to_0()) {
@@ -532,7 +457,7 @@ public:
     // }
 
     void render_normals(unsigned char pixels[], const Scene &scene, const std::stop_token &st = {}) const {
-#pragma omp parallel for shared(pixels, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)
+#pragma omp parallel for shared(pixels, scene, st) default(none) num_threads(thread_count) schedule(dynamic)
         for (int y = 0; y < IMAGE_HEIGHT; y++) {
             if (st.stop_requested()) [[unlikely]] continue;
 
