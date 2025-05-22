@@ -6,7 +6,7 @@ v 0 1 1
 v 1 1 1
 s 0
 usemtl back_wall
-f 1 2 3 4
+#f 1 2 3 4
 
 o ceiling
 v 1 1 0

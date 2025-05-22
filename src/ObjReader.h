@@ -4,8 +4,9 @@
 
 #include "BRDF2s.h"
 #include "Mesh.h"
-#include "tiny_obj_loader.h"
 #include "Triangle.h"
+
+#include "tiny_obj_loader.h"
 
 static Mesh load(const char *filename) {
     tinyobj::ObjReader reader;

@@ -4,7 +4,6 @@
 #include <numbers>
 
 
-#include "PointCloud.h"
 #include "Vecf.h"
 #include "Vector.h"
 
@@ -82,10 +81,11 @@ static void save_binary_cgh(const Complex *complex_pixels, const char *path) {
     return std::format("{:.1f}d", seconds / 60 / 60 / 24);
 }
 
-static std::string add_thousand_separator(const int n, const char *separator = " ", const bool separate_four_digits = false) {
+template<typename integral> requires std::is_integral_v<integral>
+static std::string add_thousand_separator(const integral n, const char *separator = " ", const bool separate_four_digits = false) {
     auto ret = std::to_string(n);
     if (ret.size() > 4 || separate_four_digits) {
-        for (int i = ret.size() - 3; i > 0; i -= 3) {
+        for (int i = static_cast<int>(ret.size()) - 3; i > 0; i -= 3) {
             ret.insert(i, separator);
         }
     }

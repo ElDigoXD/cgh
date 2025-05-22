@@ -20,7 +20,7 @@ wl_blue = 441.563 * nm
 
 
 # Import CGH
-def import_cgh(image_path: str, grayscale=False, phase_only=False) -> list[ndarray[Any]]:
+def import_cgh(image_path: str, grayscale=False, phase_only=False, rgb_only=False) -> list[ndarray[Any]]:
     if image_path.endswith(".csv"):  # CSV Complex format
         data_im = np.recfromtxt(f"./{image_path}", delimiter=",", names=None)
         print(data_im.dtype)
@@ -46,7 +46,6 @@ def import_cgh(image_path: str, grayscale=False, phase_only=False) -> list[ndarr
     elif image_path.endswith(".png"):  # PNG Phase format (grayscale and rgb[a])
         image_data = Image.open(f'./{image_path}')
         data_im = np.array(image_data)
-
         if data_im.ndim == 1 or grayscale:  # Grayscale
             if data_im.ndim != 1:
                 data_im = data_im[:, :, 0]
@@ -57,28 +56,32 @@ def import_cgh(image_path: str, grayscale=False, phase_only=False) -> list[ndarr
             data_norm = (data_im - 127.5) / 127.5
             complex_data = np.exp(1j * np.pi * data_norm)
             return [complex_data]
-        elif data_im == 4:  # RGBA
-            print("Image is RGBA, creating a color and luminance reconstruction.")
+        elif data_im.shape[2] == 4:  # RGBA
             data_norm = (data_im[:, :, 0] - 127.5) / 127.5
             complex_data_r = np.exp(1j * np.pi * data_norm)
             data_norm = (data_im[:, :, 1] - 127.5) / 127.5
             complex_data_g = np.exp(1j * np.pi * data_norm)
             data_norm = (data_im[:, :, 2] - 127.5) / 127.5
             complex_data_b = np.exp(1j * np.pi * data_norm)
-            data_norm = (data_im[:, :, 3] - 127.5) / 127.5
-            complex_data_a = np.exp(1j * np.pi * data_norm)
-            return [complex_data_r, complex_data_g, complex_data_b, complex_data_a]
-        elif data_im == 3:  # RGB
+            if rgb_only:
+                print("Image is RGBA, but rgb_only flag is set. Converting to RGB.")
+                return [complex_data_r, complex_data_g, complex_data_b]
+            else:
+                print("Image is RGBA, creating a color and luminance reconstruction.")
+                data_norm = (data_im[:, :, 3] - 127.5) / 127.5
+                complex_data_a = np.exp(1j * np.pi * data_norm)
+                return [complex_data_r, complex_data_g, complex_data_b, complex_data_a]
+        elif data_im.shape[2] == 3:  # RGB
             print("Unsupported operation. Use RGBA format instead.")
             exit(1)
-            #print("Image is RGB, creating a color reconstruction.")
-            #data_norm = (data_im[:, :, 0] - 127.5) / 127.5
-            #complex_data_r = np.exp(1j * np.pi * data_norm)
-            #data_norm = (data_im[:, :, 1] - 127.5) / 127.5
-            #complex_data_g = np.exp(1j * np.pi * data_norm)
-            #data_norm = (data_im[:, :, 2] - 127.5) / 127.5
-            #complex_data_b = np.exp(1j * np.pi * data_norm)
-            #return [complex_data_r, complex_data_g, complex_data_b]
+            # print("Image is RGB, creating a color reconstruction.")
+            # data_norm = (data_im[:, :, 0] - 127.5) / 127.5
+            # complex_data_r = np.exp(1j * np.pi * data_norm)
+            # data_norm = (data_im[:, :, 1] - 127.5) / 127.5
+            # complex_data_g = np.exp(1j * np.pi * data_norm)
+            # data_norm = (data_im[:, :, 2] - 127.5) / 127.5
+            # complex_data_b = np.exp(1j * np.pi * data_norm)
+            # return [complex_data_r, complex_data_g, complex_data_b]
     else:
         print("Unknown image format. Supported formats are: PNG, CSV, MAT, and BIN.")
         exit(1)
@@ -111,11 +114,24 @@ def propagate(data: ndarray[complex], slm_z: float, wavelength: float, virtual_s
 
     return propagated
 
+
+def plot_image(image: ndarray):
+    plt.axis('off')
+    plt.axes([0.0, 0.0, 1.0, 1.0])
+    plt.axis('off')
+    plt.imshow(image)
+    plt.show()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Propagate a CGH")
     parser.add_argument("CGH", type=str, help="Path to the CGH file in PNG, CSV, MAT, or BIN format")
     parser.add_argument("-g", "--grayscale", action="store_true", help="Grayscale image")
     parser.add_argument("-p", "--phase_only", action="store_true", help="Phase only image")
+    parser.add_argument("-c", "--count", type=int, default=1, help="Number of images to propagate")
+    parser.add_argument("-rgb", "--rgb", action="store_true", help="Only RGB image")
+    parser.add_argument("-z", "--z", type=float, default=291, help="Z distance to propagate")
+
     args = parser.parse_args()
     if len(sys.argv) == 1:
         parser.print_help()
@@ -124,9 +140,41 @@ def main():
     image_path = args.CGH
     grayscale = args.grayscale
     phase_only = args.phase_only
+    count = args.count
+    rgb_only = args.rgb
+    z = args.z
+
+    # For multiple images
+    # if count > 1:
+    for z in range(2900, 3005, 5):
+        z /= 10
+        rgbs = []
+        for i in range(count):
+            complex_data = import_cgh(f"output/color/{i}.png", grayscale=False, phase_only=True, rgb_only=True)
+            r = (np.abs(propagate(complex_data[0], -z * mm, wl_red)) / 7).clip(0, 1)
+            g = (np.abs(propagate(complex_data[1], -z * mm, wl_green)) / 7).clip(0, 1)
+            b = (np.abs(propagate(complex_data[2], -z * mm, wl_blue)) / 7).clip(0, 1)
+
+            rgbs.append(np.dstack((r, g, b)))
+
+        rgbs = np.array(rgbs)
+
+        img = np.average(rgbs, axis=0)
+        plt.imsave(f"output/color/average_z{z}.png", img)
+        # plot_image(img)
+
+        img = np.median(rgbs, axis=0)
+        plt.imsave(f"output/color/median_z{z}.png", img)
+        # plot_image(img)
+
+        # img = rgbs[0]
+        # plt.imsave(f"output/color/first_z{z}.png", img)
+        # plot_image(img)
+    return
 
     # Import CGH
     complex_data = import_cgh(image_path, grayscale, phase_only)
+    if rgb_only: print("TODO: rgb_only flag in output is not implemented.")
 
     def imsave_grayscale(z):
         plt.imsave(f'output/propagation/{image_path.split("/")[-1]}_{z}.png',

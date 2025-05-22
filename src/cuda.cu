@@ -43,18 +43,18 @@ __device__ REAL_T inline distance(const Point &a, const Point &b) {
 
 template<typename REAL_T>
 __device__ inline cuda::std::complex<REAL_T> compute_wave(REAL_T two_pi_over_wavelength, REAL_T distance_to_point, REAL_T amplitude, float phase) {
-    const auto sub_phase_red = two_pi_over_wavelength * distance_to_point + phase;
+    const auto sub_phase = two_pi_over_wavelength * distance_to_point + phase;
     REAL_T sin_val, cos_val;
     if constexpr (std::is_same_v<REAL_T, float>) {
-        sincosf(sub_phase_red, &sin_val, &cos_val);
+        sincosf(sub_phase, &sin_val, &cos_val);
     } else {
-        sincos(sub_phase_red, &sin_val, &cos_val);
+        sincos(sub_phase, &sin_val, &cos_val);
     }
     return {cos_val * amplitude, sin_val * amplitude};
 }
 
-typedef float REAL_T;
-typedef cuda::std::complex<REAL_T> COMPLEX_T;
+using REAL_T = float;
+using COMPLEX_T = cuda::std::complex<REAL_T>;
 
 __constant__ float SCALE = 255.f / (2 * M_PIf);
 __constant__ REAL_T two_pi_over_wavelength_red = 2 * M_PI / 0.0006328; // Helium–neon laser
@@ -87,6 +87,7 @@ __global__ void kernel(cuda::std::complex<double> *complex_pixels, unsigned char
     pixels[pixel_index * 4 + 1] = static_cast<unsigned char>((arg(agg_green) + M_PIf) * SCALE);
     pixels[pixel_index * 4 + 2] = static_cast<unsigned char>((arg(agg_blue) + M_PIf) * SCALE);
     pixels[pixel_index * 4 + 3] = static_cast<unsigned char>((arg(agg_luminance) + M_PIf) * SCALE);
+    //pixels[pixel_index * 4 + 3] = 255;
 #else // #if ENABLE_COLOR_CGH
     const auto luminance = agg_luminance / static_cast<REAL_T>(point_cloud.size());
     complex_pixels[pixel_index] = luminance;

@@ -310,6 +310,7 @@ public:
         }
         const auto t = now() - start;
         printf("         Ended color generation for the point cloud in %s (%.2f ms/point)\n", get_human_time(t / 1000.f).c_str(), 1.f * t / point_cloud.size());
+        point_cloud.save_binary_point_cloud("../point_cloud.bin");
 
         // Clear the pixels
         for (int x = 0; x < IMAGE_WIDTH; x++) {

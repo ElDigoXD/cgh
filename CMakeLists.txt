@@ -4,6 +4,8 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 20)
 set(CMAKE_CUDA_ARCHITECTURES native)
 set(CMAKE_CUDA_FLAGS "-march=native -Wall -Wextra --expt-relaxed-constexpr")
+set(CMAKE_CUDA_FLAGS_RELWITHDEBINFO "-O3 -Xptxas -O3")
+set(CMAKE_CUDA_FLAGS_RELEASE "-O3 -Xptxas -O3")
 set(CMAKE_CUDA_COMPILER "/usr/local/cuda-12.8/bin/nvcc")
 
 set(CMAKE_CXX_STANDARD_REQUIRED 23)
@@ -57,20 +59,37 @@ FetchContent_Declare(
         URL_HASH SHA256=a55a0933a29caa0e9e84ef62a45cbe8cb25dd0e17bc2850c591c6b06f95d5ebe
         DOWNLOAD_NO_EXTRACT ON
 )
-
 FetchContent_MakeAvailable(tinyobjloader)
-
 add_library(tinyobjloader-lib INTERFACE ${tinyobjloader_SOURCE_DIR})
 target_include_directories(tinyobjloader-lib INTERFACE ${tinyobjloader_SOURCE_DIR})
 
-file(GLOB_RECURSE SRC_FILES src/*.cpp src/*.h src/*.cu)
-add_executable(untitled
+FetchContent_Declare(
+        args
+        URL https://github.com/Taywee/args/raw/refs/tags/6.4.7/args.hxx
+        URL_HASH SHA256=e091a33eb09d67c1254cf43120257b01c67fa7fb23470e05208d73ede8332ad1
+        DOWNLOAD_NO_EXTRACT ON
+)
+FetchContent_MakeAvailable(args)
+add_library(args-lib INTERFACE ${args_SOURCE_DIR})
+target_include_directories(args-lib INTERFACE ${args_SOURCE_DIR})
+
+file(GLOB_RECURSE SRC_FILES "src/*!(main).cpp" src/*.h src/*.cu)
+add_executable(gui
         ${SRC_FILES}
+        src/main.cpp
+)
+add_executable(pc
+        ${SRC_FILES}
+        src/main_pc.cpp
 )
 
-target_link_libraries(untitled PRIVATE ImGui-SFML::ImGui-SFML OpenMP::OpenMP_CXX tinyobjloader-lib)
+
+target_link_libraries(gui PRIVATE ImGui-SFML::ImGui-SFML OpenMP::OpenMP_CXX tinyobjloader-lib args-lib)
+target_link_libraries(pc PRIVATE ImGui-SFML::ImGui-SFML OpenMP::OpenMP_CXX tinyobjloader-lib args-lib)
 
 
-set_target_properties(untitled PROPERTIES
+set_target_properties(gui PROPERTIES
+        CUDA_SEPARABLE_COMPILATION ON)
+set_target_properties(pc PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON)
 

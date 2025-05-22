@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include <cmath>
 
 class Vector;
 class Color;

@@ -281,6 +281,7 @@ constexpr static Scene *cornell_zoom() {
     auto cylinder_dragon_mesh = load("../resources/cylinder.obj");
 
     cornell_box_mesh.flip(Axis::Z);
+    cornell_box_mesh.flip(Axis::X);
     cornell_box_mesh.normalize();
     cornell_box_mesh.scale(Vecf{4, 2, 4});
     cornell_box_mesh.move(center);
@@ -294,7 +295,7 @@ constexpr static Scene *cornell_zoom() {
 
     dragon_mesh.normalize();
     dragon_mesh.scale(0.9);
-    dragon_mesh.move(Vecf{-0.3, 0.315, 0.8});
+    dragon_mesh.move(Vecf{-0.3, 0.315, 0.8} + Vecf{0.4, 0, 0});
     dragon_mesh.move(center);
     dragon_mesh.scale(factor);
 
@@ -306,25 +307,25 @@ constexpr static Scene *cornell_zoom() {
 
     cylinder_dragon_mesh.normalize();
     cylinder_dragon_mesh.scale(Vecf{1, 0.94, 1});
-    cylinder_dragon_mesh.move(Vecf{-0.3, -0.55, 0.8});
+    cylinder_dragon_mesh.move(Vecf{-0.3, -0.55, 0.8} + Vecf{0.4, 0, 0});
     cylinder_dragon_mesh.move(center);
     cylinder_dragon_mesh.scale(factor);
 
     cornell_box_mesh.materials[4] = Material{GGXBRDF{Color{.1, .1, .1}, 0.08, 1}};
     teapot_mesh.materials[0] = Material{GGXBRDF{Color{1, .4, .0}, 0.1, 1}};
-    dragon_mesh.materials[0] = Material{GGXBRDF{Color::cyan(), 0.2, 0}};
+    dragon_mesh.materials[0] = Material{GGXBRDF{Color{0, 1, 0}, 0.2, 0}};
 
     const auto scene = new Scene(camera);
     scene->add_mesh(cornell_box_mesh);
-    scene->add_mesh(teapot_mesh);
+    //scene->add_mesh(teapot_mesh);
     scene->add_mesh(dragon_mesh);
-    scene->add_mesh(cylinder_teapot_mesh);
+    //scene->add_mesh(cylinder_teapot_mesh);
     scene->add_mesh(cylinder_dragon_mesh);
 
-    scene->point_lights.emplace_back((Point{+2 - 0.1, 1 - 0.1, +2 - 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1}*0.8);
-    scene->point_lights.emplace_back((Point{-2 + 0.1, 1 - 0.1, -2 + 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1}*0.8);
-    scene->point_lights.emplace_back((Point{-2 + 0.1, 1 - 0.1, +2 - 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1}*0.8);
-    scene->point_lights.emplace_back((Point{+2 - 0.1, 1 - 0.1, -2 + 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1}*0.8);
+    scene->point_lights.emplace_back((Point{+2 - 0.1, 1 - 0.1, +2 - 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1} * 0.8);
+    scene->point_lights.emplace_back((Point{-2 + 0.1, 1 - 0.1, -2 + 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1} * 0.8);
+    scene->point_lights.emplace_back((Point{-2 + 0.1, 1 - 0.1, +2 - 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1} * 0.8);
+    scene->point_lights.emplace_back((Point{+2 - 0.1, 1 - 0.1, -2 + 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1} * 0.8);
     return scene;
 }
 
