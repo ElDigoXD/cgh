@@ -1,4 +1,5 @@
 import argparse
+import os
 from typing import Any
 
 import numpy as np
@@ -145,32 +146,32 @@ def main():
     z = args.z
 
     # For multiple images
-    # if count > 1:
-    for z in range(2900, 3005, 5):
-        z /= 10
-        rgbs = []
-        for i in range(count):
-            complex_data = import_cgh(f"output/color/{i}.png", grayscale=False, phase_only=True, rgb_only=True)
-            r = (np.abs(propagate(complex_data[0], -z * mm, wl_red)) / 7).clip(0, 1)
-            g = (np.abs(propagate(complex_data[1], -z * mm, wl_green)) / 7).clip(0, 1)
-            b = (np.abs(propagate(complex_data[2], -z * mm, wl_blue)) / 7).clip(0, 1)
+    if count > 1:
+        if not os.path.exists(f"{image_path}/average"): os.mkdir(f"{image_path}/average")
+        if not os.path.exists(f"{image_path}/median"): os.mkdir(f"{image_path}/median")
 
-            rgbs.append(np.dstack((r, g, b)))
+        for z in range(2900, 3005, 5):
+            z /= 10
+            rgbs = []
+            for i in range(count):
+                complex_data = import_cgh(f"{image_path}/{i}.png", grayscale=False, phase_only=True, rgb_only=True)
+                r = (np.abs(propagate(complex_data[0], -z * mm, wl_red)) / 7).clip(0, 1)
+                g = (np.abs(propagate(complex_data[1], -z * mm, wl_green)) / 7).clip(0, 1)
+                b = (np.abs(propagate(complex_data[2], -z * mm, wl_blue)) / 7).clip(0, 1)
 
-        rgbs = np.array(rgbs)
+                rgbs.append(np.dstack((r, g, b)))
 
-        img = np.average(rgbs, axis=0)
-        plt.imsave(f"output/color/average_z{z}.png", img)
-        # plot_image(img)
+            rgbs = np.array(rgbs)
 
-        img = np.median(rgbs, axis=0)
-        plt.imsave(f"output/color/median_z{z}.png", img)
-        # plot_image(img)
+            img = np.average(rgbs, axis=0)
+            plt.imsave(f"{image_path}/average_z{z*10}.png", img)
+            # plot_image(img)
 
-        # img = rgbs[0]
-        # plt.imsave(f"output/color/first_z{z}.png", img)
-        # plot_image(img)
-    return
+            img = np.median(rgbs, axis=0)
+            plt.imsave(f"{image_path}/median_z{z*10}.png", img)
+            # plot_image(img)
+
+        return
 
     # Import CGH
     complex_data = import_cgh(image_path, grayscale, phase_only)
