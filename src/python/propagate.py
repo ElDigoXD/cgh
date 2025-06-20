@@ -150,17 +150,23 @@ def main():
         if not os.path.exists(f"{image_path}/average"): os.mkdir(f"{image_path}/average")
         if not os.path.exists(f"{image_path}/median"): os.mkdir(f"{image_path}/median")
 
-        for z in range(2900, 3005, 5):
-            z /= 10
+        #for z in range(2900, 3005, 5):
+        if True:
+            #z /= 10
+            z = 291
             rgbs = []
             for i in range(count):
+                print(f"Image {i}:")
                 complex_data = import_cgh(f"{image_path}/{i}.png", grayscale=False, phase_only=True, rgb_only=True)
                 r = (np.abs(propagate(complex_data[0], -z * mm, wl_red)) / 7).clip(0, 1)
                 g = (np.abs(propagate(complex_data[1], -z * mm, wl_green)) / 7).clip(0, 1)
                 b = (np.abs(propagate(complex_data[2], -z * mm, wl_blue)) / 7).clip(0, 1)
 
-                rgbs.append(np.dstack((r, g, b)))
+                plt.imsave(f"{image_path}/out/{i}.png", np.dstack((r, g, b)))
 
+                #rgbs.append(np.dstack((r, g, b)))
+
+            return
             rgbs = np.array(rgbs)
 
             img = np.average(rgbs, axis=0)
@@ -183,7 +189,7 @@ def main():
                    cmap='gray')
 
     if len(complex_data) == 1:  # Grayscale
-        plt.imsave(f'output/propagation/{image_path.split("/")[-1]}_290.png',
+        plt.imsave(f'output/propagation/{image_path.split("/")[-1]}_291.png',
                    np.abs(propagate(complex_data[0], -290 * mm, wl_red)), cmap='gray')
         plt.imshow(np.abs(propagate(complex_data[0], -290 * mm, wl_red)), cmap='gray')
         plt.show()
@@ -226,9 +232,7 @@ def main():
         plt.imsave('output/propagation/color/g.png', np.dstack((zero, g, zero)).clip(0, 1))
         plt.imsave('output/propagation/color/b.png', np.dstack((zero, zero, b)).clip(0, 1))
         plt.imsave('output/propagation/color/a.png', np.dstack((a, a, a)).clip(0, 1))
-        plt.imsave("output/propagation/color/luminance.png", (
-            np.abs(propagate(import_cgh(image_path.replace(".png", ".bin"), phase_only=True)[0], -290 * mm, wl_red))),
-                   cmap='gray')
+
 
         exit()
         plt.imsave(f'output/propagation/{image_path.split("/")[-1]}_300.png', np.dstack((r, g, b)))
