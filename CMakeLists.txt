@@ -53,6 +53,7 @@ set(IMGUI_SFML_IMGUI_DEMO OFF)
 FetchContent_MakeAvailable(imgui-sfml)
 find_package(OpenMP REQUIRED)
 
+# tinyobjloader lib
 FetchContent_Declare(
         tinyobjloader
         URL https://github.com/tinyobjloader/tinyobjloader/raw/refs/tags/v2.0.0rc13/tiny_obj_loader.h
@@ -63,6 +64,7 @@ FetchContent_MakeAvailable(tinyobjloader)
 add_library(tinyobjloader-lib INTERFACE ${tinyobjloader_SOURCE_DIR})
 target_include_directories(tinyobjloader-lib INTERFACE ${tinyobjloader_SOURCE_DIR})
 
+# Args lib
 FetchContent_Declare(
         args
         URL https://github.com/Taywee/args/raw/refs/tags/6.4.7/args.hxx
@@ -72,6 +74,25 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(args)
 add_library(args-lib INTERFACE ${args_SOURCE_DIR})
 target_include_directories(args-lib INTERFACE ${args_SOURCE_DIR})
+
+# raylib lib
+FetchContent_Declare(
+        raylib
+        GIT_REPOSITORY https://github.com/raysan5/raylib.git
+        GIT_COMMIT 4bc8d3761c48f4dcf56f126640da8f3567dc516b
+)
+FetchContent_MakeAvailable(raylib)
+
+# raygui lib
+FetchContent_Declare(
+        raygui
+        URL https://github.com/raysan5/raygui/raw/99b37e4d4fdc19e7bf73844d6b9f177cbb27ce24/src/raygui.h
+        URL_HASH SHA256=954c7b4ea8459f1f3a109138c7ee985019b79364a4523e14e83e8fa3d29b1448
+        DOWNLOAD_NO_EXTRACT ON
+)
+FetchContent_MakeAvailable(raygui)
+add_library(raygui-lib INTERFACE ${raygui_SOURCE_DIR})
+target_include_directories(raygui-lib INTERFACE ${raygui_SOURCE_DIR})
 
 file(GLOB_RECURSE SRC_FILES "src/*!(main).cpp" src/*.h src/*.cu)
 add_executable(gui
@@ -85,7 +106,7 @@ add_executable(pc
 
 
 target_link_libraries(gui PRIVATE ImGui-SFML::ImGui-SFML OpenMP::OpenMP_CXX tinyobjloader-lib args-lib)
-target_link_libraries(pc PRIVATE ImGui-SFML::ImGui-SFML OpenMP::OpenMP_CXX tinyobjloader-lib args-lib)
+target_link_libraries(pc PRIVATE ImGui-SFML::ImGui-SFML OpenMP::OpenMP_CXX tinyobjloader-lib args-lib raygui-lib raylib)
 
 
 set_target_properties(gui PROPERTIES
