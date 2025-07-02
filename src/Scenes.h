@@ -313,7 +313,7 @@ constexpr static Scene *cornell_zoom() {
 
     cornell_box_mesh.materials[4] = Material{GGXBRDF{Color{.1, .1, .1}, 0.08, 1}};
     teapot_mesh.materials[0] = Material{GGXBRDF{Color{1, .4, .0}, 0.1, 1}};
-    dragon_mesh.materials[0] = Material{GGXBRDF{Color{0, 1, 0}, 0.2, 0}};
+    dragon_mesh.materials[0] = Material{GGXBRDF{Color{121, 121, 121}/255, 0.3, 1}};
 
     const auto scene = new Scene(camera);
     scene->add_mesh(cornell_box_mesh);

@@ -214,7 +214,7 @@ public:
 
                 if (dot_product >= 0) {
                     const auto shadow_ray = Ray{p, light_direction};
-                    if (!scene.intersects(shadow_ray, light_distance)) {
+                    if (!scene.does_intersect(shadow_ray, light_distance)) {
                         const auto &c = material.BRDF(light_direction, -current_ray.direction, normal);
                         accumulated_lighting += attenuation * c * light_color;
                     }
@@ -233,7 +233,7 @@ public:
         return final_color;
     }
 
-    void render(unsigned char pixels[], const Scene &scene, const std::stop_token &st = {}) const {
+    void render_cgi(unsigned char out_pixels[], const Scene &scene, const std::stop_token &st = {}) const {
         const auto start = now();
         printf("\n[ INFO ] Starting cgi render...\n");
         printf("         Using CPU (%d threads)\n", thread_count);
@@ -241,7 +241,7 @@ public:
         printf("         Samples: %d\n", samples_per_pixel);
         printf("         Depth: %d\n", max_depth);
 
-#pragma omp parallel for collapse(1) shared(pixels, scene, st) default(none) num_threads(thread_count) schedule(dynamic)
+#pragma omp parallel for collapse(1) shared(out_pixels, scene, st) default(none) num_threads(thread_count) schedule(dynamic)
         for (int y = 0; y < IMAGE_HEIGHT; y++) {
             if (st.stop_requested()) [[unlikely]] continue;
             for (int x = 0; x < IMAGE_WIDTH; x++) {
@@ -253,10 +253,10 @@ public:
                 }
                 color = (color / samples_per_pixel).clamp(0, 1);
 
-                pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
-                pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
-                pixels[(y * IMAGE_WIDTH + x) * 4 + 2] = static_cast<unsigned char>(std::sqrt(color.b) * 255);
-                pixels[(y * IMAGE_WIDTH + x) * 4 + 3] = 255;
+                out_pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
+                out_pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
+                out_pixels[(y * IMAGE_WIDTH + x) * 4 + 2] = static_cast<unsigned char>(std::sqrt(color.b) * 255);
+                out_pixels[(y * IMAGE_WIDTH + x) * 4 + 3] = 255;
             }
         }
         printf("         Finished cgi render in \033[92;40m%s\033[0m\n", get_human_time((now() - start) / 1000.f).c_str());
@@ -290,11 +290,12 @@ public:
 
     // __attribute__((flatten))
     // TODO: hacer que la nube de puntos se calcule aqí.
-    void render_cgh(unsigned char pixels[], std::complex<Real> complex_pixels[], const Scene &scene, PointCloud &point_cloud,
+    void render_cgh(unsigned char out_pixels[], std::complex<Real> out_complex_pixels[], const Scene &scene, PointCloud &point_cloud,
                     const std::stop_token &st = {}) {
         auto start = now();
         printf("[ INFO ] Starting color generation for the point cloud...\n");
 
+        // Computes point color
 #pragma omp parallel for collapse(1) shared(point_cloud, scene, st) default(none) num_threads(thread_count) schedule(dynamic)
         for (auto &[point, color, phase]: point_cloud) {
             if (st.stop_requested()) [[unlikely]] continue;
@@ -310,17 +311,19 @@ public:
         }
         const auto t = now() - start;
         printf("         Ended color generation for the point cloud in %s (%.2f ms/point)\n", get_human_time(t / 1000.f).c_str(), 1.f * t / point_cloud.size());
-        point_cloud.save_binary_point_cloud("../point_cloud.bin");
+        //point_cloud.save_binary_point_cloud("../point_cloud.bin");
 
         // Clear the pixels
         for (int x = 0; x < IMAGE_WIDTH; x++) {
             for (int y = 0; y < IMAGE_HEIGHT; y++) {
-                pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = 0;
-                pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = 0;
-                pixels[(y * IMAGE_WIDTH + x) * 4 + 2] = 0;
-                pixels[(y * IMAGE_WIDTH + x) * 4 + 3] = 255;
+                out_pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = 0;
+                out_pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = 0;
+                out_pixels[(y * IMAGE_WIDTH + x) * 4 + 2] = 0;
+                out_pixels[(y * IMAGE_WIDTH + x) * 4 + 3] = 255;
             }
         }
+
+        //// Erase points with less than 1% in all channels
         //const auto og_size = point_cloud.size();
         //std::erase_if(point_cloud, [](const auto &p) {
         //    auto color = std::get<1>(p);
@@ -328,13 +331,16 @@ public:
         //});
         //printf("Trimmed %ld points with less than 1%% in all channels\n", point_cloud.size() - og_size);
 
+        // Draw the points as temporary visualization
         for (auto &[point, color, phase]: point_cloud) {
             const auto [x, y] = project(point);
-            pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
-            pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
-            pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 2] = static_cast<unsigned char>(std::sqrt(color.b) * 255);
-            pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 3] = 255;
+            out_pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
+            out_pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
+            out_pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 2] = static_cast<unsigned char>(std::sqrt(color.b) * 255);
+            out_pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 3] = 255;
         }
+
+        // If the thread is asked to stop
         if (st.stop_requested()) [[unlikely]] return;
         assert(!point_cloud.empty());
 
@@ -344,7 +350,7 @@ public:
 #if ENABLE_OCCLUSION
         std::fprintf(stdout, "[ ERROR ] ENABLE_OCCLUSION not implemented in GPU. Ignoring option\n");
 #endif // #if #ENABLE_OCCLUSION
-        use_cuda(pixels, complex_pixels, point_cloud, slm_pixel_00_location, slm_pixel_delta_x, slm_pixel_delta_y);
+        use_cuda(out_pixels, out_complex_pixels, point_cloud, slm_pixel_00_location, slm_pixel_delta_x, slm_pixel_delta_y);
 #else // #if USE_GPU_FOR_CGH
 #pragma omp parallel for collapse(2) shared(pixels, complex_pixels, point_cloud, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)
         for (int y = 0; y < IMAGE_HEIGHT; y++) {
@@ -355,7 +361,7 @@ public:
                     for (const auto &[point, color, phase]: point_cloud) {
 #if ENABLE_OCCLUSION
                         const auto ray = Ray{slm_pixel_center, point - slm_pixel_center};
-                        const auto wave = compute_wave_2(ray, scene, point, color, phase);
+                        const auto wave = compute_wave_occlusion(ray, scene, point, color, phase);
 #else // #if ENABLE_OCCLUSION
                         const auto wave = compute_wave_no_occlusion(slm_pixel_center, point, color, phase);
 #endif // #if ENABLE_OCCLUSION #else
@@ -363,12 +369,12 @@ public:
                     }
 
                     agg /= static_cast<Real>(point_cloud.size());
-                    complex_pixels[(y * IMAGE_WIDTH + x)] = agg;
+                    out_complex_pixels[(y * IMAGE_WIDTH + x)] = agg;
                     const auto a = static_cast<unsigned char>((arg(agg) + std::numbers::pi) / (2 * std::numbers::pi) * 255);
-                    pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = a;
-                    pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = a;
-                    pixels[(y * IMAGE_WIDTH + x) * 4 + 2] = a;
-                    pixels[(y * IMAGE_WIDTH + x) * 4 + 3] = 255;
+                    out_pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = a;
+                    out_pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = a;
+                    out_pixels[(y * IMAGE_WIDTH + x) * 4 + 2] = a;
+                    out_pixels[(y * IMAGE_WIDTH + x) * 4 + 3] = 255;
                 }
             }
         }
@@ -441,7 +447,7 @@ public:
     //
     //         if (dot_product >= 0) {
     //             const auto shadow_ray = Ray{p, light_direction};
-    //             if (!scene.intersects(shadow_ray, light_distance)) {
+    //             if (!scene.does_intersect(shadow_ray, light_distance)) {
     //                 accumulated_lighting += attenuation * light_color * dot_product;
     //             }
     //         }

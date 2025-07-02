@@ -140,7 +140,7 @@ constexpr std::optional<TriangleIntersection> Triangle::intersect(const Ray &ray
     if (v < 0 || u + v > 1) { return {}; }
 
     const Real t = dot(edge2, s_cross_edge1) * inv_determinant;
-    if (t <= T_MIN) { return {}; } // This ray intersects this triangle, but the intersection is behind the ray
+    if (t <= T_MIN) { return {}; } // This ray intersect this triangle, but the intersection is behind the ray
 
     return TriangleIntersection{*this, t, u, v};
 }

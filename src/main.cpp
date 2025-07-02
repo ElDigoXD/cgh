@@ -541,8 +541,9 @@ public:
                 const auto mspp = (now() - start) / static_cast<double>(tmp_point_cloud.size());
                 printf("         Total render time: %s (%.2f ms/point)\n", get_human_time((now() - start) / 1000).c_str(), mspp);
                 //return;
-                //tmp_point_cloud.save_binary_point_cloud("../point_cloud.bin");
                 ////memset(pixels, 0, IMAGE_WIDTH * IMAGE_HEIGHT * 4);
+
+                // Render the real CGH
                 printf("\n[ INFO ] Starting CGH render...\n");
                 point_cloud = scene->camera->compute_point_cloud(*scene);
                 start = now();
@@ -551,11 +552,12 @@ public:
                 printf("         Expected render time: \033[92;40m%s\033[0m\n", get_human_time(expected_time).c_str());
                 scene->camera->render_cgh(pixels, complex_pixels, *scene, point_cloud, st);
                 printf("         Total render time: \033[92;40m%s\033[0m\n", get_human_time((now() - start) / 1000).c_str());
+                tmp_point_cloud.save_binary_point_cloud("../point_cloud.bin");
             } else {
                 if (enable_render_normals) {
                     scene->camera->render_normals(pixels, *scene, st);
                 } else {
-                    scene->camera->render(pixels, *scene, st);
+                    scene->camera->render_cgi(pixels, *scene, st);
                 }
             }
             texture.update(pixels, camera_image_size, {0, 0});

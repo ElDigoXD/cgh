@@ -23,7 +23,7 @@ public:
         : camera(camera) {
     }
 
-    [[nodiscard]] constexpr bool intersects(const Ray &ray, const Real max_t) const {
+    [[nodiscard]] constexpr bool does_intersect(const Ray &ray, const Real max_t) const {
         return std::ranges::any_of(meshes, [&](const Mesh &mesh) { return mesh.does_intersect(ray, max_t); });
     }
 
