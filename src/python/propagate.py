@@ -133,10 +133,12 @@ def main():
     parser.add_argument("-rgb", "--rgb", action="store_true", help="Only RGB image")
     parser.add_argument("-z", "--z", type=float, default=291, help="Z distance to propagate")
 
-    args = parser.parse_args()
     if len(sys.argv) == 1:
         parser.print_help()
-        exit(1)
+        exit(0)
+
+    args = parser.parse_args()
+
 
     image_path = args.CGH
     grayscale = args.grayscale
