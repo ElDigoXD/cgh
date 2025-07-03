@@ -5,7 +5,6 @@
 #include "Vecf.h"
 #include "Vector.h"
 
-
 struct PointCloudPoint {
     Point point;
     Vecf color;
@@ -13,7 +12,8 @@ struct PointCloudPoint {
 
     PointCloudPoint() = default;
 
-    PointCloudPoint(const Point &point, const Vecf &color, const float phase): point(point), color(color), phase(phase) {
+    PointCloudPoint(const Point &point, const Vecf &color, const float phase)
+        : point(point), color(color), phase(phase) {
     }
 };
 

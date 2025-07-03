@@ -7,11 +7,14 @@
 #include "imgui.h"
 #include "SFML/Graphics.hpp"
 
-#include "Camera.h"
+#include "OrthoCamera.h"
+#include "PointCloud.h"
+#include "Renderer.h"
 #include "Scene.h"
 #include "Scenes.h"
 #include "typedefs.h"
 #include "Vector.h"
+
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
@@ -43,7 +46,12 @@ public:
     int max_depth = 10;
     int samples_per_pixel = 100;
     const sf::Vector2u camera_image_size{IMAGE_WIDTH, IMAGE_HEIGHT};
-
+    int point_cloud_size[2] = {IMAGE_WIDTH, IMAGE_HEIGHT};
+    Renderer renderer{
+        .thread_count = 16,
+        .samples_per_pixel = samples_per_pixel,
+        .max_depth = max_depth
+    };
 
     sf::VertexArray wire;
     sf::VertexArray wire_aabb;
@@ -197,7 +205,8 @@ public:
 
             auto render_states = sf::RenderStates::Default;
             render_states.transform.scale({
-                image_size.x / static_cast<float>(camera_image_size.x), image_size.y / static_cast<float>(camera_image_size.y)
+                image_size.x / static_cast<float>(camera_image_size.x),
+                image_size.y / static_cast<float>(camera_image_size.y)
             });
 
             if (enable_render) {
@@ -298,14 +307,14 @@ public:
 
             ImGui::PushItemWidth(ImGui::GetWindowWidth() / 2);
             if (ImGui::SliderInt("Max Depth", &max_depth, 1, 1000, "%d", ImGuiSliderFlags_Logarithmic)) {
-                scene->camera->max_depth = max_depth;
+                renderer.max_depth = max_depth;
                 update_render();
             }
             if (ImGui::SliderInt("Samples", &samples_per_pixel, 1, 1000, "%d", ImGuiSliderFlags_Logarithmic)) {
-                scene->camera->samples_per_pixel = samples_per_pixel;
+                renderer.samples_per_pixel = samples_per_pixel;
                 update_render();
             }
-            if (ImGui::SliderInt("Threads", &scene->camera->thread_count, 1, static_cast<int>(std::thread::hardware_concurrency() * 2))) {
+            if (ImGui::SliderInt("Threads", &renderer.thread_count, 1, static_cast<int>(std::thread::hardware_concurrency() * 2))) {
                 update_render();
             }
             ImGui::PopItemWidth();
@@ -324,7 +333,9 @@ public:
                 }
             }
 
-            const float tmp_render_time = rendering ? timer.getElapsedTime().asSeconds() - start_time.asSeconds() : render_time;
+            const float tmp_render_time = rendering
+                                              ? timer.getElapsedTime().asSeconds() - start_time.asSeconds()
+                                              : render_time;
             im::Text("Render time: %s", get_human_time(tmp_render_time).c_str());
             if (mouse_button_pressed) {
                 im::Text("FPS: %.1f", 1 / dt.asSeconds());
@@ -369,8 +380,7 @@ public:
 
 
             ImGui::Text("Point Cloud Size:");
-            if (ImGui::DragInt2("##Point Cloud Size", &scene->camera->point_cloud_screen_height_in_px, 10, 40, 1000)) {
-                scene->camera->update();
+            if (ImGui::DragInt2("##Point Cloud Size", point_cloud_size, 10, 40, 1000)) {
                 if (enable_render_cgh) {
                     update_render();
                 }
@@ -501,7 +511,7 @@ public:
 
     void stop_render_and_wait() {
         if (rendering) {
-            scene->camera->samples_per_pixel = 0;
+            renderer.samples_per_pixel = 0;
             render_thread.request_stop();
             if (render_thread.joinable()) render_thread.join();
             rendering = false;
@@ -521,23 +531,25 @@ public:
         render_thread = std::jthread([&](const std::stop_token &st) {
             rendering = true;
             start_time = timer.getElapsedTime();
-            scene->camera->samples_per_pixel = samples_per_pixel;
-            scene->camera->max_depth = max_depth;
+            renderer.samples_per_pixel = samples_per_pixel;
+            renderer.max_depth = max_depth;
             scene->camera->update();
             expected_time = 0;
             if (enable_render_cgh) {
                 // Get an approximated render time
-                auto tmp_camera = Camera(*scene->camera);
-                tmp_camera.point_cloud_screen_height_in_px = 50; // 50
-                tmp_camera.point_cloud_screen_width_in_px = 100; // 100
-                tmp_camera.samples_per_pixel = samples_per_pixel;
-                tmp_camera.max_depth = max_depth;
-                tmp_camera.update();
                 printf("\n[ INFO ] Computing a small CGH to get expected time...\n");
-                auto tmp_point_cloud = tmp_camera.compute_point_cloud(*scene);
-                printf("         Points: %s\n", add_thousand_separator(tmp_point_cloud.size()).c_str());
                 auto start = now();
-                tmp_camera.render_cgh(pixels, complex_pixels, *scene, tmp_point_cloud, st);
+                auto tmp_point_cloud = renderer.compute_point_cloud_orthographic(*scene, 100, 50);
+                printf("         Points: %s\n", add_thousand_separator(tmp_point_cloud.size()).c_str());
+                // Draw the points as temporary visualization
+                for (const auto &[point, color, phase]: tmp_point_cloud) {
+                    const auto [x, y] = scene->camera->project(point);
+                    pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
+                    pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
+                    pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 2] = static_cast<unsigned char>(std::sqrt(color.b) * 255);
+                    pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 3] = 255;
+                }
+                renderer.render_cgh(pixels, complex_pixels, *scene, tmp_point_cloud, st);
                 const auto mspp = (now() - start) / static_cast<double>(tmp_point_cloud.size());
                 printf("         Total render time: %s (%.2f ms/point)\n", get_human_time((now() - start) / 1000).c_str(), mspp);
                 //return;
@@ -545,19 +557,27 @@ public:
 
                 // Render the real CGH
                 printf("\n[ INFO ] Starting CGH render...\n");
-                point_cloud = scene->camera->compute_point_cloud(*scene);
                 start = now();
+                point_cloud = renderer.compute_point_cloud_orthographic(*scene, point_cloud_size[0], point_cloud_size[1]);
+                printf("         Expected render time: \033[92;40m%s\033[0m\n", get_human_time(expected_time).c_str());
                 expected_time = mspp * point_cloud.size() / 1000;
                 printf("         Points: %s\n", add_thousand_separator(point_cloud.size()).c_str());
-                printf("         Expected render time: \033[92;40m%s\033[0m\n", get_human_time(expected_time).c_str());
-                scene->camera->render_cgh(pixels, complex_pixels, *scene, point_cloud, st);
+                // Draw the points as temporary visualization
+                for (auto const &[point, color, phase]: point_cloud) {
+                    const auto [x, y] = scene->camera->project(point);
+                    pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
+                    pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
+                    pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 2] = static_cast<unsigned char>(std::sqrt(color.b) * 255);
+                    pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 3] = 255;
+                }
+                renderer.render_cgh(pixels, complex_pixels, *scene, point_cloud, st);
                 printf("         Total render time: \033[92;40m%s\033[0m\n", get_human_time((now() - start) / 1000).c_str());
-                tmp_point_cloud.save_binary_point_cloud("../point_cloud.bin");
+                point_cloud.save_binary_point_cloud("../point_cloud.bin");
             } else {
                 if (enable_render_normals) {
-                    scene->camera->render_normals(pixels, *scene, st);
+                    renderer.render_normals(pixels, *scene, st);
                 } else {
-                    scene->camera->render_cgi(pixels, *scene, st);
+                    renderer.render_cgi(pixels, *scene, st);
                 }
             }
             texture.update(pixels, camera_image_size, {0, 0});
@@ -727,7 +747,7 @@ public:
 
         assert(scene != nullptr);
 
-        scene->camera->max_depth = max_depth;
+        renderer.max_depth = max_depth;
         // point_cloud = scene->camera->compute_point_cloud(*scene);
     }
 
@@ -782,7 +802,8 @@ public:
                     static_cast<float>(L.z * w2 * -200 + 200)
                 };
                 wire_diffuse[i].color = sf::Color{255, 255, 255, 255};
-            } else { // Shows the brdf luminance at all outgoing directions
+            } else {
+                // Shows the brdf luminance at all outgoing directions
                 auto c = current_material->BRDF(L, V, N);
                 auto cl = luminance(c);
                 wire_combined[i].position = sf::Vector2f{

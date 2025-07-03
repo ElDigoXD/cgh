@@ -1,15 +1,14 @@
 #pragma once
 
 
-#include <functional>
-
 #include "AABB.h"
 #include "Material.h"
 #include "Mesh.h"
 #include "ObjReader.h"
+#include "OrthoCamera.h"
 #include "Triangle.h"
 
-class Camera;
+using Camera = OrthoCamera;
 
 class Scene {
 public:

@@ -1,12 +1,14 @@
 #pragma once
 #include <functional>
 
-#include "Camera.h"
+#include "OrthoCamera.h"
 
 constexpr static Scene *basic_triangle() {
-    auto *camera = new Camera();
-    camera->look_from = {0, 1, 300};
-    camera->update();
+    auto *camera = new Camera(
+        {0, 0, 0}, /* look_at */
+        {0, 1, 300} /* look_from */
+    );
+
     const auto materials = std::vector{Material{Color{0.1, 0.1, 0.1}}};
 
     auto mesh = Mesh{
@@ -34,9 +36,10 @@ constexpr static Scene *basic_triangle() {
 
 
 constexpr static Scene *cornell_box() {
-    auto *camera = new Camera();
-    camera->look_from = {50, 50, 290};
-    camera->update();
+    auto *camera = new Camera(
+        {0, 0, 0}, /* look_at */
+        {50, 50, 290} /* look_from */
+    );
 
     auto mesh = load("../resources/cornell_box_2.obj");
     mesh.flip(Axis::Z);
@@ -50,9 +53,10 @@ constexpr static Scene *cornell_box() {
 }
 
 constexpr static Scene *sphere_mesh() {
-    auto *camera = new Camera();
-    camera->look_from = {0, 0, 300};
-    camera->update();
+    auto *camera = new Camera(
+        {0, 0, 0}, /* look_at */
+        {0, 0, 300} /* look_from */
+    );
 
     auto mesh = load("../resources/low-poly-sphere.obj");
     mesh.normalize();
@@ -65,9 +69,10 @@ constexpr static Scene *sphere_mesh() {
 }
 
 constexpr static Scene *pumpkin() {
-    auto *camera = new Camera();
-    camera->look_from = {40, 200, 300};
-    camera->update();
+    auto *camera = new Camera(
+        {0, 0, 0}, /* look_at */
+        {40, 200, 300} /* look_from */
+    );
 
     auto mesh = load("../resources/pumpkin.obj");
     mesh.change_up_coord();
@@ -84,9 +89,11 @@ constexpr static Scene *pumpkin() {
 }
 
 constexpr static Scene *teapot() {
-    auto *camera = new Camera();
-    camera->look_from = {50, 50, 290};
-    camera->update();
+    auto *camera = new Camera(
+        {0, 0, 0}, /* look_at */
+        {50, 50, 290} /* look_from */
+    );
+
     auto mesh = load("../resources/teapot.obj");
 
     mesh.normalize();
@@ -117,9 +124,10 @@ constexpr static Scene *teapot() {
 }
 
 constexpr static Scene *multi_mesh() {
-    auto *camera = new Camera();
-    camera->look_from = {50, 0, 290};
-    camera->update();
+    auto *camera = new Camera(
+        {0, 0, 0}, /* look_at */
+        {50, 0, 290} /* look_from */
+    );
 
     auto factor = 6.5f / 3.2f;
     //factor = 1.f;
@@ -162,9 +170,10 @@ constexpr static Scene *multi_mesh() {
 }
 
 constexpr static Scene *dragon() {
-    auto *camera = new Camera();
-    camera->look_from = {50, 50, 290};
-    camera->update();
+    auto *camera = new Camera(
+        {0, 0, 0}, /* look_at */
+        {50, 50, 290} /* look_from */
+    );
 
     auto mesh = load("../resources/dragon.obj");
 
@@ -181,9 +190,10 @@ constexpr static Scene *dragon() {
 }
 
 constexpr static Scene *tree() {
-    auto *camera = new Camera();
-    camera->look_from = {50, 50, 290};
-    camera->update();
+    auto *camera = new Camera(
+        {0, 0, 0}, /* look_at */
+        {50, 50, 290} /* look_from */
+    );
 
     auto mesh = load("../resources/tree.obj");
 
@@ -199,10 +209,10 @@ constexpr static Scene *tree() {
 }
 
 constexpr static Scene *bmw() {
-    auto *camera = new Camera();
-    camera->look_from = {50, 50, 290};
-    camera->update();
-
+    auto *camera = new Camera(
+        {0, 0, 0}, /* look_at */
+        {50, 50, 290} /* look_from */
+    );
 
     auto mesh = load("../resources/bmw.obj");
 
@@ -232,10 +242,10 @@ constexpr static Scene *bmw() {
 }
 
 constexpr static Scene *knob() {
-    auto *camera = new Camera();
-    camera->look_from = {-162, 100, -232};
-    camera->update();
-
+    auto *camera = new Camera(
+        {0, 0, 0}, /* look_at */
+        {-162, 100, -232} /* look_from */
+    );
 
     auto mesh = load("../resources/testObj.obj");
 
@@ -267,9 +277,10 @@ constexpr static Scene *knob() {
 }
 
 constexpr static Scene *cornell_zoom() {
-    auto *camera = new Camera();
-    camera->look_from = {50, 50, 290};
-    camera->update();
+    auto *camera = new Camera(
+        {0, 0, 0}, /* look_at */
+        {50, 50, 290} /* look_from */
+    );
 
     constexpr auto factor = 2.6f * IMAGE_HEIGHT / VIRTUAL_SLM_FACTOR / 400.f;
     constexpr auto center = Vecf{0, -0.2, 0};
@@ -313,7 +324,7 @@ constexpr static Scene *cornell_zoom() {
 
     cornell_box_mesh.materials[4] = Material{GGXBRDF{Color{.1, .1, .1}, 0.08, 1}};
     teapot_mesh.materials[0] = Material{GGXBRDF{Color{1, .4, .0}, 0.1, 1}};
-    dragon_mesh.materials[0] = Material{GGXBRDF{Color{121, 121, 121}/255, 0.3, 1}};
+    dragon_mesh.materials[0] = Material{GGXBRDF{Color{121, 121, 121} / 255, 0.3, 1}};
 
     const auto scene = new Scene(camera);
     scene->add_mesh(cornell_box_mesh);

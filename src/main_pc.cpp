@@ -5,7 +5,8 @@
 #include <cstdio>
 #include <thread>
 
-#include "Camera.h"
+#include "cuda.h"
+#include "OrthoCamera.h"
 #include "PointCloud.h"
 
 namespace rl {
@@ -36,9 +37,9 @@ void reduce_point_cloud(PointCloud &pc, const int target_points) {
 }
 
 void compute_n_cghs(PointCloud pc, const int n, const std::string &output_path) {
-    auto *camera = new Camera();
-    camera->look_from = {50, 50, 290};
-    camera->update();
+    auto *camera = new OrthoCamera(
+        {0, 0, 0}, /* look_at */
+        {50, 50, 290} /* look_from */);
 
     const auto pixels = new unsigned char[IMAGE_WIDTH * IMAGE_HEIGHT * 4];
     const auto complex_pixels = new std::complex<Real>[IMAGE_WIDTH * IMAGE_HEIGHT * 4];
@@ -48,8 +49,7 @@ void compute_n_cghs(PointCloud pc, const int n, const std::string &output_path) 
         for (auto &p: pc) {
             p.phase = rand_real() * 2; // In the range [0, 2) instead of [0, 2π) to comply with the CUDA implementation
         }
-        use_cuda(pixels, complex_pixels, pc, camera->slm_pixel_00_location, camera->slm_pixel_delta_x,
-                 camera->slm_pixel_delta_y);
+        use_cuda(pixels, complex_pixels, pc, camera->pixel_00_position, camera->pixel_delta_x, camera->pixel_delta_y);
         fprintf(stderr, "[ RESULT ] %d Time: \t%.2f \tPoints: \t%lu\n", i, (now() - start) / 1000.f, pc.size());
         auto filename = output_path + std::to_string(i) + std::string{".png"};
         printf("Saving CGH to %s\n", filename.c_str());
