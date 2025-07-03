@@ -6,8 +6,6 @@
 #include "Scene.h"
 #include "utils.h"
 
-class Scene;
-
 class Renderer {
 public:
     int thread_count;
