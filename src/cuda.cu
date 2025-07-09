@@ -93,15 +93,20 @@ __global__ void kernel(cuda::std::complex<double> *out_complex_pixels, unsigned 
     out_pixels[pixel_index * 4 + 3] = static_cast<unsigned char>((arg(agg_luminance) + M_PIf) * SCALE);
     //out_pixels[pixel_index * 4 + 3] = 255;
 #else // #if ENABLE_COLOR_CGH
-    const auto luminance = agg_luminance / static_cast<REAL_T>(point_cloud.size());
-    out_complex_pixels[pixel_index] = luminance;
 #if VIRTUAL_SLM_FACTOR == 1
-    const auto a = static_cast<uint8_t>((arg(luminance) + std::numbers::pi) / (2 * std::numbers::pi) * 255);
+    const auto l = static_cast<unsigned char>((arg(agg_luminance) + M_PIf) * SCALE);
+    out_pixels[pixel_index * 4 + 0] = l;
+    out_pixels[pixel_index * 4 + 1] = l;
+    out_pixels[pixel_index * 4 + 2] = l;
+    out_pixels[pixel_index * 4 + 3] = 255;
+#elif VIRTUAL_SLM_FACTOR > 1
+    const auto luminance = agg_luminance / static_cast<REAL_T>(point_cloud.size());
+    const auto a =  static_cast<unsigned char>((arg(luminance) + M_PIf) * SCALE);
     out_pixels[pixel_index * 4 + 0] = a;
     out_pixels[pixel_index * 4 + 1] = a;
     out_pixels[pixel_index * 4 + 2] = a;
     out_pixels[pixel_index * 4 + 3] = 255;
-#endif // #if VIRTUAL_SLM_FACTOR == 1
+#endif // #if VIRTUAL_SLM_FACTOR
 #endif // #if ENABLE_COLOR_CGH #else
 }
 
@@ -129,13 +134,8 @@ __host__ void use_cuda(unsigned char out_pixels[], std::complex<Real> out_comple
 
     unsigned char *out_pixels_buff;
     cuda::std::complex<double> *complex_pixels_buff;
-#if ENABLE_COLOR_CGH
     CU(cudaMallocManaged(&complex_pixels_buff, num_pixels * sizeof(cuda::std::complex<double>)));
-#endif // #if ENABLE_COLOR_CGH
     CU(cudaMallocManaged(&out_pixels_buff, num_pixels * 4 * sizeof(unsigned char)));
-#if VIRTUAL_SLM_FACTOR == 1
-    CU(cudaMallocManaged(&out_pixels_buff, num_pixels * 4 * sizeof(unsigned char)));
-#endif // #if VIRTUAL_SLM_FACTOR == 1
     kernel<<<grid, block>>>(complex_pixels_buff, out_pixels_buff, point_cloud, slm_pixel_00_location, slm_pixel_delta_x,
                             slm_pixel_delta_y);
     CU(cudaGetLastError());

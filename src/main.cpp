@@ -46,7 +46,7 @@ public:
     int max_depth = 10;
     int samples_per_pixel = 100;
     const sf::Vector2u camera_image_size{IMAGE_WIDTH, IMAGE_HEIGHT};
-    int point_cloud_size[2] = {IMAGE_WIDTH, IMAGE_HEIGHT};
+    int point_cloud_size[2] = {IMAGE_WIDTH / 10, IMAGE_HEIGHT / 10};
     Renderer renderer{
         .thread_count = 16,
         .samples_per_pixel = samples_per_pixel,
@@ -290,16 +290,23 @@ public:
                 im::Unindent(10);
             }
             ImGui::Checkbox("Enable lights", &enable_lights);
-
+            ImGui::Checkbox("Use GPU", &renderer.use_gpu);
             if (ImGui::Checkbox("Enable render", &enable_render)) {
                 update_render();
             }
             if (enable_render) {
                 im::Indent(5);
                 if (ImGui::Checkbox("Enable render cgh", &enable_render_cgh)) {
+                    if (enable_render_cgh) enable_render_normals = false;
                     update_render();
                 }
+                im::Indent(5);
+                if (ImGui::Checkbox("Enable occlussion", &renderer.enable_occlusion)) {
+                    if (enable_render_cgh) update_render();
+                }
+
                 if (ImGui::Checkbox("Enable render normals", &enable_render_normals)) {
+                    if (enable_render_normals) enable_render_cgh = false;
                     update_render();
                 }
                 im::Unindent(5);
@@ -558,10 +565,13 @@ public:
                 // Render the real CGH
                 printf("\n[ INFO ] Starting CGH render...\n");
                 start = now();
+                start_time = timer.getElapsedTime();
+                printf("         Getting point cloud with a size of %d x %d...\n", point_cloud_size[0], point_cloud_size[1]);
                 point_cloud = renderer.compute_point_cloud_orthographic(*scene, point_cloud_size[0], point_cloud_size[1]);
-                printf("         Expected render time: \033[92;40m%s\033[0m\n", get_human_time(expected_time).c_str());
                 expected_time = mspp * point_cloud.size() / 1000;
                 printf("         Points: %s\n", add_thousand_separator(point_cloud.size()).c_str());
+                printf("         Expected render time: \033[92;40m%s\033[0m\n", get_human_time(expected_time).c_str());
+                clear_pixels();
                 // Draw the points as temporary visualization
                 for (auto const &[point, color, phase]: point_cloud) {
                     const auto [x, y] = scene->camera->project(point);
@@ -849,6 +859,15 @@ public:
         brdf_samples_texture.draw(normal);
         brdf_samples_texture.draw(circle);
         brdf_samples_texture.display();
+    }
+
+    void clear_pixels() const {
+        for (uint i = 0; i < IMAGE_WIDTH * IMAGE_HEIGHT * 4; i += 4) {
+            pixels[i + 0] = 3;
+            pixels[i + 1] = 62;
+            pixels[i + 2] = 114;
+            pixels[i + 3] = 255;
+        }
     }
 };
 

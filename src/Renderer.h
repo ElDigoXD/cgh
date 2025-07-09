@@ -11,6 +11,8 @@ public:
     int thread_count;
     int samples_per_pixel;
     int max_depth;
+    bool use_gpu;
+    bool enable_occlusion;
 
     [[nodiscard]]
     PointCloud compute_point_cloud_orthographic(const Scene &scene, const int width, const int height) const {
@@ -85,42 +87,43 @@ public:
 
         printf("[ INFO ] Starting wave computation...\n");
         auto start = now();
-#if USE_GPU_FOR_CGH
-#if ENABLE_OCCLUSION
-        std::fprintf(stdout, "[ ERROR ] ENABLE_OCCLUSION not implemented in GPU. Ignoring option\n");
-#endif // #if ENABLE_OCCLUSION
-        use_cuda(out_pixels, out_complex_pixels, point_cloud, scene.camera->pixel_00_position,
-                 scene.camera->pixel_delta_x, scene.camera->pixel_delta_y);
-#else // #if USE_GPU_FOR_CGH
-        static constexpr Real wavelength = 0.6328e-3;
-        static constexpr Real two_pi_over_wavelength = 2 * std::numbers::pi / wavelength;
-#pragma omp parallel for collapse(2) shared(pixels, complex_pixels, point_cloud, scene, st) default(none) num_threads(MAX_THREADS) schedule(dynamic)
-        for (int y = 0; y < IMAGE_HEIGHT; y++) {
-            for (int x = 0; x < IMAGE_WIDTH; x++) {
-                if (!st.stop_requested()) [[likely]] {
-                    const auto slm_pixel_center = scene.camera->pixel_00_position + (scene.camera->pixel_delta_x * x) + (scene.camera->pixel_delta_y * y);
-                    std::complex<Real> agg;
-                    for (const auto &[point, color, phase]: point_cloud) {
-#if ENABLE_OCCLUSION
-                        const auto ray = Ray{slm_pixel_center, point - slm_pixel_center};
-                        const auto wave = compute_wave_occlusion(ray, scene, point, color, phase, two_pi_over_wavelength);
-#else // #if ENABLE_OCCLUSION
-                        const auto wave = compute_wave_no_occlusion(slm_pixel_center, point, color, phase, two_pi_over_wavelength);
-#endif // #if ENABLE_OCCLUSION #else
-                        agg += wave;
-                    }
+        if (use_gpu) {
+            if (enable_occlusion) {
+                std::fprintf(stdout, "[ ERROR ] ENABLE_OCCLUSION not implemented in GPU. Ignoring option\n");
+            }
+            use_cuda(out_pixels, out_complex_pixels, point_cloud, scene.camera->pixel_00_position,
+                     scene.camera->pixel_delta_x, scene.camera->pixel_delta_y);
+        } else {
+            static constexpr Real wavelength = 0.6328e-3;
+            static constexpr Real two_pi_over_wavelength = 2 * std::numbers::pi / wavelength;
+#pragma omp parallel for collapse(2) shared(out_pixels, out_complex_pixels, point_cloud, scene, st) default(none) num_threads(thread_count) schedule(dynamic)
+            for (int y = 0; y < IMAGE_HEIGHT; y++) {
+                for (int x = 0; x < IMAGE_WIDTH; x++) {
+                    if (!st.stop_requested()) [[likely]] {
+                        const auto slm_pixel_center = scene.camera->pixel_00_position + (scene.camera->pixel_delta_x * x) + (scene.camera->pixel_delta_y * y);
+                        std::complex<Real> agg;
+                        for (const auto &[point, color, phase]: point_cloud) {
+                            std::complex<Real> wave;
+                            if (enable_occlusion) {
+                                const auto ray = Ray{slm_pixel_center, point - slm_pixel_center};
+                                wave = compute_wave_occlusion(ray, scene, point, color, phase, two_pi_over_wavelength);
+                            } else {
+                                wave = compute_wave_no_occlusion(slm_pixel_center, point, color, phase, two_pi_over_wavelength);
+                            }
+                            agg += wave;
+                        }
 
-                    agg /= static_cast<Real>(point_cloud.size());
-                    out_complex_pixels[(y * IMAGE_WIDTH + x)] = agg;
-                    const auto a = static_cast<unsigned char>((arg(agg) + std::numbers::pi) / (2 * std::numbers::pi) * 255);
-                    out_pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = a;
-                    out_pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = a;
-                    out_pixels[(y * IMAGE_WIDTH + x) * 4 + 2] = a;
-                    out_pixels[(y * IMAGE_WIDTH + x) * 4 + 3] = 255;
+                        agg /= static_cast<Real>(point_cloud.size());
+                        out_complex_pixels[(y * IMAGE_WIDTH + x)] = agg;
+                        const auto a = static_cast<unsigned char>((arg(agg) + std::numbers::pi) / (2 * std::numbers::pi) * 255);
+                        out_pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = a;
+                        out_pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = a;
+                        out_pixels[(y * IMAGE_WIDTH + x) * 4 + 2] = a;
+                        out_pixels[(y * IMAGE_WIDTH + x) * 4 + 3] = 255;
+                    }
                 }
             }
         }
-#endif // #if USE_GPU_FOR_CGH #else
         printf("         Ended wave computation in %s (%.2f ms/point)\n",
                get_human_time((now() - start) / 1000.f).c_str(), 1.f * (now() - start) / point_cloud.size());
     }
