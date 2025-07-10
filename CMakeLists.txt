@@ -4,6 +4,7 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 20)
 set(CMAKE_CUDA_ARCHITECTURES native)
 set(CMAKE_CUDA_FLAGS "-march=native -Wall -Wextra --expt-relaxed-constexpr")
+set(CMAKE_CUDA_FLAGS_DEBUG "-g -G")
 set(CMAKE_CUDA_FLAGS_RELWITHDEBINFO "-O3 -Xptxas -O3")
 set(CMAKE_CUDA_FLAGS_RELEASE "-O3 -Xptxas -O3")
 set(CMAKE_CUDA_COMPILER "/usr/local/cuda-12.8/bin/nvcc")
@@ -17,6 +18,12 @@ set(CMAKE_CXX_COMPILER "/usr/bin/g++-14")
 
 project(untitled LANGUAGES CXX CUDA)
 include(FetchContent)
+
+# Deps:
+# - Cuda: https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=WSL-Ubuntu&target_version=2.0&target_type=deb_local
+# - GCC14: sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+# - other: sudo apt install cmake gdb ninja-build build-essential
+# - libs: sudo apt install libx11-dev libxrandr-dev libxcursor-dev libxi-dev libgl1-mesa-dev libudev-dev libfreetype-dev libxinerama-dev
 
 FetchContent_Declare(
         imgui

@@ -64,9 +64,9 @@ __constant__ REAL_T one_over_wavelength_red = 1 / 0.0006328f; // Helium–neon l
 __constant__ REAL_T one_over_wavelength_green = 1 / 0.000532f; // Nd:YAG laser
 __constant__ REAL_T one_over_wavelength_blue = 1 / 0.000441563f; // Helium–cadmium laser
 
-__global__ void kernel(cuda::std::complex<double> *out_complex_pixels, unsigned char *out_pixels, const PointCloud &point_cloud,
-                       const Point &slm_pixel_00_location, const Vec &slm_pixel_delta_x,
-                       const Vec &slm_pixel_delta_y) {
+__global__ void kernel(cuda::std::complex<double> *out_complex_pixels, unsigned char *out_pixels,
+                       const PointCloudPoint *point_cloud, const unsigned int pc_size,
+                       const Point slm_pixel_00_location, const Vec slm_pixel_delta_x, const Vec slm_pixel_delta_y) {
     const uint x = threadIdx.x + blockIdx.x * blockDim.x;
     const uint y = threadIdx.y + blockIdx.y * blockDim.y;
     if ((x >= IMAGE_WIDTH) || (y >= IMAGE_HEIGHT)) return;
@@ -76,7 +76,8 @@ __global__ void kernel(cuda::std::complex<double> *out_complex_pixels, unsigned 
     const auto slm_pixel_center = slm_pixel_00_location + (slm_pixel_delta_x * x) + (slm_pixel_delta_y * y);
 
     COMPLEX_T agg_luminance, agg_red, agg_green, agg_blue;
-    for (const auto &[point, color, phase]: point_cloud) {
+    for (unsigned int i = 0; i < pc_size; i++) {
+        const auto [point, color, phase] = point_cloud[i];
         const auto distance_to_point = distance<REAL_T>(slm_pixel_center, point);
         agg_luminance += compute_wave<REAL_T>(one_over_wavelength_red, distance_to_point, luminance(color), phase);
 #if ENABLE_COLOR_CGH
@@ -134,14 +135,28 @@ __host__ void use_cuda(unsigned char out_pixels[], std::complex<Real> out_comple
 
     unsigned char *out_pixels_buff;
     cuda::std::complex<double> *complex_pixels_buff;
+
+#if VIRTUAL_SLM_FACTOR > 1
     CU(cudaMallocManaged(&complex_pixels_buff, num_pixels * sizeof(cuda::std::complex<double>)));
+#endif
     CU(cudaMallocManaged(&out_pixels_buff, num_pixels * 4 * sizeof(unsigned char)));
-    kernel<<<grid, block>>>(complex_pixels_buff, out_pixels_buff, point_cloud, slm_pixel_00_location, slm_pixel_delta_x,
+    PointCloudPoint *pc;
+    CU(cudaMallocManaged(&pc, point_cloud.size() * sizeof(PointCloudPoint)));
+    for (unsigned int i = 0; i < point_cloud.size(); i++) {
+        pc[i] = point_cloud[i];
+    }
+    CU(cudaGetLastError());
+#if VIRTUAL_SLM_FACTOR == 1
+    //CU(cudaMallocManaged(&out_pixels_buff, num_pixels * 4 * sizeof(unsigned char)));
+#endif // #if VIRTUAL_SLM_FACTOR == 1
+    kernel<<<grid, block>>>(complex_pixels_buff, out_pixels_buff, pc, point_cloud.size(), slm_pixel_00_location, slm_pixel_delta_x,
                             slm_pixel_delta_y);
     CU(cudaGetLastError());
     CU(cudaDeviceSynchronize());
     std::copy_n(out_pixels_buff, num_pixels * 4, out_pixels);
-    std::copy_n(complex_pixels_buff, num_pixels, out_complex_pixels);
     CU(cudaFree(out_pixels_buff));
+#if VIRTUAL_SLM_FACTOR > 1
+    std::copy_n(complex_pixels_buff, num_pixels, out_complex_pixels);
     CU(cudaFree(complex_pixels_buff));
+#endif
 }

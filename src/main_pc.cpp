@@ -143,6 +143,7 @@ int gui_main(PointCloud pc) {
     rl::GuiSetStyle(rl::DEFAULT, rl::TEXT_COLOR_NORMAL, 0x000000FF);
     rl::GuiSetStyle(rl::DEFAULT, rl::TEXT_COLOR_PRESSED, 0x101010FF);
     rl::GuiSetStyle(rl::DEFAULT, rl::TEXT_COLOR_FOCUSED, 0x202020FF);
+    rl::SetTraceLogLevel(rl::LOG_DEBUG);
 
     bool shouldUpdateTexture = true;
     GuiState state;
