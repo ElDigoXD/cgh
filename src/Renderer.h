@@ -34,6 +34,7 @@ public:
                     for (int i = 0; i < samples_per_pixel; i++) {
                         color += compute_ray_color(ray, scene, max_depth).clamp(0, 1);
                     }
+                    color /= samples_per_pixel;
                     point_cloud.emplace_back(ray.at(hit_data.value().t), Vecf{color.r, color.g, color.b}, 0);
                 }
             }
