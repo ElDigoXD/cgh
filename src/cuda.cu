@@ -29,10 +29,10 @@ void check_cuda(const cudaError_t result, char const *const func, const char *co
 }
 
 template<typename REAL_T>
-__device__ REAL_T distance(const Point &a, const Point &b) {
-    const REAL_T dx = static_cast<REAL_T>(a.x) - static_cast<REAL_T>(b.x);
-    const REAL_T dy = static_cast<REAL_T>(a.y) - static_cast<REAL_T>(b.y);
-    const REAL_T dz = static_cast<REAL_T>(a.z) - static_cast<REAL_T>(b.z);
+__device__ REAL_T distance(const Vecf &a, const Vecf &b) {
+    const REAL_T dx = a.x - b.x;
+    const REAL_T dy = a.y - b.y;
+    const REAL_T dz = a.z - b.z;
 
     if constexpr (std::is_same_v<REAL_T, float>) {
         return norm3df(dx, dy, dz);
@@ -65,8 +65,8 @@ __constant__ REAL_T one_over_wavelength_green = 1 / 0.000532f; // Nd:YAG laser
 __constant__ REAL_T one_over_wavelength_blue = 1 / 0.000441563f; // Helium–cadmium laser
 
 __global__ void kernel(cuda::std::complex<double> *out_complex_pixels, unsigned char *out_pixels,
-                       const PointCloudPoint *point_cloud, const unsigned int pc_size,
-                       const Point slm_pixel_00_location, const Vec slm_pixel_delta_x, const Vec slm_pixel_delta_y) {
+                       const PointCloudPoint<Vecf> *point_cloud, const unsigned int pc_size,
+                       const Vecf slm_pixel_00_location, const Vecf slm_pixel_delta_x, const Vecf slm_pixel_delta_y) {
     const uint x = threadIdx.x + blockIdx.x * blockDim.x;
     const uint y = threadIdx.y + blockIdx.y * blockDim.y;
     if ((x >= IMAGE_WIDTH) || (y >= IMAGE_HEIGHT)) return;
@@ -140,17 +140,17 @@ __host__ void use_cuda(unsigned char out_pixels[], std::complex<Real> out_comple
     CU(cudaMallocManaged(&complex_pixels_buff, num_pixels * sizeof(cuda::std::complex<double>)));
 #endif
     CU(cudaMallocManaged(&out_pixels_buff, num_pixels * 4 * sizeof(unsigned char)));
-    PointCloudPoint *pc;
-    CU(cudaMallocManaged(&pc, point_cloud.size() * sizeof(PointCloudPoint)));
+    PointCloudPoint<Vecf> *pc;
+    CU(cudaMallocManaged(&pc, point_cloud.size() * sizeof(PointCloudPoint<Vecf>)));
     for (unsigned int i = 0; i < point_cloud.size(); i++) {
-        pc[i] = point_cloud[i];
+        pc[i] = {Vecf{point_cloud[i].point.data}, point_cloud[i].color, point_cloud[i].phase};
     }
     CU(cudaGetLastError());
 #if VIRTUAL_SLM_FACTOR == 1
     //CU(cudaMallocManaged(&out_pixels_buff, num_pixels * 4 * sizeof(unsigned char)));
 #endif // #if VIRTUAL_SLM_FACTOR == 1
-    kernel<<<grid, block>>>(complex_pixels_buff, out_pixels_buff, pc, point_cloud.size(), slm_pixel_00_location, slm_pixel_delta_x,
-                            slm_pixel_delta_y);
+    kernel<<<grid, block>>>(complex_pixels_buff, out_pixels_buff, pc, point_cloud.size(),
+        Vecf{slm_pixel_00_location.data}, Vecf{slm_pixel_delta_x.data}, Vecf{slm_pixel_delta_y.data});
     CU(cudaGetLastError());
     CU(cudaDeviceSynchronize());
     std::copy_n(out_pixels_buff, num_pixels * 4, out_pixels);
