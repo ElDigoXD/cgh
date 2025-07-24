@@ -192,17 +192,17 @@ def main():
 
     if len(complex_data) == 1:  # Grayscale
         plt.imsave(f'output/propagation/{image_path.split("/")[-1]}_291.png',
-                   np.abs(propagate(complex_data[0], -290 * mm, wl_red)), cmap='gray')
-        plt.imshow(np.abs(propagate(complex_data[0], -290 * mm, wl_red)), cmap='gray')
+                   np.abs(propagate(complex_data[0], -z * mm, wl_red)), cmap='gray')
+        plt.imshow(np.abs(propagate(complex_data[0], -z * mm, wl_red)), cmap='gray')
         plt.show()
         # imsave_grayscale(292)
         # imsave_grayscale(300)
         # imsave_grayscale(306)
     else:
-        r = (np.abs(propagate(complex_data[0], -290 * mm, wl_red)))
-        g = (np.abs(propagate(complex_data[1], -290 * mm, wl_green)))
-        b = (np.abs(propagate(complex_data[2], -290 * mm, wl_blue)))
-        a = (np.abs(propagate(complex_data[3], -290 * mm, wl_red)))
+        r = (np.abs(propagate(complex_data[0], -z * mm, wl_red)))
+        g = (np.abs(propagate(complex_data[1], -z * mm, wl_green)))
+        b = (np.abs(propagate(complex_data[2], -z * mm, wl_blue)))
+        a = (np.abs(propagate(complex_data[3], -z * mm, wl_red)))
         # Normalize to 0-1 with the maximum value of the three channels
         # max_val = np.max([np.max(r), np.max(g), np.max(b)])
         # min_val = np.min([np.min(r), np.min(g), np.min(b)])
