@@ -1,4 +1,5 @@
 #include "config.h"
+#include "typedefs.h"
 
 #include <functional>
 #include <thread>
@@ -12,13 +13,13 @@
 #include "Renderer.h"
 #include "Scene.h"
 #include "Scenes.h"
-#include "typedefs.h"
 #include "Vector.h"
+#include "cuda.h"
 
 
 #define TINYOBJLOADER_IMPLEMENTATION
+#include "Scene.h"
 #include "tiny_obj_loader.h"
-
 
 class GUI {
 public:
@@ -46,11 +47,13 @@ public:
     int max_depth = 10;
     int samples_per_pixel = 100;
     const sf::Vector2u camera_image_size{IMAGE_WIDTH, IMAGE_HEIGHT};
-    int point_cloud_size[2] = {IMAGE_WIDTH / 10, IMAGE_HEIGHT / 10};
+    int point_cloud_size[2] = {IMAGE_WIDTH, IMAGE_HEIGHT};
     Renderer renderer{
         .thread_count = 16,
         .samples_per_pixel = samples_per_pixel,
-        .max_depth = max_depth
+        .max_depth = max_depth,
+        .use_gpu = true,
+        .enable_occlusion = false
     };
 
     sf::VertexArray wire;
@@ -93,8 +96,8 @@ public:
 
     void run() {
         // scene = basic_triangle(600, 400);
-        // scene->camera->max_depth = max_depth;
-        // scene->camera->samples_per_pixel = samples_per_pixel;
+        // scene->camera.max_depth = max_depth;
+        // scene->camera.samples_per_pixel = samples_per_pixel;
 
         enable_wireframe = false;
         enable_only_visible_wireframe = true;
@@ -117,14 +120,12 @@ public:
 
 
         for (uint i = 0; i < sizeof(scene_names) / sizeof(char *); i++) {
-            if (strcmp(scene_names[i], "cornell_zoom") == 0) {
+            if (strcmp(scene_names[i], "knob") == 0) {
                 selected_scene_idx = static_cast<int>(i);
                 break;
             }
         }
         update_scene();
-
-        //scene = test_mesh(600, 400);
 
         //camera.update(1920, 1080);
         memset(pixels, 256 / 2, max_window_size.x * max_window_size.y * 4);
@@ -170,7 +171,7 @@ public:
                             old_mouse_position = event_mp->position;
                             //window.setMouseCursorVisible(false);
                         } else {
-                            const auto &ray = scene->camera->get_orthogonal_ray_at(sf::Mouse::getPosition(window).x, sf::Mouse::getPosition(window).y);
+                            const auto &ray = scene->camera.get_orthogonal_ray_at(sf::Mouse::getPosition(window).x, sf::Mouse::getPosition(window).y);
                             std::optional<TriangleIntersection> closest_hit;
                             for (auto &mesh: scene->meshes) {
                                 if (const auto &hit = mesh.intersect(ray, closest_hit ? closest_hit->t : std::numeric_limits<Real>::infinity(), Triangle::CullBackfaces::YES)) {
@@ -183,7 +184,7 @@ public:
                         }
                     }
                     if (event_mp->button == sf::Mouse::Button::Middle) {
-                        scene->camera->look_from *= -1;
+                        scene->camera.look_from *= -1;
                         update_render();
                         update_lights();
                         update_aabb_wireframe();
@@ -407,14 +408,14 @@ public:
                     update_render();
                 }
                 ImGui::Text("Look From:");
-                if (im::DragDouble3("##Look From", scene->camera->look_from.data.data(), 1, -300, 300)) {
+                if (im::DragDouble3("##Look From", scene->camera.look_from.data.data(), 1, -300, 300)) {
                     update_render();
                     update_wireframe();
                     update_aabb_wireframe();
                     update_lights();
                 }
                 ImGui::Text("Look At:");
-                if (im::DragDouble3("##Look At", scene->camera->look_at.data.data(), 0.01, -100, 100)) {
+                if (im::DragDouble3("##Look At", scene->camera.look_at.data.data(), 0.01, -100, 100)) {
                     update_render();
                     update_wireframe();
                     update_aabb_wireframe();
@@ -505,10 +506,10 @@ public:
         const auto &delta = old_mouse_position - new_position;
         old_mouse_position = new_position;
         if (delta != sf::Vector2i{0, 0}) {
-            auto new_look_from = rodrigues_rotation(scene->camera->look_at - scene->camera->look_from, scene->camera->u, delta.y * sensitivity);
+            auto new_look_from = rodrigues_rotation(scene->camera.look_at - scene->camera.look_from, scene->camera.u, delta.y * sensitivity);
             new_look_from = rodrigues_rotation(new_look_from, Vec{0, 1, 0}, delta.x * sensitivity);
-            scene->camera->look_from = scene->camera->look_at - new_look_from;
-            scene->camera->update();
+            scene->camera.look_from = scene->camera.look_at - new_look_from;
+            scene->camera.update();
             update_render();
             update_aabb_wireframe();
             update_wireframe();
@@ -540,7 +541,7 @@ public:
             start_time = timer.getElapsedTime();
             renderer.samples_per_pixel = samples_per_pixel;
             renderer.max_depth = max_depth;
-            scene->camera->update();
+            scene->camera.update();
             expected_time = 0;
             if (enable_render_cgh) {
                 // Get an approximated render time
@@ -550,7 +551,7 @@ public:
                 printf("         Points: %s\n", add_thousand_separator(tmp_point_cloud.size()).c_str());
                 // Draw the points as temporary visualization
                 for (const auto &[point, color, phase]: tmp_point_cloud) {
-                    const auto [x, y] = scene->camera->project(point);
+                    const auto [x, y] = scene->camera.project(point);
                     pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
                     pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
                     pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 2] = static_cast<unsigned char>(std::sqrt(color.b) * 255);
@@ -574,7 +575,7 @@ public:
                 clear_pixels();
                 // Draw the points as temporary visualization
                 for (auto const &[point, color, phase]: point_cloud) {
-                    const auto [x, y] = scene->camera->project(point);
+                    const auto [x, y] = scene->camera.project(point);
                     pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
                     pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
                     pixels[(static_cast<int>(y) * IMAGE_WIDTH + static_cast<int>(x)) * 4 + 2] = static_cast<unsigned char>(std::sqrt(color.b) * 255);
@@ -608,11 +609,11 @@ public:
 
     void test_wireframe_visible() {
         std::vector<Triangle> visible_triangles = {};
-        const auto &camera = scene->camera;
-        camera->update();
+        auto &camera = scene->camera;
+        camera.update();
         for (const auto &m: scene->meshes) {
             for (const auto &t: m.triangles) {
-                if (dot(t.normal(), camera->w) >= 0) {
+                if (dot(t.normal(), scene->camera.w) >= 0) {
                     visible_triangles.emplace_back(t);
                 }
             }
@@ -622,9 +623,9 @@ public:
 #pragma omp parallel for default(none) shared(visible_triangles, wire, camera)
         for (int i = 0; i < static_cast<int>(visible_triangles.size()); i++) {
             const auto &t = visible_triangles[i];
-            auto [ax, ay] = camera->project(t.a());
-            auto [bx, by] = camera->project(t.b());
-            auto [cx, cy] = camera->project(t.c());
+            auto [ax, ay] = camera.project(t.a());
+            auto [bx, by] = camera.project(t.b());
+            auto [cx, cy] = camera.project(t.c());
 
             wire[i * 6 + 0].position.x = static_cast<float>(ax);
             wire[i * 6 + 0].position.y = static_cast<float>(ay);
@@ -652,14 +653,14 @@ public:
 
         wire = sf::VertexArray(sf::PrimitiveType::Lines, scene->get_triangle_count() * 6);
 
-        scene->camera->update();
+        scene->camera.update();
         auto offset = 0;
         for (const auto &mesh: scene->meshes) {
             for (size_t j = 0; j < mesh.triangles.size(); j++) {
                 const auto &t = mesh.triangles[j];
-                auto [ax, ay] = scene->camera->project(t.a());
-                auto [bx, by] = scene->camera->project(t.b());
-                auto [cx, cy] = scene->camera->project(t.c());
+                auto [ax, ay] = scene->camera.project(t.a());
+                auto [bx, by] = scene->camera.project(t.b());
+                auto [cx, cy] = scene->camera.project(t.c());
 
                 wire[offset + j * 6 + 0].position.x = static_cast<float>(ax);
                 wire[offset + j * 6 + 0].position.y = static_cast<float>(ay);
@@ -696,7 +697,7 @@ public:
         Real projected_ps[8 * 2];
 
         for (int i = 0; i < 8; i++) {
-            std::tie(projected_ps[i * 2], projected_ps[i * 2 + 1]) = scene->camera->project(points[i]);
+            std::tie(projected_ps[i * 2], projected_ps[i * 2 + 1]) = scene->camera.project(points[i]);
         }
 
         // Create the edges for 2 faces
@@ -748,17 +749,14 @@ public:
 
     void update_scene() {
         stop_render_and_wait();
-        if (scene != nullptr) {
-            delete scene->camera;
-            delete scene;
-        }
+
+        delete scene;
 
         scene = const_cast<Scene *>(scenes[selected_scene_idx]());
 
         assert(scene != nullptr);
 
         renderer.max_depth = max_depth;
-        // point_cloud = scene->camera->compute_point_cloud(*scene);
     }
 
     void update_lights() {
@@ -768,12 +766,12 @@ public:
         }
 
         for (const auto &[position, color]: scene->point_lights) {
-            auto [px, py] = scene->camera->project(position);
+            auto [px, py] = scene->camera.project(position);
             sf::CircleShape light_circle;
             light_circle.setPosition({static_cast<float>(px), static_cast<float>(py)});
             light_circle.setOrigin(light_circle.getGeometricCenter());
             light_circle.setRadius(
-                1000 / static_cast<float>((scene->camera->look_from - position).length()));
+                1000 / static_cast<float>((scene->camera.look_from - position).length()));
             light_circle.setPointCount(100);
             light_circle.setFillColor(sf::Color::Yellow);
             light_circles.push_back(light_circle);

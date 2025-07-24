@@ -12,13 +12,13 @@ using Camera = OrthoCamera;
 
 class Scene {
 public:
-    Camera *camera;
+    Camera camera;
 
     std::vector<Mesh> meshes;
 
     std::vector<std::pair<Point, Color> > point_lights;
 
-    explicit Scene(Camera *camera)
+    explicit Scene(const Camera &camera)
         : camera(camera) {
     }
 
@@ -26,7 +26,7 @@ public:
         return std::ranges::any_of(meshes, [&](const Mesh &mesh) { return mesh.does_intersect(ray, max_t); });
     }
 
-    [[nodiscard]] constexpr std::optional<TriangleIntersection> intersect(const Ray &ray, const Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
+    [[nodiscard]] HOST_DEVICE std::optional<TriangleIntersection> intersect(const Ray &ray, const Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
         std::optional<TriangleIntersection> closest_hit;
         for (const auto &mesh: meshes) {
             if (const auto &hit = mesh.intersect(ray, closest_hit ? closest_hit->t : T_MAX, cull_backfaces)) {

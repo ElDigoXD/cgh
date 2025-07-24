@@ -1,13 +1,16 @@
 #include "config.h"
-
+#include "typedefs.h"
 
 #include <algorithm>
 #include <cstdio>
+#include <random>
 #include <thread>
 
-#include "cuda.h"
 #include "OrthoCamera.h"
 #include "PointCloud.h"
+#include "Renderer.h"
+#include "Scenes.h"
+#include "cuda.h"
 
 namespace rl {
 #include "raylib.h"
@@ -25,31 +28,45 @@ namespace rl {
 
 int target_points = 1'000;
 bool headless = false;
+bool enable_gpu = false;
+bool enable_occlusion = false;
 
 int gui_main(PointCloud pc);
 
+/**
+ * Reduces the point cloud to the target number of points by randomly removing points.
+ * If the target is not reached or overreached, the point cloud is not uniformly distributed.
+ */
 void reduce_point_cloud(PointCloud &pc, const int target_points) {
-    const auto ratio = static_cast<float>(target_points) / static_cast<float>(pc.size());
-    printf("Resizing point cloud from %s to %s\n", add_thousand_separator(pc.size()).c_str(),
-           add_thousand_separator(target_points).c_str());
-    pc.erase(std::ranges::remove_if(pc, [ratio](const auto &) { return rand_real() >= ratio; }).begin(), pc.end());
+    const auto ratio = static_cast<double>(target_points) / static_cast<double>(pc.size());
+    printf("Resizing point cloud from %s to %s\n", add_thousand_separator(pc.size()).c_str(), add_thousand_separator(target_points).c_str());
+    std::ranges::remove_if(pc, [ratio](const auto &) { return rand_real() >= ratio; });
+    pc.erase(pc.begin() + target_points, pc.end());
     printf("Resized point cloud to %s points\n", add_thousand_separator(pc.size()).c_str());
 }
 
-void compute_n_cghs(PointCloud pc, const int n, const std::string &output_path) {
-    auto *camera = new OrthoCamera(
+void compute_n_cghs(unsigned char *pixels, PointCloud pc, const int n, const std::string &output_path) {
+    const auto camera = OrthoCamera(
         {0, 0, 0}, /* look_at */
-        {50, 50, 290} /* look_from */);
-
-    const auto pixels = new unsigned char[IMAGE_WIDTH * IMAGE_HEIGHT * 4];
+        {0, 1, 300} /* look_from */);
     const auto complex_pixels = new std::complex<Real>[IMAGE_WIDTH * IMAGE_HEIGHT * 4];
-
+    Renderer renderer{
+        .thread_count = 16,
+        .samples_per_pixel = 10,
+        .max_depth = 10,
+        .use_gpu = enable_gpu,
+        .enable_occlusion = enable_occlusion
+    };
+    const auto *scene = knob();
     for (int i = 0; i < n; i++) {
-        auto start = now();
+        const auto start = now();
         for (auto &p: pc) {
             p.phase = rand_real() * 2; // In the range [0, 2) instead of [0, 2π) to comply with the CUDA implementation
+            p.phase = 0;
         }
-        use_cuda(pixels, complex_pixels, pc, camera->pixel_00_position, camera->pixel_delta_x, camera->pixel_delta_y);
+        //use_cuda(pixels, complex_pixels, pc, scene->camera.pixel_00_position, scene->camera.pixel_delta_x, scene->camera.pixel_delta_y);
+        //use_cuda_occ(*scene, pixels, pc);
+        renderer.render_cgh(pixels, complex_pixels, *scene, pc);
         fprintf(stderr, "[ RESULT ] %d Time: \t%.2f \tPoints: \t%lu\n", i, (now() - start) / 1000.f, pc.size());
         auto filename = output_path + std::to_string(i) + std::string{".png"};
         printf("Saving CGH to %s\n", filename.c_str());
@@ -69,6 +86,8 @@ int main(const int argc, char **argv) {
     args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
     args::ValueFlag target_points_arg(parser, "", "Target number of points", {'p', "points"}, target_points);
     args::Flag headless_arg(parser, "headless", "Headless mode", {"headless"}, headless);
+    args::Flag use_gpu_arg(parser, "gpu", "Use GPU", {'g', "gpu"});
+    args::Flag use_occlusion_arg(parser, "occlusion", "Use occlusion", {'o', "occ"});
     try {
         parser.ParseCLI(argc, argv);
     } catch (const args::Help &) {
@@ -82,23 +101,24 @@ int main(const int argc, char **argv) {
 
     target_points = target_points_arg.Get();
     headless = headless_arg.Get();
-    printf("headless = %d\n", headless);
+    enable_gpu = use_gpu_arg.Get();
+    enable_occlusion = use_occlusion_arg.Get();
 
     if (!headless) {
         return gui_main(pc);
     }
     srand(42);
     rng_state = rand();
-    if (target_points != 0) {
+    if (target_points != 0 && target_points < pc.size()) {
         reduce_point_cloud(pc, target_points);
     }
 
-
-    compute_n_cghs(pc, 1, "../");
+    const auto pixels = new unsigned char[IMAGE_WIDTH * IMAGE_HEIGHT * 4];
+    compute_n_cghs(pixels, pc, 1, "../");
 }
 
 
-void draw_point(const PointCloudPoint &point) {
+void draw_point(const PointCloudPoint<> &point) {
     rl::DrawLine3D({
                        static_cast<float>(point.point.x),
                        static_cast<float>(point.point.y),
@@ -151,16 +171,17 @@ int gui_main(PointCloud pc) {
     state.target_points = pc.size();
     state.max_points = pc.size();
 
-    // auto image = rl::GenImageGradientLinear(1920, 1080, 0, (rl::Color){255, 255, 255, 255}, (rl::Color){0, 0, 0, 255});
-    // auto texture = rl::LoadTextureFromImage(image);
+    auto image = rl::GenImageColor(IMAGE_WIDTH, IMAGE_HEIGHT, (rl::Color){0, 0, 0, 0});
+    auto texture = rl::LoadTextureFromImage(image);
     auto render_texture = rl::LoadRenderTexture(rl::GetScreenWidth(), rl::GetScreenHeight());
     auto camera = rl::Camera3D{
-        .position = {0, 0, 300},
-        .target = {0, 0, 6},
+        .position = {0, 1, 300},
+        .target = {0, 0, 0},
         .up = {0, 1, 0},
         .fovy = 8.5f,
         .projection = rl::CameraProjection::CAMERA_ORTHOGRAPHIC
     };
+    const auto pixels = new unsigned char[IMAGE_WIDTH * IMAGE_HEIGHT * 4];
 
     while (!rl::WindowShouldClose()) {
         rl::BeginDrawing();
@@ -213,6 +234,12 @@ int gui_main(PointCloud pc) {
             rl::GuiDisable();
             shouldUpdateTexture = true;
         }
+
+        if (state.computation_done == GuiState::DONE) {
+            state.computation_done = GuiState::IDLE;
+            rl::UpdateTexture(texture, pixels);
+            shouldUpdateTexture = true;
+        }
         rl::BeginTextureMode(render_texture);
         if (shouldUpdateTexture) {
             shouldUpdateTexture = false;
@@ -222,6 +249,7 @@ int gui_main(PointCloud pc) {
                 draw_point(point);
             }
             rl::EndMode3D();
+            rl::DrawTexture(texture, 0, 0, (rl::Color){255, 255, 255, 255});
         }
         rl::EndTextureMode();
         rl::DrawTextureRec(render_texture.texture,
@@ -256,10 +284,10 @@ int gui_main(PointCloud pc) {
         }
         if (rl::GuiButton({offset_x + 80, offset_y, 80, 20},
                           state.computation_done == GuiState::COMPUTING ? "Computing" : "Compute")) {
-            std::jthread([&new_pc, &state]() {
+            std::jthread([&new_pc, &state, pixels]() {
                 state.computation_done = GuiState::COMPUTING;
-                compute_n_cghs(new_pc, state.num_renders, "../");
-                state.computation_done = GuiState::IDLE;
+                compute_n_cghs(pixels, new_pc, state.num_renders, "../");
+                state.computation_done = GuiState::DONE;
             }).detach();
         }
         rl::GuiEnable();

@@ -4,39 +4,38 @@
 #include "OrthoCamera.h"
 
 constexpr static Scene *basic_triangle() {
-    auto *camera = new Camera(
+    const auto camera = Camera(
         {0, 0, 0}, /* look_at */
-        {0, 1, 300} /* look_from */
+        {0, 0, 300} /* look_from */
     );
 
-    const auto materials = std::vector{Material{Color{0.1, 0.1, 0.1}}};
+    const auto materials = std::vector{Material{Color{1, 1, 1}}};
 
     auto mesh = Mesh{
-        std::vector{Face{{0, 1, 2}, {3, 4, 5}, 0}},
         std::vector{
-            Vecf{-1, -.5, -1} * 1.5f,
-            Vecf{1, -.5, -1} * 1.5f,
-            Vecf{0, .8, -1} * 1.5f
+            Face{{0, 1, 2}, {0, 0, 0}, 0},
+            //Face{{3, 2, 1}, {0, 0, 0}, 0}
+        },
+        std::vector{
+            Vecf{-1, -.5, 0} * 1.5f,
+            Vecf{1, -.5, 0} * 1.5f,
+            Vecf{0, .8, 0} * 1.5f,
+            //Vecf{2, .8, 0} * 1.5f,
         },
         std::vector{
             Vecf{0, 0, 1},
-            Vecf{0, 0, 1},
-            Vecf{0, 0, 1},
-            Vecf{-1, -.5, 1},
-            Vecf{1, -.5, 1},
-            Vecf{1, 0, 1},
         },
         materials
     };
     const auto scene = new Scene(camera);
     scene->add_mesh(mesh);
-    scene->point_lights.emplace_back(Point{0, 0, 10}, Color{1, 1, 1});
+    scene->point_lights.emplace_back(Point{0, 0, 10}, Color{2, 2, 2});
     return scene;
 }
 
 
 constexpr static Scene *cornell_box() {
-    auto *camera = new Camera(
+    const auto camera = Camera(
         {0, 0, 0}, /* look_at */
         {50, 50, 290} /* look_from */
     );
@@ -53,23 +52,24 @@ constexpr static Scene *cornell_box() {
 }
 
 constexpr static Scene *sphere_mesh() {
-    auto *camera = new Camera(
+    const auto camera = Camera(
         {0, 0, 0}, /* look_at */
         {0, 0, 300} /* look_from */
     );
 
     auto mesh = load("../resources/low-poly-sphere.obj");
     mesh.normalize();
-    mesh.scale(2.25);
+    mesh.scale(5);
 
     const auto scene = new Scene(camera);
     scene->add_mesh(mesh);
-    scene->point_lights.emplace_back(Point{0, 10, 10}, Color{1, 1, 1});
+    scene->point_lights.emplace_back(Point{10, 10, 10}, Color{1, 1, 1});
+    scene->point_lights.emplace_back(Point{-10, -10, 10}, Color{1, 1, 1});
     return scene;
 }
 
 constexpr static Scene *pumpkin() {
-    auto *camera = new Camera(
+    const auto camera = Camera(
         {0, 0, 0}, /* look_at */
         {40, 200, 300} /* look_from */
     );
@@ -89,7 +89,7 @@ constexpr static Scene *pumpkin() {
 }
 
 constexpr static Scene *teapot() {
-    auto *camera = new Camera(
+    const auto camera = Camera(
         {0, 0, 0}, /* look_at */
         {50, 50, 290} /* look_from */
     );
@@ -97,34 +97,34 @@ constexpr static Scene *teapot() {
     auto mesh = load("../resources/teapot.obj");
 
     mesh.normalize();
-    mesh.scale(4);
+    mesh.scale(8);
 
     mesh.materials[0] = Material{GGXBRDF{Color{1, .4, .0} * .5, 0.5, 1}};
 
-    auto floor_mesh = Mesh{
-        std::vector<Face>{
-            {{0, 1, 2}, {-1, -1, -1}, 0},
-            {{3, 2, 1}, {-1, -1, -1}, 0},
-        },
-        std::vector<Vecf>{
-            {+4, -1, +4},
-            {+4, -1, -4},
-            {-4, -1, +4},
-            {-4, -1, -4},
-        },
-        std::vector<Vecf>{},
-        std::vector{Material{GGXBRDF{Color{1, 1, 1}, 0, 1}}}
-    };
+    //auto floor_mesh = Mesh{
+    //    std::vector<Face>{
+    //        {{0, 1, 2}, {-1, -1, -1}, 0},
+    //        {{3, 2, 1}, {-1, -1, -1}, 0},
+    //    },
+    //    std::vector<Vecf>{
+    //        {+4, -1, +4},
+    //        {+4, -1, -4},
+    //        {-4, -1, +4},
+    //        {-4, -1, -4},
+    //    },
+    //    std::vector<Vecf>{},
+    //    std::vector{Material{GGXBRDF{Color{1, 1, 1}, 0, 1}}}
+    //};
 
     const auto scene = new Scene(camera);
     scene->add_mesh(mesh);
-    scene->add_mesh(floor_mesh);
+    //scene->add_mesh(floor_mesh);
     scene->point_lights.emplace_back(Point{0, 10, 10}, Color{1, 1, 1});
     return scene;
 }
 
 constexpr static Scene *multi_mesh() {
-    auto *camera = new Camera(
+    const auto camera = Camera(
         {0, 0, 0}, /* look_at */
         {50, 0, 290} /* look_from */
     );
@@ -170,7 +170,7 @@ constexpr static Scene *multi_mesh() {
 }
 
 constexpr static Scene *dragon() {
-    auto *camera = new Camera(
+    const auto camera = Camera(
         {0, 0, 0}, /* look_at */
         {50, 50, 290} /* look_from */
     );
@@ -190,7 +190,7 @@ constexpr static Scene *dragon() {
 }
 
 constexpr static Scene *tree() {
-    auto *camera = new Camera(
+    const auto camera = Camera(
         {0, 0, 0}, /* look_at */
         {50, 50, 290} /* look_from */
     );
@@ -209,7 +209,7 @@ constexpr static Scene *tree() {
 }
 
 constexpr static Scene *bmw() {
-    auto *camera = new Camera(
+    const auto camera = Camera(
         {0, 0, 0}, /* look_at */
         {50, 50, 290} /* look_from */
     );
@@ -242,7 +242,7 @@ constexpr static Scene *bmw() {
 }
 
 constexpr static Scene *knob() {
-    auto *camera = new Camera(
+    const auto camera = Camera(
         {0, 0, 0}, /* look_at */
         {-162, 100, -232} /* look_from */
     );
@@ -253,31 +253,32 @@ constexpr static Scene *knob() {
     mesh.scale(3.f * static_cast<float>(IMAGE_HEIGHT) / 400.f);
     //mesh.move((Vecf{0, -1.23, -0.73})*-1);
     //mesh.scale(10.f);
-    auto floor_mesh = Mesh{
-        std::vector<Face>{
-            {{0, 1, 2}, {-1, -1, -1}, 0},
-            {{3, 2, 1}, {-1, -1, -1}, 0},
-        },
-        std::vector<Vecf>{
-            {+4, -1.4, +4},
-            {+4, -1.4, -4},
-            {-4, -1.4, +4},
-            {-4, -1.4, -4},
-        },
-        std::vector<Vecf>{},
-        std::vector{Material{GGXBRDF{Color{1, 1, 1}, 0.00, 1}}}
-    };
+    //auto floor_mesh = Mesh{
+    //    std::vector<Face>{
+    //        {{0, 1, 2}, {-1, -1, -1}, 0},
+    //        {{3, 2, 1}, {-1, -1, -1}, 0},
+    //    },
+    //    std::vector<Vecf>{
+    //        {+4, -4.4, +4},
+    //        {+4, -4.4, -4},
+    //        {-4, -4.4, +4},
+    //        {-4, -4.4, -4},
+    //    },
+    //    std::vector<Vecf>{},
+    //    std::vector{Material{GGXBRDF{Color{1, 1, 1}, 1, 0}}}
+    //};
 
     const auto scene = new Scene(camera);
     scene->add_mesh(mesh, Mesh::Heuristic::BIGGEST_AXIS);
-    scene->add_mesh(floor_mesh);
-    scene->point_lights.emplace_back(Point{0, 0, -2.3}, Color{1, 1, 1} * 5);
+    //scene->add_mesh(floor_mesh);
+    scene->point_lights.emplace_back(Point{100, 0, -100}, Color{1, 1, 1} * 5);
+    scene->point_lights.emplace_back(Point{-100, 0, -100}, Color{1, 1, 1} * 5);
     //scene->point_lights.emplace_back(Point{-5, 5, -8}, Color{1, 1, 1});
     return scene;
 }
 
 constexpr static Scene *cornell_zoom() {
-    auto *camera = new Camera(
+    const auto camera = Camera(
         {0, 0, 0}, /* look_at */
         {50, 50, 290} /* look_from */
     );

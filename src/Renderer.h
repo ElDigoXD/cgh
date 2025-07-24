@@ -17,7 +17,7 @@ public:
     [[nodiscard]]
     PointCloud compute_point_cloud_orthographic(const Scene &scene, const int width, const int height) const {
         PointCloud point_cloud;
-        auto camera = *scene.camera;
+        auto camera = scene.camera;
         const auto viewport_x = camera.u * camera.viewport_width;
         const auto viewport_y = -camera.v * camera.viewport_height;
         const auto viewport_upper_left = camera.look_from - viewport_x / 2 - viewport_y / 2;
@@ -57,7 +57,7 @@ public:
             for (int x = 0; x < IMAGE_WIDTH; x++) {
                 Color color;
                 for (int i = 0; i < samples_per_pixel; i++) {
-                    auto ray = scene.camera->get_random_orthogonal_ray_at(x, y);
+                    auto ray = scene.camera.get_random_orthogonal_ray_at(x, y);
                     ray.direction = normalize(ray.direction);
                     color += compute_ray_color(ray, scene, max_depth).clamp(0, 1);
                 }
@@ -90,18 +90,23 @@ public:
         auto start = now();
         if (use_gpu) {
             if (enable_occlusion) {
-                std::fprintf(stdout, "[ ERROR ] ENABLE_OCCLUSION not implemented in GPU. Ignoring option\n");
+                printf("[ INFO ] CUDA occlusion enabled\n");
+                use_cuda_occ(scene, out_pixels, point_cloud);
+            } else {
+                printf("[ INFO ] CUDA no occlussion\n");
+                use_cuda(out_pixels, out_complex_pixels, point_cloud, scene.camera.pixel_00_position,
+                         scene.camera.pixel_delta_x, scene.camera.pixel_delta_y);
             }
-            use_cuda(out_pixels, out_complex_pixels, point_cloud, scene.camera->pixel_00_position,
-                     scene.camera->pixel_delta_x, scene.camera->pixel_delta_y);
         } else {
+            printf("[ INFO ] CPU %s\n", enable_occlusion ? "occlusion enabled" : "no occlussion");
             static constexpr Real wavelength = 0.6328e-3;
             static constexpr Real two_pi_over_wavelength = 2 * std::numbers::pi / wavelength;
 #pragma omp parallel for collapse(2) shared(out_pixels, out_complex_pixels, point_cloud, scene, st) default(none) num_threads(thread_count) schedule(dynamic)
             for (int y = 0; y < IMAGE_HEIGHT; y++) {
                 for (int x = 0; x < IMAGE_WIDTH; x++) {
                     if (!st.stop_requested()) [[likely]] {
-                        const auto slm_pixel_center = scene.camera->pixel_00_position + (scene.camera->pixel_delta_x * x) + (scene.camera->pixel_delta_y * y);
+                        const uint pixel_index = y * IMAGE_WIDTH + x;
+                        const auto slm_pixel_center = scene.camera.pixel_00_position + (scene.camera.pixel_delta_x * x) + (scene.camera.pixel_delta_y * y);
                         std::complex<Real> agg;
                         for (const auto &[point, color, phase]: point_cloud) {
                             std::complex<Real> wave;
@@ -113,14 +118,12 @@ public:
                             }
                             agg += wave;
                         }
-
-                        agg /= static_cast<Real>(point_cloud.size());
-                        out_complex_pixels[(y * IMAGE_WIDTH + x)] = agg;
+                        out_complex_pixels[pixel_index] = agg;
                         const auto a = static_cast<unsigned char>((arg(agg) + std::numbers::pi) / (2 * std::numbers::pi) * 255);
-                        out_pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = a;
-                        out_pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = a;
-                        out_pixels[(y * IMAGE_WIDTH + x) * 4 + 2] = a;
-                        out_pixels[(y * IMAGE_WIDTH + x) * 4 + 3] = 255;
+                        out_pixels[pixel_index * 4 + 0] = a;
+                        out_pixels[pixel_index * 4 + 1] = a;
+                        out_pixels[pixel_index * 4 + 2] = a;
+                        out_pixels[pixel_index * 4 + 3] = 255;
                     }
                 }
             }
@@ -136,7 +139,7 @@ public:
             if (st.stop_requested()) [[unlikely]] continue;
 
             for (int x = 0; x < IMAGE_WIDTH; x++) {
-                const auto &ray = scene.camera->get_orthogonal_ray_at(x, y);
+                const auto &ray = scene.camera.get_orthogonal_ray_at(x, y);
                 if (const auto &hit = scene.intersect(ray, Triangle::CullBackfaces::YES)) {
                     const auto &triangle = hit->triangle;
                     const auto &normal = triangle.normal(hit->u, hit->v);

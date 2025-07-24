@@ -1,6 +1,7 @@
 #pragma once
 #include "config.h"
 #include "Ray.h"
+#include "utils.h"
 
 class OrthoCamera {
 public:
@@ -20,9 +21,9 @@ public:
      * viewport_width and viewport_height in mm.
      */
     OrthoCamera(const Vec &look_at,
-            const Vec &look_from,
-            const Real viewport_width = PIXEL_SIZE * IMAGE_WIDTH,
-            const Real viewport_height = PIXEL_SIZE * IMAGE_HEIGHT
+                const Vec &look_from,
+                const Real viewport_width = PIXEL_SIZE * IMAGE_WIDTH,
+                const Real viewport_height = PIXEL_SIZE * IMAGE_HEIGHT
     ): look_at{look_at}, look_from{look_from}, viewport_width{viewport_width}, viewport_height{viewport_height} {
         update();
     }
@@ -44,7 +45,7 @@ public:
     /**
      * Returns a ray that is orthogonal to the camera plane at pixel (x, y).
      */
-    [[nodiscard]] constexpr Ray get_orthogonal_ray_at(const int x, const int y) const {
+    [[nodiscard]] HOST_DEVICE constexpr Ray get_orthogonal_ray_at(const int x, const int y) const {
         const auto pixel_center = pixel_00_position + pixel_delta_x * x + pixel_delta_y * y;
         return Ray{pixel_center, -w};
     }
@@ -75,5 +76,10 @@ public:
         ay = ay / pixel_size + IMAGE_HEIGHT / 2.0;
 
         return {ax, ay};
+    }
+
+    [[nodiscard]] HOST_DEVICE std::string to_string() const {
+        return std::format(
+            "OrthoCamera(look_at: {}, look_from: {})", look_at.to_string(), look_from.to_string());
     }
 };
