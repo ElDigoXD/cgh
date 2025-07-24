@@ -169,6 +169,10 @@ public:
     void print() const {
         std::cout << "(" << x << " ," << y << " ," << z << ")";
     }
+
+    [[nodiscard]] std::string to_string() const {
+        return std::format("({:.3f}, {:.3f}, {:.3f})", x, y, z);
+    }
 };
 
 template<typename Real> requires std::is_arithmetic_v<Real>
