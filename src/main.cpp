@@ -75,6 +75,7 @@ public:
     bool enable_lights = true;
     bool enable_render = false;
     bool enable_render_normals = false;
+    bool enable_render_intersections = false;
     bool enable_render_cgh = false;
     bool enable_camera_movement = true;
     bool enable_bdrf_viewer = false;
@@ -298,16 +299,30 @@ public:
             if (enable_render) {
                 im::Indent(5);
                 if (ImGui::Checkbox("Enable render cgh", &enable_render_cgh)) {
-                    if (enable_render_cgh) enable_render_normals = false;
+                    if (enable_render_cgh) {
+                        enable_render_normals = false;
+                        enable_render_intersections = false;
+                    }
                     update_render();
                 }
                 im::Indent(5);
-                if (ImGui::Checkbox("Enable occlussion", &renderer.enable_occlusion)) {
+                if (ImGui::Checkbox("Enable occlusion", &renderer.enable_occlusion)) {
                     if (enable_render_cgh) update_render();
                 }
+                im::Unindent(5);
 
                 if (ImGui::Checkbox("Enable render normals", &enable_render_normals)) {
-                    if (enable_render_normals) enable_render_cgh = false;
+                    if (enable_render_normals) {
+                        enable_render_cgh = false;
+                        enable_render_intersections = false;
+                    }
+                    update_render();
+                }
+                if (ImGui::Checkbox("Enable render intersections", &enable_render_intersections)) {
+                    if (enable_render_intersections) {
+                        enable_render_cgh = false;
+                        enable_render_normals = false;
+                    }
                     update_render();
                 }
                 im::Unindent(5);
@@ -345,6 +360,14 @@ public:
                                               ? timer.getElapsedTime().asSeconds() - start_time.asSeconds()
                                               : render_time;
             im::Text("Render time: %s", get_human_time(tmp_render_time).c_str());
+            if (sprite.getGlobalBounds().contains(sf::Vector2<float>(sf::Mouse::getPosition(window)))) {
+                auto a = sprite.getInverseTransform().transformPoint(sf::Vector2<float>(sf::Mouse::getPosition(window)));
+                a.x = std::clamp(a.x, 0.f, static_cast<float>(camera_image_size.x - 1));
+                a.y = std::clamp(a.y, 0.f, static_cast<float>(camera_image_size.y - 1));
+                const auto ray = scene->camera.get_orthogonal_ray_at(a.x, a.y);
+                const auto hit_data = scene->intersect(ray);
+                im::Text("x: %4.0f, y: %4.0f: %d", a.x, a.y, hit_data->intersection_count);
+            }
             if (mouse_button_pressed) {
                 im::Text("FPS: %.1f", 1 / dt.asSeconds());
             }
@@ -587,6 +610,8 @@ public:
             } else {
                 if (enable_render_normals) {
                     renderer.render_normals(pixels, *scene, st);
+                } else if (enable_render_intersections) {
+                    renderer.render_intersection_count(pixels, *scene, max_depth, st);
                 } else {
                     renderer.render_cgi(pixels, *scene, st);
                 }

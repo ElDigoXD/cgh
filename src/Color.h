@@ -117,6 +117,60 @@ public:
         return x <= other.x && y <= other.y && z <= other.z;
     }
 
+    // Source: https://github.com/jakubg05/Ray-Tracing
+    static Color complexityToRGB(const uint complexity, const uint max) {
+        double wavelength = 380.0 + 370.0 * complexity / (max);
+        Color color;
+        if (wavelength <= 380.0) {
+            color.r = 0.0;
+            color.g = 0.0;
+            color.b = 0.0;
+        } else if (wavelength > 380.0 && wavelength <= 440.0) {
+            color.r = -(wavelength - 440.0) / (440.0 - 380.0) / 3;
+            color.g = 0.0;
+            color.b = 0.8;
+        } else if (wavelength >= 440.0 && wavelength <= 490.0) {
+            color.r = 0.0;
+            color.g = (wavelength - 440.0) / (490.0 - 440.0);
+            color.b = 1.0;
+        } else if (wavelength >= 490.0 && wavelength <= 510.0) {
+            color.r = 0.0;
+            color.g = 1.0;
+            color.b = -(wavelength - 510.0) / (510.0 - 490.0);
+        } else if (wavelength >= 510.0 && wavelength <= 580.0) {
+            color.r = (wavelength - 510.0) / (580.0 - 510.0);
+            color.g = 1.0;
+            color.b = 0.0;
+        } else if (wavelength >= 580.0 && wavelength <= 645.0) {
+            color.r = 1.0;
+            color.g = -(wavelength - 645.0) / (645.0 - 580.0);
+            color.b = 0.0;
+        } else if (wavelength >= 645.0 && wavelength <= 780.0) {
+            color.r = 1.0;
+            color.g = 0.0;
+            color.b = 0.0;
+        } else {
+            color.r = 1.0;
+            color.g = 1.0;
+            color.b = 1.0;
+        }
+
+        double factor;
+
+        if (wavelength >= 380 && wavelength < 420) {
+            factor = 0.3 + 0.7 * (wavelength - 380) / (420 - 380);
+        } else if (wavelength >= 420 && wavelength < 701) {
+            factor = 1.0;
+        } else if (wavelength >= 701 && wavelength < 781) {
+            factor = 0.3 + 0.7 * (780 - wavelength) / (780 - 700);
+            return (color + factor);
+        } else {
+            factor = 1.0;
+        }
+
+        return color * factor;
+    }
+
     static constexpr Color black() { return Color{0, 0, 0}; }
 
     static constexpr Color white() { return Color{1, 1, 1}; }

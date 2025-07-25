@@ -31,8 +31,10 @@ public:
         for (const auto &mesh: meshes) {
             if (const auto &hit = mesh.intersect(ray, closest_hit ? closest_hit->t : T_MAX, cull_backfaces)) {
                 if (!closest_hit || hit->t < closest_hit->t) {
+                    auto old_intersection_count = closest_hit ? closest_hit->intersection_count : 0;
                     closest_hit = hit;
                     closest_hit->material = mesh.materials[hit->triangle.material_idx];
+                    closest_hit->intersection_count += old_intersection_count;
                 }
             }
         }

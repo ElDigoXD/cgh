@@ -152,6 +152,27 @@ public:
         }
     }
 
+    void render_intersection_count(u_char out_pixels[], const Scene &scene, const int max_value, const std::stop_token &st = {}) const {
+#pragma omp parallel for collapse(1) shared(out_pixels, scene, max_value, st) default(none) num_threads(thread_count) schedule(dynamic)
+        for (int y = 0; y < IMAGE_HEIGHT; y++) {
+            if (st.stop_requested()) [[unlikely]] continue;
+            for (int x = 0; x < IMAGE_WIDTH; x++) {
+                Color color;
+                auto ray = scene.camera.get_random_orthogonal_ray_at(x, y);
+                ray.direction = normalize(ray.direction);
+                if (const auto hit_data = scene.intersect(ray)) {
+                    color = {1. * hit_data->intersection_count / max_value, 1. * hit_data->intersection_count / max_value, 1. * hit_data->intersection_count / max_value};
+                    color = Color::complexityToRGB(hit_data->intersection_count, max_value);
+                }
+                color = color.clamp(0, 1);
+                out_pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
+                out_pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
+                out_pixels[(y * IMAGE_WIDTH + x) * 4 + 2] = static_cast<unsigned char>(std::sqrt(color.b) * 255);
+                out_pixels[(y * IMAGE_WIDTH + x) * 4 + 3] = 255;
+            }
+        }
+    }
+
     [[nodiscard]]
     static Color compute_ray_color(const Ray &ray, const Scene &scene, int max_depth) {
         Ray current_ray = ray;

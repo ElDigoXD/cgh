@@ -210,7 +210,7 @@ public:
         vec.reserve(log_n);
         std::stack stack(std::move(vec));
         stack.push(0);
-
+        auto intersection_count = 0;
         std::optional<TriangleIntersection> closest_hit;
 
         while (!stack.empty()) {
@@ -223,18 +223,22 @@ public:
                         closest_hit = hit;
                     }
                 }
+                intersection_count++;
                 continue;
             }
 
+            intersection_count++;
             if (!tree[i].aabb.intersect(ray, max_t)) {
                 continue;
             }
-
             assert(i < static_cast<int>(tree.size()) / 2);
             if (i < static_cast<int>(tree.size()) / 2) {
                 stack.push(i * 2 + 2);
                 stack.push(i * 2 + 1);
             }
+        }
+        if (closest_hit) {
+            closest_hit->intersection_count = intersection_count;
         }
         return closest_hit;
     }

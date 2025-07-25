@@ -114,6 +114,7 @@ struct TriangleIntersection {
     }
 
     Triangle triangle;
+    uint intersection_count{0};
     Material material{};
     Real t;
     Real u;
