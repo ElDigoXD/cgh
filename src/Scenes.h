@@ -178,7 +178,7 @@ constexpr static Scene *dragon() {
     auto mesh = load("../resources/dragon.obj");
 
     mesh.normalize();
-    mesh.scale(3);
+    mesh.scale(6);
 
     mesh.materials[0] = Material{GGXBRDF{Color::cyan(), 0.5, 1}};
 

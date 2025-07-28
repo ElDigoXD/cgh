@@ -625,9 +625,9 @@ public:
                 const auto date = get_current_date();
                 if (enable_render_cgh) {
                     save_binary_cgh(complex_pixels, std::format("../backups/{:%m}_{:%d}_{}_{}.bin", date.month(), date.day(), scene_names[selected_scene_idx], now()).c_str());
+                    const auto image = sf::Image(camera_image_size, pixels);
+                    [[maybe_unused]] auto _ = image.saveToFile(std::format("../backups/{:%m}_{:%d}_{}_{}.png", date.month(), date.day(), scene_names[selected_scene_idx], now()).c_str());
                 }
-                const auto image = sf::Image(camera_image_size, pixels);
-                [[maybe_unused]] auto _ = image.saveToFile(std::format("../backups/{:%m}_{:%d}_{}_{}.png", date.month(), date.day(), scene_names[selected_scene_idx], now()).c_str());
             }
         });
     }

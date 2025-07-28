@@ -111,7 +111,8 @@ struct GPUMesh {
             }
 
             if (i < static_cast<int>(tree_size) / 2) {
-                if (stack_ptr < 62) { // Leave room for 2 more elements
+                if (stack_ptr < 62) {
+                    // Leave room for 2 more elements
                     stack[stack_ptr++] = i * 2 + 2;
                     stack[stack_ptr++] = i * 2 + 1;
                 }
@@ -146,7 +147,8 @@ struct GPUMesh {
             }
 
             if (i < static_cast<int>(tree_size) / 2) {
-                if (stack_ptr < 62) { // Leave room for 2 more elements
+                if (stack_ptr < 62) {
+                    // Leave room for 2 more elements
                     stack[stack_ptr++] = i * 2 + 2;
                     stack[stack_ptr++] = i * 2 + 1;
                 }
@@ -319,7 +321,7 @@ __global__ void test_kernel(const GPUScene &scene, unsigned char *out_pixels, co
 
     const auto slm_pixel_center = scene.camera.pixel_00_position + (scene.camera.pixel_delta_x * x) + (scene.camera.pixel_delta_y * y);
 
-    COMPLEX_T agg_luminance{0, 0};
+    COMPLEX_T agg_luminance, agg_red, agg_green, agg_blue;
     for (unsigned int i = 0; i < pc_size; i++) {
         const auto [point, color, phase] = point_cloud[i];
         const auto ray = Ray{slm_pixel_center, point - slm_pixel_center};
@@ -327,14 +329,28 @@ __global__ void test_kernel(const GPUScene &scene, unsigned char *out_pixels, co
             if ((ray.at(hit_data) - point).is_close_to_0()) {
                 const auto distance_to_point = distance<REAL_T>(slm_pixel_center, point);
                 agg_luminance += compute_wave<REAL_T>(one_over_wavelength_red, distance_to_point, luminance(color), phase);
+#if ENABLE_COLOR_CGH
+                agg_red += compute_wave<REAL_T>(one_over_wavelength_red, distance_to_point, color.r, phase);
+                agg_green += compute_wave<REAL_T>(one_over_wavelength_green, distance_to_point, color.g, phase);
+                agg_blue += compute_wave<REAL_T>(one_over_wavelength_blue, distance_to_point, color.b, phase);
+#endif // ENABLE_COLOR_CGH
             }
         }
     }
+
+#if ENABLE_COLOR_CGH
+    out_pixels[pixel_index * 4 + 0] = static_cast<unsigned char>((arg(agg_red) + M_PIf) * SCALE);
+    out_pixels[pixel_index * 4 + 1] = static_cast<unsigned char>((arg(agg_green) + M_PIf) * SCALE);
+    out_pixels[pixel_index * 4 + 2] = static_cast<unsigned char>((arg(agg_blue) + M_PIf) * SCALE);
+    out_pixels[pixel_index * 4 + 3] = static_cast<unsigned char>((arg(agg_luminance) + M_PIf) * SCALE);
+    //out_pixels[pixel_index * 4 + 3] = 255;
+#else // #if !ENABLE_COLOR_CGH
     const auto a = static_cast<unsigned char>((arg(agg_luminance) + M_PIf) * SCALE);
     out_pixels[pixel_index * 4 + 0] = a;
     out_pixels[pixel_index * 4 + 1] = a;
     out_pixels[pixel_index * 4 + 2] = a;
     out_pixels[pixel_index * 4 + 3] = 255;
+#endif // !ENABLE_COLOR_CGH
 }
 
 __host__ void use_cuda_occ(const Scene &scene, unsigned char pixels[], const PointCloud &point_cloud) {
