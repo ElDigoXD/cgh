@@ -26,24 +26,13 @@ namespace rl {
 #include "tiny_obj_loader.h"
 
 
-int target_points = 1'000;
+int target_points = 10'000;
 bool headless = false;
 bool enable_gpu = false;
 bool enable_occlusion = false;
+const auto *scene = dragon();
 
 int gui_main(PointCloud pc);
-
-/**
- * Reduces the point cloud to the target number of points by randomly removing points.
- * If the target is not reached or overreached, the point cloud is not uniformly distributed.
- */
-void reduce_point_cloud(PointCloud &pc, const int target_points) {
-    const auto ratio = static_cast<double>(target_points) / static_cast<double>(pc.size());
-    printf("Resizing point cloud from %s to %s\n", add_thousand_separator(pc.size()).c_str(), add_thousand_separator(target_points).c_str());
-    std::ranges::remove_if(pc, [ratio](const auto &) { return rand_real() >= ratio; });
-    pc.erase(pc.begin() + target_points, pc.end());
-    printf("Resized point cloud to %s points\n", add_thousand_separator(pc.size()).c_str());
-}
 
 void compute_n_cghs(unsigned char *pixels, PointCloud pc, const int n, const std::string &output_path) {
     const auto camera = OrthoCamera(
@@ -57,7 +46,7 @@ void compute_n_cghs(unsigned char *pixels, PointCloud pc, const int n, const std
         .use_gpu = enable_gpu,
         .enable_occlusion = enable_occlusion
     };
-    const auto *scene = knob();
+
     for (int i = 0; i < n; i++) {
         const auto start = now();
         for (auto &p: pc) {
@@ -175,8 +164,8 @@ int gui_main(PointCloud pc) {
     auto texture = rl::LoadTextureFromImage(image);
     auto render_texture = rl::LoadRenderTexture(rl::GetScreenWidth(), rl::GetScreenHeight());
     auto camera = rl::Camera3D{
-        .position = {0, 1, 300},
-        .target = {0, 0, 0},
+        .position = rl::Vector3{static_cast<float>(scene->camera.look_from.x), static_cast<float>(scene->camera.look_from.y), static_cast<float>(scene->camera.look_from.z)},
+        .target = rl::Vector3{static_cast<float>(scene->camera.look_at.x), static_cast<float>(scene->camera.look_at.y), static_cast<float>(scene->camera.look_at.z)},
         .up = {0, 1, 0},
         .fovy = 8.5f,
         .projection = rl::CameraProjection::CAMERA_ORTHOGRAPHIC

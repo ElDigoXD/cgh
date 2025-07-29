@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <vector>
 
 #include "utils.h"
@@ -71,3 +72,15 @@ struct PointCloud : std::vector<PointCloudPoint<>> {
         return pc;
     }
 };
+
+/**
+ * Reduces the point cloud to the target number of points by randomly removing points.
+ * If the target is not reached or overreached, the point cloud is not uniformly distributed.
+ */
+inline void reduce_point_cloud(PointCloud &pc, const int target_points) {
+    const auto ratio = static_cast<double>(target_points) / static_cast<double>(pc.size());
+    printf("Resizing point cloud from %s to %s\n", add_thousand_separator(pc.size()).c_str(), add_thousand_separator(target_points).c_str());
+    std::ranges::remove_if(pc, [ratio](const auto &) { return rand_real() >= ratio; });
+    pc.erase(pc.begin() + target_points, pc.end());
+    printf("Resized point cloud to %s points\n", add_thousand_separator(pc.size()).c_str());
+}
