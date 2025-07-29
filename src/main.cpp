@@ -24,7 +24,7 @@
 class GUI {
 public:
     // GUI data
-    sf::RenderWindow window = sf::RenderWindow(sf::VideoMode({800, 400}), "Raytracer GUI");
+    sf::RenderWindow window = sf::RenderWindow(sf::VideoMode({static_cast<unsigned>(400. * 16 / 9 + 200), 400}), "Raytracer GUI");
     sf::Vector2u image_size = window.getSize() - sf::Vector2u{200, 0};
     constexpr static sf::Vector2u max_window_size = {IMAGE_WIDTH + 200, IMAGE_HEIGHT};
 
@@ -121,7 +121,7 @@ public:
 
 
         for (uint i = 0; i < sizeof(scene_names) / sizeof(char *); i++) {
-            if (strcmp(scene_names[i], "knob") == 0) {
+            if (strcmp(scene_names[i], "dragon") == 0) {
                 selected_scene_idx = static_cast<int>(i);
                 break;
             }
@@ -172,7 +172,9 @@ public:
                             old_mouse_position = event_mp->position;
                             //window.setMouseCursorVisible(false);
                         } else {
-                            const auto &ray = scene->camera.get_orthogonal_ray_at(sf::Mouse::getPosition(window).x, sf::Mouse::getPosition(window).y);
+                            const auto pt = sprite.getInverseTransform().transformPoint(sf::Vector2<float>(sf::Mouse::getPosition(window)));
+                            const auto &ray = scene->camera.get_orthogonal_ray_at(pt.x, pt.y);
+
                             std::optional<TriangleIntersection> closest_hit;
                             for (auto &mesh: scene->meshes) {
                                 if (const auto &hit = mesh.intersect(ray, closest_hit ? closest_hit->t : std::numeric_limits<Real>::infinity(), Triangle::CullBackfaces::YES)) {
@@ -488,6 +490,8 @@ public:
                     float c[3] = {static_cast<float>(a.r), static_cast<float>(a.g), static_cast<float>(a.b)};
                     if (ImGui::ColorEdit3("##color", c)) {
                         ggxBRDF->base_color = Color{c};
+                        ggxBRDF->f0 = mix(GGXBRDF::f0_dielectrics, ggxBRDF->base_color, ggxBRDF->metalness);
+                        ggxBRDF->diffuse_reflectance = ggxBRDF->base_color * (1 - ggxBRDF->metalness);
                         update_render();
                         sample_material();
                     }
