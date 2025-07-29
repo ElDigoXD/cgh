@@ -183,8 +183,9 @@ public:
             stack.pop();
 
             if (tree[i].triangle_idx >= 0) {
-                if (const auto &hit = triangles[tree[i].triangle_idx].intersect(ray, Triangle::CullBackfaces::NO)) {
-                    if (hit->t < max_t) {
+                const auto &hit = triangles[tree[i].triangle_idx].intersect(ray, Triangle::CullBackfaces::NO);
+                if (hit.t != 0) {
+                    if (hit.t < max_t) {
                         return true;
                     }
                 }
@@ -205,29 +206,29 @@ public:
     }
 
     // __attribute_noinline__
-    [[nodiscard]] HOST_DEVICE std::optional<TriangleIntersection> intersect(const Ray &ray, const Real max_t, const Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
+    [[nodiscard]] HOST_DEVICE TriangleIntersection intersect(const Ray &ray, const Real max_t, const Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
         std::vector<int> vec;
         vec.reserve(log_n);
         std::stack stack(std::move(vec));
         stack.push(0);
         auto intersection_count = 0;
-        std::optional<TriangleIntersection> closest_hit;
+        TriangleIntersection closest_hit{};
 
         while (!stack.empty()) {
             const int i = stack.top();
             stack.pop();
-
+            intersection_count++;
             if (tree[i].triangle_idx >= 0) {
-                if (const auto &hit = triangles[tree[i].triangle_idx].intersect(ray, cull_backfaces)) {
-                    if (!closest_hit || (hit->t < closest_hit->t && hit->t < max_t)) {
+                const auto &hit = triangles[tree[i].triangle_idx].intersect(ray, cull_backfaces);
+                if (hit.t != 0) {
+                    if (closest_hit.t == 0 || hit.t < closest_hit.t) {
                         closest_hit = hit;
                     }
                 }
-                intersection_count++;
                 continue;
             }
 
-            intersection_count++;
+
             if (!tree[i].aabb.intersect(ray, max_t)) {
                 continue;
             }
@@ -237,9 +238,7 @@ public:
                 stack.push(i * 2 + 1);
             }
         }
-        if (closest_hit) {
-            closest_hit->intersection_count = intersection_count;
-        }
+        closest_hit.intersection_count = intersection_count;
         return closest_hit;
     }
 

@@ -16,6 +16,8 @@ struct Triangle {
     Vecf a_normal_data, b_normal_data, c_normal_data;
     u32 material_idx{};
 
+    constexpr Triangle() = default;
+
     constexpr Triangle(const Point &a, const Point &b, const Point &c, const int material_idx)
         : a_data{static_cast<float>(a.x), static_cast<float>(a.y), static_cast<float>(a.z)},
           b_data{static_cast<float>(b.x), static_cast<float>(b.y), static_cast<float>(b.z)},
@@ -66,7 +68,7 @@ struct Triangle {
         NO
     };
 
-    [[nodiscard]] inline std::optional<TriangleIntersection> intersect(const Ray &ray, CullBackfaces cull_backfaces) const;
+    [[nodiscard]] inline TriangleIntersection intersect(const Ray &ray, CullBackfaces cull_backfaces) const;
 
     constexpr Point operator[](const Real vertex) const { return vertex == 0 ? a() : vertex == 1 ? b() : c(); }
 
@@ -110,19 +112,21 @@ struct Face {
 };
 
 struct TriangleIntersection {
+    constexpr TriangleIntersection() = default;
+
     constexpr TriangleIntersection(const Triangle &triangle, const Real t, const Real u, const Real v) : triangle(triangle), t(t), u(u), v(v) {
     }
 
-    Triangle triangle;
+    Triangle triangle{};
     uint intersection_count{0};
     Material material{};
-    Real t;
-    Real u;
-    Real v;
+    Real t{0};
+    Real u{0};
+    Real v{0};
 };
 
 // https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
-std::optional<TriangleIntersection> HOST_DEVICE Triangle::intersect(const Ray &ray, const CullBackfaces cull_backfaces = CullBackfaces::YES) const {
+HOST_DEVICE TriangleIntersection Triangle::intersect(const Ray &ray, const CullBackfaces cull_backfaces = CullBackfaces::YES) const {
     constexpr Real epsilon = std::numeric_limits<Real>::epsilon();
     const Vec edge1 = b() - a();
     const Vec edge2 = c() - a();

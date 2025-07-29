@@ -367,8 +367,9 @@ public:
                 a.x = std::clamp(a.x, 0.f, static_cast<float>(camera_image_size.x - 1));
                 a.y = std::clamp(a.y, 0.f, static_cast<float>(camera_image_size.y - 1));
                 const auto ray = scene->camera.get_orthogonal_ray_at(a.x, a.y);
-                const auto hit_data = scene->intersect(ray);
-                im::Text("x: %4.0f, y: %4.0f: %d", a.x, a.y, hit_data->intersection_count);
+                if (const auto hit_data = scene->intersect(ray); hit_data.t != 0) {
+                    im::Text("x: %4.0f, y: %4.0f: %d", a.x, a.y, hit_data.intersection_count);
+                }
             }
             if (mouse_button_pressed) {
                 im::Text("FPS: %.1f", 1 / dt.asSeconds());

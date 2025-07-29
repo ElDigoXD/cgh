@@ -26,15 +26,15 @@ public:
         return std::ranges::any_of(meshes, [&](const Mesh &mesh) { return mesh.does_intersect(ray, max_t); });
     }
 
-    [[nodiscard]] HOST_DEVICE std::optional<TriangleIntersection> intersect(const Ray &ray, const Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
-        std::optional<TriangleIntersection> closest_hit;
+    [[nodiscard]] HOST_DEVICE TriangleIntersection intersect(const Ray &ray, const Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
+        TriangleIntersection closest_hit{};
         for (const auto &mesh: meshes) {
-            if (const auto &hit = mesh.intersect(ray, closest_hit ? closest_hit->t : T_MAX, cull_backfaces)) {
-                if (!closest_hit || hit->t < closest_hit->t) {
-                    auto old_intersection_count = closest_hit ? closest_hit->intersection_count : 0;
+            const auto &hit = mesh.intersect(ray, closest_hit.t != 0 ? closest_hit.t : T_MAX, cull_backfaces);
+            closest_hit.intersection_count += hit.intersection_count;
+            if (hit.t != 0) {
+                if (closest_hit.t == 0 || hit.t < closest_hit.t) {
                     closest_hit = hit;
-                    closest_hit->material = mesh.materials[hit->triangle.material_idx];
-                    closest_hit->intersection_count += old_intersection_count;
+                    closest_hit.material = mesh.materials[hit.triangle.material_idx];
                 }
             }
         }

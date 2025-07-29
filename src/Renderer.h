@@ -29,13 +29,13 @@ public:
             for (int x = 0; x < width; x++) {
                 const auto &ray = camera.get_random_orthogonal_ray_at(x, y);
 
-                if (const auto &hit_data = scene.intersect(ray)) {
+                if (const auto &t = scene.intersect(ray).t; t != 0) {
                     auto color = Color{0, 0, 0};
                     for (int i = 0; i < samples_per_pixel; i++) {
                         color += compute_ray_color(ray, scene, max_depth).clamp(0, 1);
                     }
                     color /= samples_per_pixel;
-                    point_cloud.emplace_back(ray.at(hit_data.value().t), Vecf{color.r, color.g, color.b}, 0);
+                    point_cloud.emplace_back(ray.at(t), Vecf{color.r, color.g, color.b}, 0);
                 }
             }
         }
@@ -140,9 +140,9 @@ public:
 
             for (int x = 0; x < IMAGE_WIDTH; x++) {
                 const auto &ray = scene.camera.get_orthogonal_ray_at(x, y);
-                if (const auto &hit = scene.intersect(ray, Triangle::CullBackfaces::YES)) {
-                    const auto &triangle = hit->triangle;
-                    const auto &normal = triangle.normal(hit->u, hit->v);
+                if (const auto &hit = scene.intersect(ray, Triangle::CullBackfaces::YES); hit.t != 0) {
+                    const auto &triangle = hit.triangle;
+                    const auto &normal = triangle.normal(hit.u, hit.v);
                     pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = static_cast<unsigned char>(std::sqrt(normal.x) * 255);
                     pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = static_cast<unsigned char>(std::sqrt(normal.y) * 255);
                     pixels[(y * IMAGE_WIDTH + x) * 4 + 2] = static_cast<unsigned char>(std::sqrt(normal.z) * 255);
@@ -152,18 +152,19 @@ public:
         }
     }
 
-    void render_intersection_count(u_char out_pixels[], const Scene &scene, const int max_value, const std::stop_token &st = {}) const {
-#pragma omp parallel for collapse(1) shared(out_pixels, scene, max_value, st) default(none) num_threads(thread_count) schedule(dynamic)
+    void render_intersection_count(u_char out_pixels[], const Scene &scene, const int max_value, const std::stop_token &st = {}) {
+#pragma omp parallel for collapse(1) shared(out_pixels, scene, max_value, st) default(none) num_threads(thread_count)
         for (int y = 0; y < IMAGE_HEIGHT; y++) {
             if (st.stop_requested()) [[unlikely]] continue;
             for (int x = 0; x < IMAGE_WIDTH; x++) {
                 Color color;
                 auto ray = scene.camera.get_random_orthogonal_ray_at(x, y);
                 ray.direction = normalize(ray.direction);
-                if (const auto hit_data = scene.intersect(ray)) {
-                    color = {1. * hit_data->intersection_count / max_value, 1. * hit_data->intersection_count / max_value, 1. * hit_data->intersection_count / max_value};
-                    color = Color::complexityToRGB(hit_data->intersection_count, max_value);
-                }
+                const auto hit_data = scene.intersect(ray);
+
+                //color = {1. * hit_data.intersection_count / max_value, 1. * hit_data.intersection_count / max_value, 1. * hit_data.intersection_count / max_value};
+                color = Color::complexityToRGB(hit_data.intersection_count, max_value);
+
                 color = color.clamp(0, 1);
                 out_pixels[(y * IMAGE_WIDTH + x) * 4 + 0] = static_cast<unsigned char>(std::sqrt(color.r) * 255);
                 out_pixels[(y * IMAGE_WIDTH + x) * 4 + 1] = static_cast<unsigned char>(std::sqrt(color.g) * 255);
@@ -181,17 +182,20 @@ public:
         Color attenuation(1, 1, 1);
         bool any_non_specular_bounces = false;
 
-        while (const auto &hit_data = scene.intersect(current_ray, Triangle::CullBackfaces::YES)) {
-            const auto &triangle = hit_data->triangle;
-            Material material = hit_data->material;
+        while (true) {
+            const auto &hit_data = scene.intersect(current_ray, Triangle::CullBackfaces::YES);
+            if (hit_data.t == 0) break;
+
+            const auto &triangle = hit_data.triangle;
+            Material material = hit_data.material;
             // Path regularization
             // https://pbr-book.org/4ed/Light_Transport_I_Surface_Reflection/A_Better_Path_Tracer#PathIntegrator::regularize
             // if (any_non_specular_bounces) {
             //     material.regularize();
             // }
 
-            const auto &normal = triangle.normal(hit_data->u, hit_data->v);
-            const Point p = current_ray.at(hit_data->t);
+            const auto &normal = triangle.normal(hit_data.u, hit_data.v);
+            const Point p = current_ray.at(hit_data.t);
 
             for (const auto &[light_position, light_color]: scene.point_lights) {
                 const auto &light_offset = light_position - p;
@@ -235,8 +239,8 @@ public:
                                                      const Vecf &color, const Real phase,
                                                      const Real two_pi_over_wavelength) {
         // Test visibility of the point
-        if (const auto &hit_data = scene.intersect(ray)) {
-            if (!(ray.at(hit_data->t) - expected_point).is_close_to_0()) {
+        if (const auto &hit_data = scene.intersect(ray); hit_data.t != 0) {
+            if (!(ray.at(hit_data.t) - expected_point).is_close_to_0()) {
                 return {0, 0};
             }
 
