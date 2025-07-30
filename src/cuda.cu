@@ -309,7 +309,7 @@ __global__ void kernel(cuda::std::complex<double> *out_complex_pixels, unsigned 
 #endif // #if ENABLE_COLOR_CGH #else
 }
 
-__global__ void test_kernel(const GPUScene &scene, unsigned char *out_pixels, const PointCloudPoint<> *point_cloud, const unsigned int pc_size) {
+__global__ void test_kernel(const GPUScene &scene, unsigned char *out_pixels, const PointCloudPoint<> *point_cloud, const unsigned int pc_size, const float* phases, const int num_images) {
     const uint x = threadIdx.x + blockIdx.x * blockDim.x;
     const uint y = threadIdx.y + blockIdx.y * blockDim.y;
     if ((x >= IMAGE_WIDTH) || (y >= IMAGE_HEIGHT)) return;
@@ -321,14 +321,20 @@ __global__ void test_kernel(const GPUScene &scene, unsigned char *out_pixels, co
 
     const auto slm_pixel_center = scene.camera.pixel_00_position + (scene.camera.pixel_delta_x * x) + (scene.camera.pixel_delta_y * y);
 
-    COMPLEX_T agg_luminance, agg_red, agg_green, agg_blue;
+    COMPLEX_T agg_luminance[num_images], agg_red[num_images], agg_green[num_images], agg_blue[num_images];
     for (unsigned int i = 0; i < pc_size; i++) {
         const auto [point, color, phase] = point_cloud[i];
         const auto ray = Ray{slm_pixel_center, point - slm_pixel_center};
         if (const auto &hit_data = scene.intersect(ray, T_MAX)) {
             if ((ray.at(hit_data) - point).is_close_to_0()) {
                 const auto distance_to_point = distance<REAL_T>(slm_pixel_center, point);
-                agg_luminance += compute_wave<REAL_T>(one_over_wavelength_red, distance_to_point, luminance(color), phase);
+                // agg_luminance += compute_wave<REAL_T>(one_over_wavelength_red, distance_to_point, luminance(color), phase);
+                double sin_val, cos_val;
+                for (int j = 0; j < num_images; j++) {
+                    const double y = one_over_wavelength_red * distance_to_point * 2 + phases[pc_size * j + i];
+                    sincospi(y, &sin_val, &cos_val);
+                    agg_luminance[j] += COMPLEX_T{cos_val*luminance(color), sin_val*luminance(color)};
+                }
 #if ENABLE_COLOR_CGH
                 agg_red += compute_wave<REAL_T>(one_over_wavelength_red, distance_to_point, color.r, phase);
                 agg_green += compute_wave<REAL_T>(one_over_wavelength_green, distance_to_point, color.g, phase);
@@ -345,38 +351,43 @@ __global__ void test_kernel(const GPUScene &scene, unsigned char *out_pixels, co
     out_pixels[pixel_index * 4 + 3] = static_cast<unsigned char>((arg(agg_luminance) + M_PIf) * SCALE);
     //out_pixels[pixel_index * 4 + 3] = 255;
 #else // #if !ENABLE_COLOR_CGH
-    const auto a = static_cast<unsigned char>((arg(agg_luminance) + M_PIf) * SCALE);
-    out_pixels[pixel_index * 4 + 0] = a;
-    out_pixels[pixel_index * 4 + 1] = a;
-    out_pixels[pixel_index * 4 + 2] = a;
-    out_pixels[pixel_index * 4 + 3] = 255;
+    for (int j = 0; j < num_images; j++) {
+        const auto a = static_cast<unsigned char>((arg(agg_luminance[j]) + M_PIf) * SCALE);
+        out_pixels[IMAGE_WIDTH * IMAGE_HEIGHT * j * 4 + pixel_index * 4 + 0] = a;
+        out_pixels[IMAGE_WIDTH * IMAGE_HEIGHT * j * 4 + pixel_index * 4 + 1] = a;
+        out_pixels[IMAGE_WIDTH * IMAGE_HEIGHT * j * 4 + pixel_index * 4 + 2] = a;
+        out_pixels[IMAGE_WIDTH * IMAGE_HEIGHT * j * 4 + pixel_index * 4 + 3] = 255;
+    }
 #endif // !ENABLE_COLOR_CGH
 }
 
-__host__ void use_cuda_occ(const Scene &scene, unsigned char pixels[], const PointCloud &point_cloud) {
+__host__ void use_cuda_occ(const Scene &scene, unsigned char pixels[], const PointCloud &point_cloud, const int num_images) {
     static constexpr uint num_pixels = IMAGE_WIDTH * IMAGE_HEIGHT;
 
     dim3 block(32, 32);
     dim3 grid(IMAGE_WIDTH / block.x + 1, IMAGE_HEIGHT / block.y + 1);
-    int minGridSize, blockSize;
-    cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, test_kernel);
-    std::cout << "Suggested block size: " << blockSize << "\n";
-
 
     const auto gpu_scene = GPUScene(scene);
     unsigned char *out_pixels_buff;
-    CU(cudaMallocManaged(&out_pixels_buff, num_pixels * 4 * sizeof(unsigned char)));
+    CU(cudaMallocManaged(&out_pixels_buff, num_pixels * 4 * sizeof(unsigned char) * num_images));
     PointCloudPoint<> *pc;
     CU(cudaMallocManaged(&pc, point_cloud.size() * sizeof(PointCloudPoint<>)));
     for (unsigned int i = 0; i < point_cloud.size(); i++) {
         pc[i] = {point_cloud[i].point, point_cloud[i].color, point_cloud[i].phase};
     }
+    float* phases;
+    CU(cudaMallocManaged(&phases, point_cloud.size() * sizeof(float) * num_images));
+    for (int j = 0; j < num_images; j++) {
+        for (unsigned int i = 0; i < point_cloud.size(); i++) {
+            phases[point_cloud.size() * j + i] = rand_real() * 2;
+        }
+    }
     CU(cudaGetLastError());
 
-    test_kernel<<<grid, block>>>(gpu_scene, out_pixels_buff, pc, point_cloud.size());
+    test_kernel<<<grid, block>>>(gpu_scene, out_pixels_buff, pc, point_cloud.size(), phases, num_images);
     CU(cudaGetLastError());
     CU(cudaDeviceSynchronize());
-    std::copy_n(out_pixels_buff, num_pixels * 4, pixels);
+    std::copy_n(out_pixels_buff, num_pixels * 4 * num_images, pixels);
     CU(cudaFree(out_pixels_buff));
 }
 

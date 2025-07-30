@@ -1,6 +1,7 @@
 #pragma once
 
 #define VIRTUAL_SLM_FACTOR 1
+#define NUM_IMAGES 10
 
 // Sets VIRTUAL_SLM_FACTOR to 1
 #define ENABLE_COLOR_CGH 0

@@ -40,7 +40,7 @@ public:
     sf::Clock update_texture_clock;
 
     // Render data
-    unsigned char *pixels = new unsigned char[max_window_size.x * max_window_size.y * 4];
+    unsigned char *pixels = new unsigned char[max_window_size.x * max_window_size.y * 4 * NUM_IMAGES];
     std::complex<Real> *complex_pixels = new std::complex<Real> [max_window_size.x * max_window_size.y * 4];
     Scene *scene = nullptr;
     PointCloud point_cloud;

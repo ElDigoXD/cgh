@@ -48,6 +48,10 @@ void compute_n_cghs(unsigned char *pixels, PointCloud pc, const int n, const std
     };
 
     for (int i = 0; i < n; i++) {
+        if (n > 1) {
+            printf("[ INFO ] N > 1 is not updated yet\n");
+            return;
+        }
         const auto start = now();
         for (auto &p: pc) {
             p.phase = rand_real() * 2; // In the range [0, 2) instead of [0, 2π) to comply with the CUDA implementation
@@ -60,13 +64,17 @@ void compute_n_cghs(unsigned char *pixels, PointCloud pc, const int n, const std
         auto filename = output_path + std::to_string(i) + std::string{".png"};
         printf("Saving CGH to %s\n", filename.c_str());
         //[[maybe_unused]] auto _ = sf::Image({IMAGE_WIDTH, IMAGE_HEIGHT}, pixels).saveToFile(filename);
-        const rl::Image image{
-            .data = pixels,
-            .width = IMAGE_WIDTH,
-            .height = IMAGE_HEIGHT,
-            .format = rl::PixelFormat::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
-        };
-        rl::ExportImage(image, filename.c_str());
+        for (int j = 0; j < 10; j++) {
+            filename = output_path + std::to_string(j) + std::string{".png"};
+            printf("Saving CGH to %s\n", filename.c_str());
+            const rl::Image image{
+                .data = &pixels[IMAGE_WIDTH * IMAGE_HEIGHT * 4 * j],
+                .width = IMAGE_WIDTH,
+                .height = IMAGE_HEIGHT,
+                .format = rl::PixelFormat::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
+            };
+            rl::ExportImage(image, filename.c_str());
+        }
     }
 }
 
@@ -94,6 +102,8 @@ int main(const int argc, char **argv) {
     enable_occlusion = use_occlusion_arg.Get();
 
     if (!headless) {
+        enable_gpu = true;
+        enable_occlusion = true;
         return gui_main(pc);
     }
     srand(42);
@@ -102,7 +112,7 @@ int main(const int argc, char **argv) {
         reduce_point_cloud(pc, target_points);
     }
 
-    const auto pixels = new unsigned char[IMAGE_WIDTH * IMAGE_HEIGHT * 4];
+    const auto pixels = new unsigned char[IMAGE_WIDTH * IMAGE_HEIGHT * 4 * 10];
     compute_n_cghs(pixels, pc, 1, "../");
 }
 
