@@ -175,12 +175,12 @@ public:
                             const auto pt = sprite.getInverseTransform().transformPoint(sf::Vector2<float>(sf::Mouse::getPosition(window)));
                             const auto &ray = scene->camera.get_orthogonal_ray_at(pt.x, pt.y);
 
-                            std::optional<TriangleIntersection> closest_hit;
+                            TriangleIntersection closest_hit = {};
                             for (auto &mesh: scene->meshes) {
-                                if (const auto &hit = mesh.intersect(ray, closest_hit ? closest_hit->t : std::numeric_limits<Real>::infinity(), Triangle::CullBackfaces::YES)) {
-                                    if (!closest_hit || hit->t < closest_hit->t) {
+                                if (const auto &hit = mesh.intersect(ray, closest_hit.t != 0 ? closest_hit.t : std::numeric_limits<Real>::infinity(), Triangle::CullBackfaces::YES); hit.t != 0) {
+                                    if (closest_hit.t == 0 || hit.t < closest_hit.t) {
                                         closest_hit = hit;
-                                        current_material = &mesh.materials[hit->triangle.material_idx];
+                                        current_material = &mesh.materials[hit.triangle.material_idx];
                                     }
                                 }
                             }
@@ -575,7 +575,7 @@ public:
                 // Get an approximated render time
                 printf("\n[ INFO ] Computing a small CGH to get expected time...\n");
                 auto start = now();
-                auto tmp_point_cloud = renderer.compute_point_cloud_orthographic(*scene, 100, 50);
+                auto tmp_point_cloud = renderer.compute_point_cloud_orthographic(*scene, 16, 9);
                 printf("         Points: %s\n", add_thousand_separator(tmp_point_cloud.size()).c_str());
                 // Draw the points as temporary visualization
                 for (const auto &[point, color, phase]: tmp_point_cloud) {
@@ -621,7 +621,7 @@ public:
                     renderer.render_cgi(pixels, *scene, st);
                 }
             }
-            texture.update(pixels, camera_image_size, {0, 0});
+            texture.update(&pixels[IMAGE_HEIGHT * IMAGE_WIDTH * 4], camera_image_size, {0, 0});
             rendering = false;
             expected_time = 0;
             if (!st.stop_requested()) {

@@ -158,7 +158,7 @@ public:
             if (st.stop_requested()) [[unlikely]] continue;
             for (int x = 0; x < IMAGE_WIDTH; x++) {
                 Color color;
-                auto ray = scene.camera.get_random_orthogonal_ray_at(x, y);
+                auto ray = scene.camera.get_orthogonal_ray_at(x, y);
                 ray.direction = normalize(ray.direction);
                 const auto hit_data = scene.intersect(ray);
 
