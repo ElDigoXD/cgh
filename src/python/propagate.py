@@ -9,6 +9,8 @@ from numpy import ndarray
 from PIL import Image
 from numpy.fft.helper import fftshift
 from numpy.fft import fft2, ifft2
+#import cupy as cp
+#from cupy.fft import fft2, ifft2, fftshift
 import sys
 
 mm = 1
@@ -93,6 +95,7 @@ def import_cgh(image_path: str, grayscale=False, phase_only=False, rgb_only=Fals
 # Propagation kernel
 def propagate(data: ndarray[complex], slm_z: float, wavelength: float, virtual_slm_factor=1):
     # Have margins for the fft
+    #data = cp.array(data, dtype=complex, blocking=True)
     nx = 2048 * 2
     ny = 2048 * 2
 
@@ -155,18 +158,27 @@ def main():
         #for z in range(2900, 3005, 5):
         if True:
             #z /= 10
-            z = 291
+            z = 299
             rgbs = []
-            for i in range(count):
+            import concurrent.futures
+
+            def process_image(i):
                 print(f"Image {i}:")
-                complex_data = import_cgh(f"{image_path}/{i}.png", grayscale=False, phase_only=True, rgb_only=True)
-                r = (np.abs(propagate(complex_data[0], -z * mm, wl_red)) / 7).clip(0, 1)
-                g = (np.abs(propagate(complex_data[1], -z * mm, wl_green)) / 7).clip(0, 1)
-                b = (np.abs(propagate(complex_data[2], -z * mm, wl_blue)) / 7).clip(0, 1)
+                if grayscale:
+                    complex_data = import_cgh(f"{image_path}/{i}.png", grayscale=True, phase_only=phase_only)
+                    r = (np.abs(propagate(complex_data[0], -z * mm, wl_red)))
+                    plt.imsave(f"{image_path}/out/{i}.png", r, cmap='gray')
+                else:
+                    complex_data = import_cgh(f"{image_path}/{i}.png", grayscale=False, phase_only=True, rgb_only=True)
+                    r = (np.abs(propagate(complex_data[0], -z * mm, wl_red)) / 7).clip(0, 1)
+                    g = (np.abs(propagate(complex_data[1], -z * mm, wl_green)) / 7).clip(0, 1)
+                    b = (np.abs(propagate(complex_data[2], -z * mm, wl_blue)) / 7).clip(0, 1)
+                    plt.imsave(f"{image_path}/out/{i}.png", np.dstack((r, g, b)))
 
-                plt.imsave(f"{image_path}/out/{i}.png", np.dstack((r, g, b)))
+            # Parallelize the loop
+            with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+                executor.map(process_image, range(count))
 
-                #rgbs.append(np.dstack((r, g, b)))
 
             return
             rgbs = np.array(rgbs)
