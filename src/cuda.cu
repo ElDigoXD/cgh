@@ -115,6 +115,8 @@ struct GPUMesh {
                     // Leave room for 2 more elements
                     stack[stack_ptr++] = i * 2 + 2;
                     stack[stack_ptr++] = i * 2 + 1;
+                } else {
+                    assert(false || "Stack is not big enough for BVH traversal");
                 }
             }
         }
