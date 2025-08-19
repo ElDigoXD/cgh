@@ -180,12 +180,14 @@ constexpr static Scene *dragon() {
     mesh.normalize();
     mesh.scale(6);
 
-    mesh.materials[0] = Material{GGXBRDF{Color::cyan(), 0.5, 1}};
+    mesh.materials[0] = Material{GGXBRDF{Color{255, 255, 255} / 255, .69, 1}};
 
     const auto scene = new Scene(camera);
     scene->add_mesh(mesh);
 
-    scene->point_lights.emplace_back(Point{0, 100, 0}, Color{1, 1, 1});
+    scene->point_lights.emplace_back(Point{50, 0, 100}, Color{0, 1, 0} * 1);
+    scene->point_lights.emplace_back(Point{-50, 0, 100}, Color{0, 0, 1} * 1);
+    scene->point_lights.emplace_back(Point{0, 100, 100}, Color{1, 1, 1} * 1);
     return scene;
 }
 
