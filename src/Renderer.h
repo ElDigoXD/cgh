@@ -42,6 +42,22 @@ public:
         return point_cloud;
     }
 
+    static PointCloud compute_point_cloud_from_mesh(const Scene &scene, const int width, const int height) {
+        PointCloud point_cloud;
+        for (const auto &mesh: scene.meshes) {
+            for (const auto &triangle: mesh.triangles) {
+                if (dot(triangle.normal(), scene.camera.w) >= -0.1) {
+                    const auto center = (triangle.a() + triangle.b() + triangle.c()) / 3;
+                    const auto color = triangle.normal(1 / 3.f, 1 / 3.f);
+                    point_cloud.emplace_back(center, Vecf{color.r, color.g, color.b}, 0);
+                }
+            }
+        }
+
+        return point_cloud;
+    }
+
+
     void render_cgi(u_char out_pixels[], const Scene &scene, const std::stop_token &st = {}) const {
         printf("\n[ INFO ] Starting cgi render...\n");
         printf("         Using CPU (%d threads)\n", thread_count);
@@ -98,7 +114,7 @@ public:
                          scene.camera.pixel_delta_x, scene.camera.pixel_delta_y);
             }
         } else {
-            printf("[ INFO ] CPU %s\n", enable_occlusion ? "occlusion enabled" : "no occlussion");
+            printf("[ INFO ] CPU %s\n", enable_occlusion ? "occlusion enabled" : "no occlusion");
             static constexpr Real wavelength = 0.6328e-3;
             static constexpr Real two_pi_over_wavelength = 2 * std::numbers::pi / wavelength;
 #pragma omp parallel for collapse(2) shared(out_pixels, out_complex_pixels, point_cloud, scene, st) default(none) num_threads(thread_count) schedule(dynamic)

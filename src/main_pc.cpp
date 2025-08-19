@@ -94,7 +94,8 @@ int main(const int argc, char **argv) {
         std::cerr << "[ ERROR ] Argument error, please use '" << parser.Prog() << " -h' to display the help menu\n";
         std::exit(1);
     }
-    auto pc = PointCloud::load_point_cloud("../point_cloud.bin");
+    //auto pc = PointCloud::load_point_cloud("../point_cloud.bin");
+    auto pc = Renderer::compute_point_cloud_from_mesh(*scene, IMAGE_WIDTH, IMAGE_HEIGHT);
 
     target_points = target_points_arg.Get();
     headless = headless_arg.Get();
