@@ -1,7 +1,8 @@
 #pragma once
 #include "config.h"
-#include "Ray.h"
 #include "utils.h"
+
+#include "Ray.h"
 
 class OrthoCamera {
 public:

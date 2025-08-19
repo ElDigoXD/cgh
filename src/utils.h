@@ -1,5 +1,11 @@
 #pragma once
 
+#ifdef __CUDACC__
+#define HOST_DEVICE __host__ __device__
+#else
+#define HOST_DEVICE
+#endif
+
 #include <chrono>
 #include <numbers>
 
@@ -43,11 +49,7 @@ constexpr static VecType mix(const VecType &a, const VecType &b, const Real t) {
     return a * (1 - t) + b * t;
 }
 
-#ifdef __CUDACC__
-#define HOST_DEVICE __host__ __device__
-#else
-#define HOST_DEVICE
-#endif
+
 
 static void save_binary_cgh(const Complex *complex_pixels, const char *path) {
     FILE *fd = std::fopen(path, "w");
