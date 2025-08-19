@@ -621,7 +621,7 @@ public:
                     renderer.render_cgi(pixels, *scene, st);
                 }
             }
-            texture.update(&pixels[IMAGE_HEIGHT * IMAGE_WIDTH * 4], camera_image_size, {0, 0});
+            texture.update(pixels, camera_image_size, {0, 0});
             rendering = false;
             expected_time = 0;
             if (!st.stop_requested()) {
