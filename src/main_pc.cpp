@@ -61,14 +61,13 @@ void compute_n_cghs(unsigned char *pixels, PointCloud pc, const int n, const std
         //use_cuda_occ(*scene, pixels, pc);
         renderer.render_cgh(pixels, complex_pixels, *scene, pc);
         fprintf(stderr, "[ RESULT ] %d Time: \t%.2f \tPoints: \t%lu\n", i, (now() - start) / 1000.f, pc.size());
-        auto filename = output_path + std::to_string(i) + std::string{".png"};
-        printf("Saving CGH to %s\n", filename.c_str());
-        //[[maybe_unused]] auto _ = sf::Image({IMAGE_WIDTH, IMAGE_HEIGHT}, pixels).saveToFile(filename);
-        for (int j = 0; j < 10; j++) {
+        std::string filename;
+#pragma omp parallel for default(none) shared(pixels, output_path) private(filename)
+        for (int j = 0; j < NUM_IMAGES; j++) {
             filename = output_path + std::to_string(j) + std::string{".png"};
             printf("Saving CGH to %s\n", filename.c_str());
             const rl::Image image{
-                .data = &pixels[IMAGE_WIDTH * IMAGE_HEIGHT * 4 * j],
+                .data = &pixels[IMAGE_WIDTH * IMAGE_HEIGHT * 4ull * j],
                 .width = IMAGE_WIDTH,
                 .height = IMAGE_HEIGHT,
                 .format = rl::PixelFormat::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
@@ -113,7 +112,8 @@ int main(const int argc, char **argv) {
         reduce_point_cloud(pc, target_points);
     }
 
-    const auto pixels = new unsigned char[IMAGE_WIDTH * IMAGE_HEIGHT * 4 * 10];
+    printf("pixel[] size: %llu\n", IMAGE_WIDTH*1ull * IMAGE_HEIGHT*1 * 4ull * NUM_IMAGES);
+    const auto pixels = new unsigned char[IMAGE_WIDTH * IMAGE_HEIGHT * 4ull * NUM_IMAGES];
     compute_n_cghs(pixels, pc, 1, "../");
 }
 
@@ -181,7 +181,7 @@ int gui_main(PointCloud pc) {
         .fovy = 8.5f,
         .projection = rl::CameraProjection::CAMERA_ORTHOGRAPHIC
     };
-    const auto pixels = new unsigned char[IMAGE_WIDTH * IMAGE_HEIGHT * 4];
+    const auto pixels = new unsigned char[IMAGE_WIDTH * IMAGE_HEIGHT * 4ull * NUM_IMAGES];
 
     while (!rl::WindowShouldClose()) {
         rl::BeginDrawing();
