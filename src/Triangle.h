@@ -59,6 +59,10 @@ struct Triangle {
         return Vector{b_normal_data * u + c_normal_data * v + a_normal_data * (1 - u - v)}.normalize();
     }
 
+    Point get_point_from_barycentric(const Real u, const Real v) const {
+        return a() * (1 - u - v) + b() * u + c() * v;
+    }
+
     constexpr bool operator==(const Triangle &other) const {
         return a() == other.a() && b() == other.b() && c() == other.c();
     }

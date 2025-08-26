@@ -13,4 +13,8 @@ public:
     [[nodiscard]] constexpr Point at(const Real t) const {
         return origin + direction * t;
     }
+
+    static Ray from_to_normalized(const Point &from, const Point &to) {
+        return Ray{from, normalize(to - from)};
+    }
 };

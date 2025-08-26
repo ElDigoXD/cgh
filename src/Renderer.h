@@ -42,18 +42,88 @@ public:
         return point_cloud;
     }
 
-    static PointCloud compute_point_cloud_from_mesh(const Scene &scene, const int width, const int height) {
+    [[nodiscard]] PointCloud compute_point_cloud_from_mesh(const Scene &scene, const int, const int) const {
         PointCloud point_cloud;
         for (const auto &mesh: scene.meshes) {
-            for (const auto &triangle: mesh.triangles) {
-                if (dot(triangle.normal(), scene.camera.w) >= -0.1) {
-                    const auto center = (triangle.a() + triangle.b() + triangle.c()) / 3;
-                    const auto color = triangle.normal(1 / 3.f, 1 / 3.f);
-                    point_cloud.emplace_back(center, Vecf{color.r, color.g, color.b}, 0);
+            for (const auto &base_triangle: mesh.triangles) {
+                if (dot(base_triangle.normal(), scene.camera.w) >= -0.1) {
+                    std::vector<std::tuple<Point, Real, Real> > points;
+                    auto uvs = std::vector<std::pair<Real, Real> >{};
+                    auto area = base_triangle.area();
+                    if (area < 0.001) {
+                        uvs.emplace_back(1 / 3., 1 / 3.);
+                    } else {
+                        for (int i = 0; i < area/0.001; i++) {
+                            uvs.emplace_back(rand_real(), rand_real());
+                        }
+                    }
+                    for (const auto &[u, v]: uvs) {
+                        points.emplace_back(base_triangle.get_point_from_barycentric(u, v), u, v);
+                    }
+                    for (const auto &point: points) {
+                        auto [center, u, v] = point;
+                        const auto ray = Ray(center, (center - scene.camera.look_from).normalize());
+                        Ray first_ray = ray;
+                        first_ray.origin += first_ray.at(-0.001f);
+                        Color color;
+                        for (int i = 0; i < samples_per_pixel; i++) {
+                            Color final_color; {
+                                Ray current_ray = first_ray;
+                                int current_depth = max_depth;
+                                Color accumulated_lighting(0, 0, 0);
+                                Color attenuation(1, 1, 1);
+                                Point p;
+                                while (true) {
+                                    Triangle triangle;
+                                    Material material;
+                                    Vec normal;
+                                    if (current_depth == max_depth) {
+                                        triangle = base_triangle;
+                                        material = mesh.materials[triangle.material_idx];
+                                        normal = triangle.normal(u, v);
+                                        p = center;
+                                    } else {
+                                        const auto &hit_data = scene.intersect(current_ray, Triangle::CullBackfaces::YES);
+                                        if (hit_data.t == 0) break;
+                                        triangle = hit_data.triangle;
+                                        material = hit_data.material;
+                                        normal = triangle.normal(hit_data.u, hit_data.v);
+                                        p = current_ray.at(hit_data.t);
+                                    }
+
+                                    for (const auto &[light_position, light_color]: scene.point_lights) {
+                                        const auto &light_offset = light_position - p;
+                                        const auto &light_distance = light_offset.length();
+                                        const auto &light_direction = light_offset.normalize();
+                                        const auto &dot_product = dot(light_direction, normal);
+
+                                        if (dot_product >= 0) {
+                                            const auto shadow_ray = Ray{p, light_direction};
+                                            if (!scene.does_intersect(shadow_ray, light_distance)) {
+                                                const auto &c = material.BRDF(light_direction, -current_ray.direction, normal);
+                                                accumulated_lighting += attenuation * c * light_color;
+                                            }
+                                        }
+                                    }
+                                    const auto [scatter_direction, w, is_specular_sample] = material.sample(normal, -current_ray.direction);
+                                    attenuation *= w;
+                                    if (luminance(attenuation) <= 1e-3f || --current_depth == 0) {
+                                        break;
+                                    }
+                                    current_ray = Ray{p, Vec{scatter_direction}};
+                                }
+
+                                final_color = accumulated_lighting;
+                            }
+                            color += final_color.clamp(0, 1);
+                        }
+                        color /= samples_per_pixel;
+                        if (color != Color::black())
+                            point_cloud.emplace_back(center, Vecf{color.r, color.g, color.b}, 0);
+                    }
                 }
             }
         }
-
         return point_cloud;
     }
 
