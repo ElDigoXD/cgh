@@ -22,6 +22,7 @@ include(FetchContent)
 # Deps:
 # - Cuda: https://developer.nvidia.com/cuda-downloads?target_os=Linux&target_arch=x86_64&Distribution=WSL-Ubuntu&target_version=2.0&target_type=deb_local
 # - GCC14: sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+# - GCC15: from source
 # - other: sudo apt install cmake gdb ninja-build build-essential
 # - libs: sudo apt install libx11-dev libxrandr-dev libxcursor-dev libxi-dev libgl1-mesa-dev libudev-dev libfreetype-dev libxinerama-dev
 
