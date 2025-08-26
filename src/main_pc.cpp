@@ -130,9 +130,9 @@ void draw_point(const PointCloudPoint<> &point) {
                        static_cast<float>(point.point.z) + 0.01f
                    },
                    (rl::Color){
-                       static_cast<unsigned char>(point.color.r * 255),
-                       static_cast<unsigned char>(point.color.g * 255),
-                       static_cast<unsigned char>(point.color.b * 255),
+                       static_cast<unsigned char>(sqrt(point.color.r) * 255),
+                       static_cast<unsigned char>(sqrt(point.color.g) * 255),
+                       static_cast<unsigned char>(sqrt(point.color.b) * 255),
                        255
                    });
 }
