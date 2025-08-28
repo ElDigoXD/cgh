@@ -19,7 +19,7 @@ struct PointCloudPoint {
     }
 };
 
-struct PointCloud : std::vector<PointCloudPoint<>> {
+struct PointCloud : std::vector<PointCloudPoint<> > {
     void save_binary_point_cloud(const char *path) const {
         FILE *fd = std::fopen(path, "w");
         if (fd == nullptr) {
