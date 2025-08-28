@@ -46,6 +46,31 @@ public:
         meshes.emplace_back(mesh);
     }
 
+    [[nodiscard]]
+    Scene* prepare_for_occlusion() const {
+        const auto new_scene = new Scene{camera};
+        new_scene->point_lights = point_lights;
+
+        for (const auto &mesh: meshes) {
+            Mesh new_mesh;
+            new_mesh.materials = mesh.materials;
+            new_mesh.tree = std::vector<Mesh::Node>{mesh.tree.size()};
+
+            for (const auto &triangle: mesh.triangles) {
+                const auto normal = triangle.normal();
+                if (dot(normal, camera.w) >= -0.1) {
+                    new_mesh.triangles.emplace_back(triangle);
+                }
+            }
+            new_mesh.log_n = mesh.log_n;
+
+            new_scene->add_mesh(new_mesh);
+        }
+        printf("[ Info ] Prepared scene for occlusion with %d triangles (originally %d triangles).\n",
+               new_scene->get_triangle_count(), get_triangle_count());
+        return new_scene;
+    }
+
     [[nodiscard]] constexpr int get_triangle_count() const {
         int count = 0;
         for (const auto &mesh: meshes) {

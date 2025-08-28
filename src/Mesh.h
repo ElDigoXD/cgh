@@ -21,7 +21,10 @@ public:
     std::vector<Material> materials{};
     std::vector<Triangle> triangles;
 
-    const int log_n;
+    int log_n;
+
+    explicit constexpr Mesh() : log_n(1) {
+    }
 
     explicit constexpr Mesh(const std::vector<Face> &faces, const std::vector<Vecf> &vertices, const std::vector<Vecf> &normals, const std::vector<Material> &materials)
         : tree(static_cast<int>(std::pow(2, static_cast<int>(std::ceil(std::log2(faces.size()) + 1))))),

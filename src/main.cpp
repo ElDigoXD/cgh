@@ -122,6 +122,7 @@ public:
             }
         }
         update_scene();
+        // scene = scene->prepare_for_occlusion();
 
         //camera.update(1920, 1080);
         memset(pixels, 256 / 2, max_window_size.x * max_window_size.y * 4);
