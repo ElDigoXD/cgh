@@ -16,11 +16,6 @@
 #include "Vector.h"
 #include "cuda.h"
 
-
-#define TINYOBJLOADER_IMPLEMENTATION
-#include "Scene.h"
-#include "tiny_obj_loader.h"
-
 class GUI {
 public:
     // GUI data

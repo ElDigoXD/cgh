@@ -22,10 +22,6 @@ namespace rl {
 #include "args.hxx"
 //#include "SFML/Graphics.hpp"
 
-#define TINYOBJLOADER_IMPLEMENTATION
-#include "tiny_obj_loader.h"
-
-
 int target_points = 10'000;
 bool headless = false;
 bool enable_gpu = false;
