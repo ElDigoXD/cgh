@@ -37,8 +37,11 @@ public:
     constexpr Vector(const Real x, const Real y, const Real z) : x{x}, y{y}, z{z} { // NOLINT(*-pro-type-member-init)
     }
 
-    template<class VecType> requires std::is_same_v<VecType, Vecf>
-    explicit Vector(const VecType &v): x{v.x}, y{v.y}, z{v.z} {
+    template<class VecType> requires std::is_same_v<VecType, Vecf> || std::is_same_v<VecType, Vector>
+    explicit Vector(const VecType &v) : x{v.x}, y{v.y}, z{v.z} { // NOLINT(*-pro-type-member-init)
+    }
+
+    explicit Vector(const std::array<Real, 3> &v) : x{v[0]}, y{v[1]}, z{v[2]} { // NOLINT(*-pro-type-member-init)
     }
 
     template<class VecType> requires std::is_same_v<VecType, Vector> || std::is_same_v<VecType, Vecf>
