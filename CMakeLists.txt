@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.28)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 20)
 set(CMAKE_CUDA_ARCHITECTURES native)
-set(CMAKE_CUDA_FLAGS "-march=native -Wall -Wextra --expt-relaxed-constexpr --ptxas-options=-v --maxrregcount=64 ")
+set(CMAKE_CUDA_FLAGS "-march=native -Wall -Wextra -Wno-unused-function --expt-relaxed-constexpr --maxrregcount=64 ")
 set(CMAKE_CUDA_FLAGS_DEBUG "-g -G")
 set(CMAKE_CUDA_FLAGS_RELWITHDEBINFO "-O3 -Xptxas -O3")
 set(CMAKE_CUDA_FLAGS_RELEASE "-O3 -Xptxas -O3")
@@ -102,7 +102,9 @@ FetchContent_MakeAvailable(raygui)
 add_library(raygui-lib INTERFACE ${raygui_SOURCE_DIR})
 target_include_directories(raygui-lib INTERFACE ${raygui_SOURCE_DIR})
 
-file(GLOB_RECURSE SRC_FILES "src/*!(main).cpp" src/*.h src/*.cu)
+file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS src/*.cpp src/*.h src/*.cu)
+list(FILTER SRC_FILES EXCLUDE REGEX ".*/main(_pc)?\\.cpp$")
+
 add_executable(gui
         ${SRC_FILES}
         src/main.cpp
@@ -121,4 +123,3 @@ set_target_properties(gui PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON)
 set_target_properties(pc PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON)
-
