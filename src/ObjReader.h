@@ -8,6 +8,7 @@
 
 #include "tiny_obj_loader.h"
 
+[[maybe_unused]]
 static Mesh load(const char *filename) {
     tinyobj::ObjReader reader;
     tinyobj::ObjReaderConfig config;

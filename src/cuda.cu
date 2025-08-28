@@ -74,7 +74,6 @@ struct GPUNode {
     AABB aabb;
     int32_t triangle_idx{-1};
 
-    HOST_DEVICE
     GPUNode() = default;
 
     explicit HOST_DEVICE GPUNode(const Mesh::Node &node)
@@ -278,7 +277,12 @@ __global__ void kernel(cuda::std::complex<double> *out_complex_pixels, unsigned 
 
     const auto slm_pixel_center = slm_pixel_00_location + (slm_pixel_delta_x * x) + (slm_pixel_delta_y * y);
 
+#if ENABLE_COLOR_CGH
     COMPLEX_T agg_luminance, agg_red, agg_green, agg_blue;
+#elif !ENABLE_COLOR_CGH
+    COMPLEX_T agg_luminance;
+#endif // #if ENABLE_COLOR_CGH
+
     for (unsigned int i = 0; i < pc_size; i++) {
         const auto [point, color, phase] = point_cloud[i];
         const auto distance_to_point = distance<REAL_T, VEC_T>(slm_pixel_center, point);
@@ -326,7 +330,12 @@ __global__ void occ_kernel(const GPUScene scene, unsigned char *out_pixels, cons
 
     const auto slm_pixel_center = scene.camera.pixel_00_position + (scene.camera.pixel_delta_x * x) + (scene.camera.pixel_delta_y * y);
 
+#if ENABLE_COLOR_CGH
     COMPLEX_T agg_luminance[NUM_IMAGES], agg_red[NUM_IMAGES], agg_green[NUM_IMAGES], agg_blue[NUM_IMAGES];
+#elif !ENABLE_COLOR_CGH
+    COMPLEX_T agg_luminance[NUM_IMAGES];
+#endif // #if ENABLE_COLOR_CGH
+
     for (unsigned int i = 0; i < pc_size; i++) {
         const auto [point, color, phase] = point_cloud[i];
         const auto ray = Ray{slm_pixel_center, point - slm_pixel_center};
@@ -412,7 +421,7 @@ __host__ void use_cuda_occ(const Scene &scene, unsigned char pixels[], const Poi
 }
 
 // Point cloud phase must be in the range [0, 2).
-__host__ void use_cuda(unsigned char out_pixels[], std::complex<Real> out_complex_pixels[], const PointCloud &point_cloud,
+__host__ void use_cuda(unsigned char out_pixels[], [[maybe_unused]] std::complex<Real> out_complex_pixels[], const PointCloud &point_cloud,
                        const Point &slm_pixel_00_location, const Vec &slm_pixel_delta_x, const Vec &slm_pixel_delta_y) {
     static constexpr uint num_pixels = IMAGE_WIDTH * IMAGE_HEIGHT;
 

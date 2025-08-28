@@ -75,7 +75,7 @@ static constexpr Vecf reflect(const Vecf &i, const Vecf &n) {
     return i - 2 * n * dot(i, n);
 }
 
-static constexpr Vecf sample_hemisphere() {
+static Vecf sample_hemisphere() {
     const auto r = rand_real();
     const auto a = sqrt(r);
     const auto b = 2 * M_PI * rand_real();

@@ -1,4 +1,5 @@
 #pragma once
+#include "config.h"
 
 #ifdef __CUDACC__
 #define HOST_DEVICE __host__ __device__
@@ -29,6 +30,7 @@ static uint now() {
     return static_cast<uint>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
 }
 
+[[maybe_unused]]
 static std::chrono::year_month_day get_current_date() {
     return std::chrono::year_month_day{std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now())};
 }
@@ -50,7 +52,7 @@ constexpr static VecType mix(const VecType &a, const VecType &b, const Real t) {
 }
 
 
-
+[[maybe_unused]]
 static void save_binary_cgh(const Complex *complex_pixels, const char *path) {
     FILE *fd = std::fopen(path, "w");
     if (fd == nullptr) {

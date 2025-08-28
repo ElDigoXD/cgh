@@ -16,13 +16,12 @@ namespace rl {
 #include "raylib.h"
 #define RAYGUI_IMPLEMENTATION
 #include "raygui.h"
-#include "raymath.h"
 }
 
 #include "args.hxx"
 //#include "SFML/Graphics.hpp"
 
-int target_points = 10'000;
+uint target_points = 10'000;
 bool headless = false;
 bool enable_gpu = false;
 bool enable_occlusion = false;
@@ -31,9 +30,6 @@ const auto *scene = dragon();
 int gui_main(PointCloud pc);
 
 void compute_n_cghs(unsigned char *pixels, PointCloud pc, const int n, const std::string &output_path) {
-    const auto camera = OrthoCamera(
-        {0, 0, 0}, /* look_at */
-        {0, 1, 300} /* look_from */);
     const auto complex_pixels = new std::complex<Real>[IMAGE_WIDTH * IMAGE_HEIGHT * 4];
     Renderer renderer{
         .thread_count = 16,
@@ -50,11 +46,9 @@ void compute_n_cghs(unsigned char *pixels, PointCloud pc, const int n, const std
         }
         const auto start = now();
         for (auto &p: pc) {
-            p.phase = rand_real() * 2; // In the range [0, 2) instead of [0, 2π) to comply with the CUDA implementation
+            p.phase = static_cast<float>(rand_real() * 2); // In the range [0, 2) instead of [0, 2π) to comply with the CUDA implementation
             p.phase = 0;
         }
-        //use_cuda(pixels, complex_pixels, pc, scene->camera.pixel_00_position, scene->camera.pixel_delta_x, scene->camera.pixel_delta_y);
-        //use_cuda_occ(*scene, pixels, pc);
         renderer.render_cgh(pixels, complex_pixels, *scene, pc);
         fprintf(stderr, "[ RESULT ] %d Time: \t%.2f \tPoints: \t%lu\n", i, (now() - start) / 1000.f, pc.size());
         std::string filename;
@@ -66,6 +60,7 @@ void compute_n_cghs(unsigned char *pixels, PointCloud pc, const int n, const std
                 .data = &pixels[IMAGE_WIDTH * IMAGE_HEIGHT * 4ull * j],
                 .width = IMAGE_WIDTH,
                 .height = IMAGE_HEIGHT,
+                .mipmaps = 1,
                 .format = rl::PixelFormat::PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
             };
             rl::ExportImage(image, filename.c_str());
@@ -149,7 +144,7 @@ struct GuiState {
 };
 
 int gui_main(PointCloud pc) {
-    rl::SetConfigFlags(rl::FLAG_WINDOW_RESIZABLE | rl::FLAG_VSYNC_HINT);
+    rl::SetConfigFlags(rl::FLAG_WINDOW_RESIZABLE | rl::FLAG_VSYNC_HINT | rl::FLAG_MSAA_4X_HINT);
     rl::InitWindow(1920 / 2, 1080 / 2, "Point Cloud to CGH");
     rl::SetTargetFPS(60);
     rl::SetExitKey(rl::KEY_NULL);
@@ -159,7 +154,7 @@ int gui_main(PointCloud pc) {
     rl::GuiSetStyle(rl::DEFAULT, rl::TEXT_COLOR_NORMAL, 0x000000FF);
     rl::GuiSetStyle(rl::DEFAULT, rl::TEXT_COLOR_PRESSED, 0x101010FF);
     rl::GuiSetStyle(rl::DEFAULT, rl::TEXT_COLOR_FOCUSED, 0x202020FF);
-    rl::SetTraceLogLevel(rl::LOG_DEBUG);
+    rl::SetTraceLogLevel(rl::LOG_WARNING);
 
     bool shouldUpdateTexture = true;
     GuiState state;
@@ -270,7 +265,7 @@ int gui_main(PointCloud pc) {
             shouldUpdateTexture = true;
         }
         offset_y += 30;
-        if (auto val = rl::GuiSpinner({offset_x, offset_y, 80, 20}, "", &state.num_renders, 0, 1'000, false)) {
+        if (rl::GuiSpinner({offset_x, offset_y, 80, 20}, "", &state.num_renders, 0, 1'000, false)) {
             if (rl::IsKeyDown(rl::KeyboardKey::KEY_LEFT_SHIFT)) {
                 state.num_renders += 5;
             }

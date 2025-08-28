@@ -12,7 +12,7 @@ struct GGXBRDF final : BRDF {
     Color f0;
     Color diffuse_reflectance;
 
-    GGXBRDF(const Color &base_color, const float perceptual_roughness, const float metalness)
+    constexpr GGXBRDF(const Color &base_color, const float perceptual_roughness, const float metalness)
         : base_color(base_color), roughness(perceptual_roughness * perceptual_roughness), metalness(metalness) {
         f0 = mix(f0_dielectrics, base_color, metalness);
         diffuse_reflectance = base_color * (1 - metalness);
@@ -32,7 +32,7 @@ struct GGXBRDF final : BRDF {
         return specular + diffuse * (Color{1, 1, 1} - f);
     }
 
-    [[nodiscard]] constexpr std::tuple<Vecf, Color, bool> sample(const Vec &N, const Vec &V) const override {
+    [[nodiscard]] std::tuple<Vecf, Color, bool> sample(const Vec &N, const Vec &V) const override {
         if (dot(N, V) <= 0) {
             return {{0, 0, 0}, {0, 0, 0}, false};
             assert(false && "V must be in the same hemisphere as N");
@@ -133,7 +133,7 @@ struct GGXBRDF final : BRDF {
         return 0.5f / (a + b);
     }
 
-    [[nodiscard]] constexpr Vecf sample_half_vector_ggx(const Vecf &v_local) const {
+    [[nodiscard]] Vecf sample_half_vector_ggx(const Vecf &v_local) const {
         // Section 3.2: transforming the view direction to the hemisphere configuration
         const Vecf v_hemi = normalize(Vecf{roughness * v_local.x, roughness * v_local.y, v_local.z});
 

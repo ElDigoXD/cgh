@@ -79,7 +79,8 @@ public:
         return {ax, ay};
     }
 
-    [[nodiscard]] HOST_DEVICE std::string to_string() const {
+    [[nodiscard]]
+    std::string to_string() const {
         return std::format(
             "OrthoCamera(look_at: {}, look_from: {})", look_at.to_string(), look_from.to_string());
     }
