@@ -393,8 +393,8 @@ __host__ void use_cuda_occ(const Scene &scene, unsigned char pixels[], const Poi
     dim3 block(32, 32);
     dim3 grid(IMAGE_WIDTH / block.x + 1, IMAGE_HEIGHT / block.y + 1);
 
-    //const auto *occ_scene = scene.prepare_for_occlusion();
-    const auto gpu_scene = GPUScene(scene);
+    const auto *occ_scene = scene.prepare_for_occlusion();
+    const auto gpu_scene = GPUScene(*occ_scene);
     unsigned char *out_pixels_buff;
     CU(cudaMallocManaged(&out_pixels_buff, (num_pixels * 4ull * sizeof(unsigned char) * NUM_IMAGES)));
     PointCloudPoint<> *pc;

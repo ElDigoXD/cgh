@@ -179,7 +179,7 @@ public:
                 printf("[ INFO ] CUDA occlusion enabled\n");
                 use_cuda_occ(scene, out_pixels, point_cloud);
             } else {
-                printf("[ INFO ] CUDA no occlussion\n");
+                printf("[ INFO ] CUDA no occlusion\n");
                 use_cuda(out_pixels, out_complex_pixels, point_cloud, scene.camera.pixel_00_position,
                          scene.camera.pixel_delta_x, scene.camera.pixel_delta_y);
             }
@@ -187,18 +187,19 @@ public:
             printf("[ INFO ] CPU %s\n", enable_occlusion ? "occlusion enabled" : "no occlusion");
             static constexpr Real wavelength = 0.6328e-3;
             static constexpr Real two_pi_over_wavelength = 2 * std::numbers::pi / wavelength;
-#pragma omp parallel for collapse(2) shared(out_pixels, out_complex_pixels, point_cloud, scene, st) default(none) num_threads(thread_count) schedule(dynamic)
+            auto scene_occ = *scene.prepare_for_occlusion();
+#pragma omp parallel for collapse(2) shared(out_pixels, out_complex_pixels, point_cloud, scene_occ, st) default(none) num_threads(thread_count) schedule(dynamic)
             for (int y = 0; y < IMAGE_HEIGHT; y++) {
                 for (int x = 0; x < IMAGE_WIDTH; x++) {
                     if (!st.stop_requested()) [[likely]] {
                         const uint pixel_index = y * IMAGE_WIDTH + x;
-                        const auto slm_pixel_center = scene.camera.pixel_00_position + (scene.camera.pixel_delta_x * x) + (scene.camera.pixel_delta_y * y);
+                        const auto slm_pixel_center = scene_occ.camera.pixel_00_position + (scene_occ.camera.pixel_delta_x * x) + (scene_occ.camera.pixel_delta_y * y);
                         std::complex<Real> agg;
                         for (const auto &[point, color, phase]: point_cloud) {
                             std::complex<Real> wave;
                             if (enable_occlusion) {
                                 const auto ray = Ray{slm_pixel_center, point - slm_pixel_center};
-                                wave = compute_wave_occlusion(ray, scene, point, color, phase, two_pi_over_wavelength);
+                                wave = compute_wave_occlusion(ray, scene_occ, point, color, phase, two_pi_over_wavelength);
                             } else {
                                 wave = compute_wave_no_occlusion(slm_pixel_center, point, color, phase, two_pi_over_wavelength);
                             }
