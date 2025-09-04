@@ -25,6 +25,9 @@ uint target_points = 10'000;
 bool headless = false;
 bool enable_gpu = false;
 bool enable_occlusion = false;
+unsigned int num_images = 1;
+bool use_color = true;
+
 const auto *scene = dragon();
 
 int gui_main(PointCloud pc);
@@ -36,8 +39,14 @@ void compute_n_cghs(unsigned char *pixels, PointCloud pc, const int n, const std
         .samples_per_pixel = 10,
         .max_depth = 10,
         .use_gpu = enable_gpu,
-        .enable_occlusion = enable_occlusion
+        .enable_occlusion = enable_occlusion,
+        .num_images = num_images,
+        .use_color = use_color
     };
+
+    // TODO: Remove. For testing purposes only.
+    //pc = renderer.compute_point_cloud_from_mesh(*scene, IMAGE_WIDTH, IMAGE_HEIGHT);
+    //pc.save_binary_point_cloud("../point_cloud.bin");
 
     for (int i = 0; i < n; i++) {
         if (n > 1) {
@@ -52,8 +61,8 @@ void compute_n_cghs(unsigned char *pixels, PointCloud pc, const int n, const std
         renderer.render_cgh(pixels, complex_pixels, *scene, pc);
         fprintf(stderr, "[ RESULT ] %d Time: \t%.2f \tPoints: \t%lu\n", i, (now() - start) / 1000.f, pc.size());
         std::string filename;
-#pragma omp parallel for default(none) shared(pixels, output_path) private(filename)
-        for (int j = 0; j < NUM_IMAGES; j++) {
+#pragma omp parallel for default(none) shared(pixels, output_path, num_images) private(filename)
+        for (uint j = 0; j < num_images; j++) {
             filename = output_path + std::to_string(j) + std::string{".png"};
             printf("Saving CGH to %s\n", filename.c_str());
             const rl::Image image{
@@ -73,24 +82,61 @@ int main(const int argc, char **argv) {
     args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
     args::ValueFlag target_points_arg(parser, "", "Target number of points", {'p', "points"}, target_points);
     args::Flag headless_arg(parser, "headless", "Headless mode", {"headless"}, headless);
-    args::Flag use_gpu_arg(parser, "gpu", "Use GPU", {'g', "gpu"});
-    args::Flag use_occlusion_arg(parser, "occlusion", "Use occlusion", {'o', "occ"});
+
+    args::Group hw_group(parser, "", args::Group::Validators::Xor);
+    args::Flag use_gpu_arg(hw_group, "", "Use GPU", {"gpu"});
+    args::Flag use_cpu_arg(hw_group, "", "Use CPU", {"cpu"});
+
+    args::Group color_group(parser, "", args::Group::Validators::Xor);
+    args::Flag use_color_arg(color_group, "", "Use color", {"color"});
+    args::Flag use_grayscale_arg(color_group, "", "Use luminance", {"gs", "grayscale"});
+
+    args::Flag use_occlusion_arg(parser, "", "Use occlusion", {'o', "occ"});
+    args::ValueFlag num_images_arg(parser, "", "Number of images", {"num-images"}, num_images);
+
+
+
     try {
         parser.ParseCLI(argc, argv);
     } catch (const args::Help &) {
         std::cout << parser;
         std::exit(0);
-    } catch (const args::ParseError &) {
+    } catch (const args::ParseError &e) {
         std::cerr << "[ ERROR ] Argument error, please use '" << parser.Prog() << " -h' to display the help menu\n";
+        std::cerr << e.what() << std::endl;
+
         std::exit(1);
+    } catch (const args::ValidationError &e) {
+        std::cerr << "[ ERROR ] Argument validation error, please use '" << parser.Prog() << " -h' to display the help menu\n";
+        std::cerr << e.what() << std::endl;
+        if (headless_arg.Get()) {
+            std::exit(1);
+        }
     }
-    //auto pc = PointCloud::load_point_cloud("../point_cloud.bin");
-    auto pc = Renderer::compute_point_cloud_from_mesh(*scene, IMAGE_WIDTH, IMAGE_HEIGHT);
 
     target_points = target_points_arg.Get();
     headless = headless_arg.Get();
     enable_gpu = use_gpu_arg.Get();
     enable_occlusion = use_occlusion_arg.Get();
+    num_images = num_images_arg.Get();
+    use_color = use_color_arg.Get();
+
+    auto pc = PointCloud::load_point_cloud("../point_cloud.bin");
+    //auto pc = Renderer::compute_point_cloud_from_mesh(*scene, IMAGE_WIDTH, IMAGE_HEIGHT);
+
+    //    // TODO: Remove. For testing purposes only.
+    //#pragma region Temp point cloud
+    //    Renderer renderer{
+    //        .thread_count = 16,
+    //        .samples_per_pixel = 16,
+    //        .max_depth = 10,
+    //        .use_gpu = enable_gpu,
+    //        .enable_occlusion = enable_occlusion
+    //    };
+    //
+    //    pc = renderer.compute_point_cloud_from_mesh(*scene, IMAGE_WIDTH, IMAGE_HEIGHT);
+    //    pc.save_binary_point_cloud("../point_cloud.bin");
+    //#pragma endregion Temp point cloud
 
     if (!headless) {
         enable_gpu = true;
@@ -103,8 +149,8 @@ int main(const int argc, char **argv) {
         reduce_point_cloud(pc, target_points);
     }
 
-    printf("pixel[] size: %llu\n", IMAGE_WIDTH*1ull * IMAGE_HEIGHT*1 * 4ull * NUM_IMAGES);
-    const auto pixels = new unsigned char[IMAGE_WIDTH * IMAGE_HEIGHT * 4ull * NUM_IMAGES];
+    printf("pixel[] size: %llu\n", IMAGE_WIDTH * 1ull * IMAGE_HEIGHT * 1 * 4ull * num_images);
+    const auto pixels = new unsigned char[IMAGE_WIDTH * IMAGE_HEIGHT * 4ull * num_images];
     compute_n_cghs(pixels, pc, 1, "../");
 }
 
@@ -172,7 +218,7 @@ int gui_main(PointCloud pc) {
         .fovy = 8.5f,
         .projection = rl::CameraProjection::CAMERA_ORTHOGRAPHIC
     };
-    const auto pixels = new unsigned char[IMAGE_WIDTH * IMAGE_HEIGHT * 4ull * NUM_IMAGES];
+    const auto pixels = new unsigned char[IMAGE_WIDTH * IMAGE_HEIGHT * 4ull * num_images];
 
     while (!rl::WindowShouldClose()) {
         rl::BeginDrawing();

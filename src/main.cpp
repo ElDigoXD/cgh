@@ -35,7 +35,7 @@ public:
     sf::Clock update_texture_clock;
 
     // Render data
-    unsigned char *pixels = new unsigned char[max_window_size.x * max_window_size.y * 4 * NUM_IMAGES];
+    unsigned char *pixels = new unsigned char[max_window_size.x * max_window_size.y * 4 * 1];
     std::complex<Real> *complex_pixels = new std::complex<Real> [max_window_size.x * max_window_size.y * 4];
     Scene *scene = nullptr;
     PointCloud point_cloud;
@@ -48,7 +48,9 @@ public:
         .samples_per_pixel = samples_per_pixel,
         .max_depth = max_depth,
         .use_gpu = true,
-        .enable_occlusion = false
+        .enable_occlusion = false,
+        .num_images = 1,
+        .use_color = true
     };
 
     sf::VertexArray wire;
@@ -122,7 +124,7 @@ public:
             }
         }
         update_scene();
-        // scene = scene->prepare_for_occlusion();
+        scene = scene->prepare_for_occlusion();
 
         //camera.update(1920, 1080);
         memset(pixels, 256 / 2, max_window_size.x * max_window_size.y * 4);

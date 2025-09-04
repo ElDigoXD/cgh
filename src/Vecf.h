@@ -106,5 +106,5 @@ constexpr Vecf operator*(const Real scalar, const Vecf &v) {
 }
 
 static constexpr float luminance(const Vecf &color) {
-    return 0.2126f * static_cast<float>(color.x) + 0.7152f * static_cast<float>(color.y) + 0.0722f * static_cast<float>(color.z);
+    return 0.2126f * static_cast<float>(color.r) + 0.7152f * static_cast<float>(color.g) + 0.0722f * static_cast<float>(color.b);
 }

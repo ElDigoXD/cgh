@@ -203,7 +203,7 @@ def main():
                    cmap='gray')
 
     if len(complex_data) == 1:  # Grayscale
-        plt.imsave(f'output/propagation/{image_path.split("/")[-1]}_291.png',
+        plt.imsave(f'output/propagation/{image_path.split("/")[-1]}_{z}.png',
                    np.abs(propagate(complex_data[0], -z * mm, wl_red)), cmap='gray')
         plt.imshow(np.abs(propagate(complex_data[0], -z * mm, wl_red)), cmap='gray')
         plt.show()

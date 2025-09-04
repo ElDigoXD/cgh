@@ -8,11 +8,15 @@
 
 class Renderer {
 public:
+    // For cgi & pc:
     int thread_count;
     int samples_per_pixel;
     int max_depth;
+    // For cgh
     bool use_gpu;
     bool enable_occlusion;
+    unsigned int num_images;
+    bool use_color;
 
     [[nodiscard]]
     PointCloud compute_point_cloud_orthographic(const Scene &scene, const int width, const int height) const {
@@ -50,10 +54,10 @@ public:
                     std::vector<std::tuple<Point, Real, Real> > points;
                     auto uvs = std::vector<std::pair<Real, Real> >{};
                     auto area = base_triangle.area();
-                    if (area < 0.001) {
+                    if (area < 0.0005) {
                         uvs.emplace_back(1 / 3., 1 / 3.);
                     } else {
-                        for (int i = 0; i < area/0.001; i++) {
+                        for (int i = 0; i < area/0.0005; i++) {
                             uvs.emplace_back(rand_real(), rand_real());
                         }
                     }
@@ -177,11 +181,11 @@ public:
         if (use_gpu) {
             if (enable_occlusion) {
                 printf("[ INFO ] CUDA occlusion enabled\n");
-                use_cuda_occ(scene, out_pixels, point_cloud);
+                use_cuda_occ(scene, out_pixels, point_cloud, num_images, use_color);
             } else {
                 printf("[ INFO ] CUDA no occlusion\n");
                 use_cuda(out_pixels, out_complex_pixels, point_cloud, scene.camera.pixel_00_position,
-                         scene.camera.pixel_delta_x, scene.camera.pixel_delta_y);
+                         scene.camera.pixel_delta_x, scene.camera.pixel_delta_y, use_color);
             }
         } else {
             printf("[ INFO ] CPU %s\n", enable_occlusion ? "occlusion enabled" : "no occlusion");
