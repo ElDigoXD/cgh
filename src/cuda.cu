@@ -33,7 +33,7 @@ void check_cuda(const cudaError_t result, char const *const func, const char *co
 }
 
 using REAL_T = double;
-using VEC_T = Vector;
+using VEC_T = Vec;
 using COMPLEX_T = cuda::std::complex<REAL_T>;
 
 
@@ -434,11 +434,11 @@ __host__ void use_cuda_occ(const Scene &scene,
     }
     float *phases;
     CU(cudaMallocManaged(&phases, point_cloud.size() * sizeof(float) * num_images * 1ull));
-    //for (int j = 0; j < num_images; j++) {
-    //    for (unsigned int i = 0; i < point_cloud.size(); i++) {
-    //        phases[point_cloud.size() * j + i] = rand_real() * 2;
-    //    }
-    //}
+    for (uint j = 0; j < num_images; j++) {
+        for (unsigned int i = 0; i < point_cloud.size(); i++) {
+            phases[point_cloud.size() * j + i] = rand_real() * 2;
+        }
+    }
     CU(cudaGetLastError());
     if (use_color) {
         switch (num_images) {
@@ -483,6 +483,7 @@ __host__ void use_cuda(unsigned char out_pixels[],
                        const Point &slm_pixel_00_location,
                        const Vec &slm_pixel_delta_x,
                        const Vec &slm_pixel_delta_y,
+                       const unsigned int num_images,
                        const bool use_color) {
     static constexpr uint num_pixels = IMAGE_WIDTH * IMAGE_HEIGHT;
 
@@ -509,7 +510,7 @@ __host__ void use_cuda(unsigned char out_pixels[],
 #if VIRTUAL_SLM_FACTOR > 1
     CU(cudaMallocManaged(&complex_pixels_buff, num_pixels * sizeof(cuda::std::complex<double>)));
 #endif
-    CU(cudaMallocManaged(&out_pixels_buff, num_pixels * 4 * sizeof(unsigned char)));
+    CU(cudaMallocManaged(&out_pixels_buff, (num_pixels * 4ull * sizeof(unsigned char) * num_images)));
     PointCloudPoint<VEC_T> *pc;
     CU(cudaMallocManaged(&pc, point_cloud.size() * sizeof(PointCloudPoint<VEC_T>)));
     for (unsigned int i = 0; i < point_cloud.size(); i++) {
@@ -522,14 +523,22 @@ __host__ void use_cuda(unsigned char out_pixels[],
     //CU(cudaMallocManaged(&out_pixels_buff, num_pixels * 4 * sizeof(unsigned char)));
     CU(cudaMallocManaged(&complex_pixels_buff, 0));
 #endif // #if VIRTUAL_SLM_FACTOR == 1
-    kernel<VEC_T><<<grid, block>>>(complex_pixels_buff, out_pixels_buff, pc, point_cloud.size(),
-                                   VEC_T{slm_pixel_00_location.data},
-                                   VEC_T{slm_pixel_delta_x.data},
-                                   VEC_T{slm_pixel_delta_y.data},
-                                   use_color);
-    CU(cudaGetLastError());
-    CU(cudaDeviceSynchronize());
-    std::copy_n(out_pixels_buff, num_pixels * 4, out_pixels);
+    srand(time(nullptr));
+    rng_state = rand();
+    for (uint j = 0; j < num_images; j++) {
+        for (unsigned int i = 0; i < point_cloud.size(); i++) {
+            pc[i].phase = rand_real() * 2;
+        }
+        kernel<VEC_T><<<grid, block>>>(complex_pixels_buff, out_pixels_buff, pc, point_cloud.size(),
+                                       VEC_T{slm_pixel_00_location.data},
+                                       VEC_T{slm_pixel_delta_x.data},
+                                       VEC_T{slm_pixel_delta_y.data},
+                                       use_color);
+        CU(cudaGetLastError());
+        CU(cudaDeviceSynchronize());
+        cudaMemcpy(&out_pixels[j*num_pixels*4ull], out_pixels_buff,num_pixels * 4ull, cudaMemcpyDeviceToHost);
+    }
+    //std::copy_n(out_pixels_buff, num_pixels * 4, out_pixels);
     CU(cudaFree(out_pixels_buff));
 #if VIRTUAL_SLM_FACTOR > 1
     std::copy_n(complex_pixels_buff, num_pixels, out_complex_pixels);

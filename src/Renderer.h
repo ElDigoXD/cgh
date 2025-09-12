@@ -43,6 +43,11 @@ public:
                 }
             }
         }
+
+        //std::erase_if(point_cloud, [](const PointCloudPoint<> &p) {
+        //    return p.color.r == 0.00 && p.color.g == 0.00 && p.color.b == 0.0;
+        //});
+
         return point_cloud;
     }
 
@@ -54,10 +59,11 @@ public:
                     std::vector<std::tuple<Point, Real, Real> > points;
                     auto uvs = std::vector<std::pair<Real, Real> >{};
                     auto area = base_triangle.area();
-                    if (area < 0.0005) {
+                    const auto area_ratio = 1 / 10.f;
+                    if (area < 0.0005 * area_ratio) {
                         uvs.emplace_back(1 / 3., 1 / 3.);
                     } else {
-                        for (int i = 0; i < area/0.0005; i++) {
+                        for (int i = 0; i < area / (0.0005 * area_ratio); i++) {
                             uvs.emplace_back(rand_real(), rand_real());
                         }
                     }
@@ -163,7 +169,9 @@ public:
                get_human_time((now() - start) / 1000.f).c_str());
     }
 
-    void render_cgh(unsigned char out_pixels[], std::complex<Real> out_complex_pixels[], const Scene &scene,
+    void render_cgh(unsigned char out_pixels[],
+                    std::complex<Real> out_complex_pixels[],
+                    const Scene &scene,
                     PointCloud &point_cloud,
                     const std::stop_token &st = {}) {
         //// Erase points with less than 1% in all channels
@@ -185,7 +193,7 @@ public:
             } else {
                 printf("[ INFO ] CUDA no occlusion\n");
                 use_cuda(out_pixels, out_complex_pixels, point_cloud, scene.camera.pixel_00_position,
-                         scene.camera.pixel_delta_x, scene.camera.pixel_delta_y, use_color);
+                         scene.camera.pixel_delta_x, scene.camera.pixel_delta_y, num_images, use_color);
             }
         } else {
             printf("[ INFO ] CPU %s\n", enable_occlusion ? "occlusion enabled" : "no occlusion");

@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <random>
 #include <vector>
 
 #include "utils.h"
@@ -80,7 +81,11 @@ struct PointCloud : std::vector<PointCloudPoint<> > {
 inline void reduce_point_cloud(PointCloud &pc, const int target_points) {
     const auto ratio = static_cast<double>(target_points) / static_cast<double>(pc.size());
     printf("Resizing point cloud from %s to %s\n", add_thousand_separator(pc.size()).c_str(), add_thousand_separator(target_points).c_str());
-    std::ranges::remove_if(pc, [ratio](const auto &) { return rand_real() >= ratio; });
+    std::ranges::shuffle(pc.begin(), pc.end(), std::default_random_engine{});
+    auto [ret, last] = std::ranges::remove_if(pc, [ratio](const auto &) { return rand_real() >= ratio; });
     pc.erase(pc.begin() + target_points, pc.end());
+    std::ranges::sort(pc, [](const auto &a, const auto &b) {return a.point.x < b.point.x;});
+
+    //pc.erase(ret + target_points, last);
     printf("Resized point cloud to %s points\n", add_thousand_separator(pc.size()).c_str());
 }

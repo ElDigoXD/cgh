@@ -1,6 +1,7 @@
 import os
 import sys
 
+import imageio
 import PIL.Image
 import argparse
 import matplotlib.pyplot as plt
@@ -8,7 +9,7 @@ import numpy as np
 
 parser = argparse.ArgumentParser(description="Calibrate CGHs")
 parser.add_argument("CGH", type=str, help="Path to the CGH directory")
-parser.add_argument("-c", "--count", type=int, default=1, help="Number of images to propagate")
+parser.add_argument("-c", "--count", type=int, default=1, help="Number of images to calibrate")
 
 args = parser.parse_args()
 if len(sys.argv) == 1:
@@ -24,10 +25,12 @@ for i in range(count):
     # Carga la imagen
     imagen_raw = PIL.Image.open(f"{image_path}/{i}.png")
     a = np.array(imagen_raw)
+    if a.shape[2] == 4:
+        a = a[:, :, 3]
+    else:
+        a = a[:, :, 0]
     rango = 255
-    
     # Calculo de nueva fase, calibrada para el SLM
-    a = a[:, :, 3]
     phase = a * 2.0 * np.pi / rango + np.pi / 2.0
 
     # Coeficientes obtenidos a partir del proceso de calibracion
@@ -45,3 +48,4 @@ for i in range(count):
 
     # Almacenamiento del holograma calibrado
     plt.imsave(f"{image_path}/calibrado/{i}.png", NG2, cmap="gray",  vmin=0, vmax=255)
+    #imageio.imsave(f"{image_path}/calibrado/{i}.png", NG2, cmap="gray",  vmin=0, vmax=255)

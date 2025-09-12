@@ -24,7 +24,7 @@ namespace rl {
 uint target_points = 10'000;
 bool headless = false;
 bool enable_gpu = false;
-bool enable_occlusion = false;
+bool enable_occlusion = true;
 unsigned int num_images = 1;
 bool use_color = true;
 
@@ -32,7 +32,7 @@ const auto *scene = dragon();
 
 int gui_main(PointCloud pc);
 
-void compute_n_cghs(unsigned char *pixels, PointCloud pc, const int n, const std::string &output_path) {
+void compute_n_cghs(unsigned char *pixels, PointCloud pc, int n, const std::string &output_path) {
     const auto complex_pixels = new std::complex<Real>[IMAGE_WIDTH * IMAGE_HEIGHT * 4];
     Renderer renderer{
         .thread_count = 16,
@@ -46,10 +46,16 @@ void compute_n_cghs(unsigned char *pixels, PointCloud pc, const int n, const std
 
     // TODO: Remove. For testing purposes only.
     //pc = renderer.compute_point_cloud_from_mesh(*scene, IMAGE_WIDTH, IMAGE_HEIGHT);
-    //pc.save_binary_point_cloud("../point_cloud.bin");
+    //pc = renderer.compute_point_cloud_orthographic(*scene, IMAGE_WIDTH, IMAGE_HEIGHT);
+    //pc.save_binary_point_cloud("../point_cloud_ortho.bin");
+    if (!renderer.enable_occlusion) {
+        n = num_images;
+        num_images = 1;
+        renderer.num_images = 1;
+    }
 
     for (int i = 0; i < n; i++) {
-        if (n > 1) {
+        if (n > 1 && renderer.enable_occlusion) {
             printf("[ INFO ] N > 1 is not updated yet\n");
             return;
         }
@@ -61,9 +67,13 @@ void compute_n_cghs(unsigned char *pixels, PointCloud pc, const int n, const std
         renderer.render_cgh(pixels, complex_pixels, *scene, pc);
         fprintf(stderr, "[ RESULT ] %d Time: \t%.2f \tPoints: \t%lu\n", i, (now() - start) / 1000.f, pc.size());
         std::string filename;
-#pragma omp parallel for default(none) shared(pixels, output_path, num_images) private(filename)
+#pragma omp parallel for default(none) shared(pixels, output_path, num_images, i, n) private(filename)
         for (uint j = 0; j < num_images; j++) {
-            filename = output_path + std::to_string(j) + std::string{".png"};
+            if (n == 1) {
+                filename = output_path + std::to_string(j) + ".png";
+            } else {
+                filename = output_path + std::to_string(i) + ".png";
+            }
             printf("Saving CGH to %s\n", filename.c_str());
             const rl::Image image{
                 .data = &pixels[IMAGE_WIDTH * IMAGE_HEIGHT * 4ull * j],
@@ -95,7 +105,6 @@ int main(const int argc, char **argv) {
     args::ValueFlag num_images_arg(parser, "", "Number of images", {"num-images"}, num_images);
 
 
-
     try {
         parser.ParseCLI(argc, argv);
     } catch (const args::Help &) {
@@ -121,7 +130,16 @@ int main(const int argc, char **argv) {
     num_images = num_images_arg.Get();
     use_color = use_color_arg.Get();
 
-    auto pc = PointCloud::load_point_cloud("../point_cloud.bin");
+    PointCloud pc;
+    if (enable_occlusion) {
+        srand(42);
+        rng_state = rand();
+        pc = PointCloud::load_point_cloud("../point_cloud.bin");
+        reduce_point_cloud(pc, 400000);
+    } else {
+        pc = PointCloud::load_point_cloud("../point_cloud_ortho.bin");
+    }
+
     //auto pc = Renderer::compute_point_cloud_from_mesh(*scene, IMAGE_WIDTH, IMAGE_HEIGHT);
 
     //    // TODO: Remove. For testing purposes only.

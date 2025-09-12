@@ -152,32 +152,36 @@ def main():
 
     # For multiple images
     if count > 1:
-        if not os.path.exists(f"{image_path}/average"): os.mkdir(f"{image_path}/average")
-        if not os.path.exists(f"{image_path}/median"): os.mkdir(f"{image_path}/median")
+        #if not os.path.exists(f"{image_path}/average"): os.mkdir(f"{image_path}/average")
+        #if not os.path.exists(f"{image_path}/median"): os.mkdir(f"{image_path}/median")
+        if not os.path.exists(f"{image_path}/out"): os.mkdir(f"{image_path}/out")
 
         #for z in range(2900, 3005, 5):
         if True:
             #z /= 10
-            z = 299
+            #z = 299
             rgbs = []
             import concurrent.futures
 
             def process_image(i):
+
                 print(f"Image {i}:")
                 if grayscale:
                     complex_data = import_cgh(f"{image_path}/{i}.png", grayscale=True, phase_only=phase_only)
                     r = (np.abs(propagate(complex_data[0], -z * mm, wl_red)))
                     plt.imsave(f"{image_path}/out/{i}.png", r, cmap='gray')
                 else:
-                    complex_data = import_cgh(f"{image_path}/{i}.png", grayscale=False, phase_only=True, rgb_only=True)
+                    complex_data = import_cgh(f"{image_path}/{i}.png", grayscale=False, phase_only=True, rgb_only=False)
                     r = (np.abs(propagate(complex_data[0], -z * mm, wl_red)) / 7).clip(0, 1)
                     g = (np.abs(propagate(complex_data[1], -z * mm, wl_green)) / 7).clip(0, 1)
                     b = (np.abs(propagate(complex_data[2], -z * mm, wl_blue)) / 7).clip(0, 1)
+                    a = (np.abs(propagate(complex_data[3], -z * mm, wl_red)) / 7).clip(0, 1)
                     plt.imsave(f"{image_path}/out/{i}.png", np.dstack((r, g, b)))
+                    plt.imsave(f"{image_path}/out/{i}g.png", a, cmap='gray')
 
             # Parallelize the loop
-            with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-                executor.map(process_image, range(count))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()-2) as executor:
+                executor.map(process_image, range(0, count))
 
 
             return
