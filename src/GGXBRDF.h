@@ -20,10 +20,10 @@ struct GGXBRDF final : BRDF {
 
     [[nodiscard]] constexpr Color brdf(const Vec &L, const Vec &V, const Vec &N) const override {
         const auto h = normalize(L + V);
-        const auto n_dot_h = dot(N, h);
-        const auto n_dot_l = dot(N, L);
-        const auto n_dot_v = dot(N, V);
-        const auto v_dot_h = dot(V, h);
+        const auto n_dot_h = std::max(0.00001, dot(N, h));
+        const auto n_dot_l = std::max(0.00001, dot(N, L));
+        const auto n_dot_v = std::max(0.00001, dot(N, V));
+        const auto v_dot_h = std::max(0.00001, dot(V, h));
 
         const auto f = schlick_fresnel(f0, v_dot_h);
         const auto diffuse = lambert_diffuse_brdf(diffuse_reflectance, n_dot_l);
@@ -130,6 +130,8 @@ struct GGXBRDF final : BRDF {
         const auto a = n_dot_v * std::sqrt(roughness2 + n_dot_l * (n_dot_l - roughness2 * n_dot_l));
         const auto b = n_dot_l * std::sqrt(roughness2 + n_dot_v * (n_dot_v - roughness2 * n_dot_v));
 
+        if (a + b == 0)
+            return 0;
         return 0.5f / (a + b);
     }
 
