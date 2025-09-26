@@ -60,6 +60,7 @@ struct Triangle {
     }
 
     Point get_point_from_barycentric(const Real u, const Real v) const {
+        assert(u+v <= 1);
         return a() * (1 - u - v) + b() * u + c() * v;
     }
 
