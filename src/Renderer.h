@@ -21,6 +21,7 @@ public:
     [[nodiscard]]
     PointCloud compute_point_cloud_orthographic(const Scene &scene, const int width, const int height) const {
         PointCloud point_cloud;
+        std::mutex mutex;
         auto camera = scene.camera;
         const auto viewport_x = camera.u * camera.viewport_width;
         const auto viewport_y = -camera.v * camera.viewport_height;
@@ -29,6 +30,7 @@ public:
         camera.pixel_delta_y = viewport_y / height;
         camera.pixel_00_position = viewport_upper_left + (camera.pixel_delta_x + camera.pixel_delta_y) / 2;
 
+#pragma omp parallel for collapse(2) shared(scene, point_cloud, camera, mutex, width, height) default(none) num_threads(thread_count) schedule(dynamic)
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 const auto &ray = camera.get_random_orthogonal_ray_at(x, y);
@@ -36,20 +38,120 @@ public:
                 if (const auto &t = scene.intersect(ray).t; t != 0) {
                     auto color = Color{0, 0, 0};
                     for (int i = 0; i < samples_per_pixel; i++) {
-                        color += compute_ray_color(ray, scene, max_depth).clamp(0, 1);
+                        const auto new_col = compute_ray_color(ray, scene, max_depth).clamp(0, 1);
+                        if (new_col.has_nan()) {
+                            i--;
+                        } else {
+                            color += new_col;
+                        }
                     }
                     color /= samples_per_pixel;
-                    point_cloud.emplace_back(ray.at(t), Vecf{color.r, color.g, color.b}, 0);
+
+                    if (color != Color::black() && !color.has_nan()) {
+                        mutex.lock();
+                        point_cloud.emplace_back(ray.at(t), Vecf{color.r, color.g, color.b}, 0);
+                        mutex.unlock();
+                    }
                 }
             }
         }
-
-        //std::erase_if(point_cloud, [](const PointCloudPoint<> &p) {
-        //    return p.color.r == 0.00 && p.color.g == 0.00 && p.color.b == 0.0;
-        //});
-
         return point_cloud;
     }
+
+    [[nodiscard]] PointCloud compute_point_cloud_mix(const Scene &scene, const int width, const int height) const {
+        PointCloud point_cloud;
+        std::mutex mutex;
+        auto camera = scene.camera;
+        const auto viewport_x = camera.u * camera.viewport_width;
+        const auto viewport_y = -camera.v * camera.viewport_height;
+        const auto viewport_upper_left = camera.look_from - viewport_x / 2 - viewport_y / 2;
+        camera.pixel_delta_x = viewport_x / width;
+        camera.pixel_delta_y = viewport_y / height;
+        camera.pixel_00_position = viewport_upper_left + (camera.pixel_delta_x + camera.pixel_delta_y) / 2;
+
+#pragma omp parallel for collapse(2) shared(scene, point_cloud, camera, mutex, width, height) default(none) num_threads(thread_count) schedule(dynamic)
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                const auto &proj_ray = camera.get_random_orthogonal_ray_at(x, y);
+                const auto &hits = scene.all_intersections(proj_ray);
+                for (const auto &hit: hits) {
+                    if (dot(hit.triangle.normal(), scene.camera.w) < -0.1 /*5º44'*/) {
+                        continue;
+                    }
+                    const auto &point = proj_ray.at(hit.t);
+                    const auto ray = Ray{point, proj_ray.direction};
+                    Ray first_ray = ray;
+                    first_ray.origin += first_ray.at(-0.001f);
+                    first_ray.direction = normalize(first_ray.direction);
+
+                    Color color;
+                    for (int i = 0; i < samples_per_pixel; i++) {
+                        Color final_color; {
+                            Ray current_ray = first_ray;
+                            int current_depth = max_depth;
+                            Color accumulated_lighting(0, 0, 0);
+                            Color attenuation(1, 1, 1);
+                            Point p;
+                            while (true) {
+                                Triangle triangle;
+                                Material material;
+                                Vec normal;
+                                if (current_depth == max_depth) {
+                                    triangle = hit.triangle;
+                                    material = hit.material;
+                                    normal = triangle.normal(hit.u, hit.v);
+                                    p = point;
+                                } else {
+                                    const auto &hit_data = scene.intersect(current_ray, Triangle::CullBackfaces::YES);
+                                    if (hit_data.t == 0) break;
+                                    triangle = hit_data.triangle;
+                                    material = hit_data.material;
+                                    normal = triangle.normal(hit_data.u, hit_data.v);
+                                    p = current_ray.at(hit_data.t);
+                                }
+
+                                for (const auto &[light_position, light_color]: scene.point_lights) {
+                                    const auto &light_offset = light_position - p;
+                                    const auto &light_distance = light_offset.length();
+                                    const auto &light_direction = light_offset.normalize();
+                                    const auto &dot_product = dot(light_direction, normal);
+
+                                    if (dot_product >= 0) {
+                                        const auto shadow_ray = Ray{p, light_direction};
+                                        if (!scene.does_intersect(shadow_ray, light_distance)) {
+                                            const auto &c = material.BRDF(light_direction, -current_ray.direction, normal);
+                                            accumulated_lighting += attenuation * c * light_color;
+                                        }
+                                    }
+                                }
+                                const auto [scatter_direction, w, is_specular_sample] = material.sample(normal, -current_ray.direction);
+                                attenuation *= w;
+                                if (luminance(attenuation) <= 1e-3f || --current_depth == 0) {
+                                    break;
+                                }
+                                current_ray = Ray{p, Vec{scatter_direction}};
+                            }
+
+                            final_color = accumulated_lighting;
+                        }
+                        if (final_color.has_nan()) {
+                            i--;
+                        } else {
+                            color += final_color.clamp(0, 1);
+                        }
+                    }
+                    color /= samples_per_pixel;
+                    if (color != Color::black() && !color.has_nan()) {
+                        mutex.lock();
+                        point_cloud.emplace_back(point, Vecf{color.r, color.g, color.b}, 0);
+                        mutex.unlock();
+                    }
+                }
+            }
+        }
+        return point_cloud;
+    }
+
 
     [[nodiscard]] PointCloud compute_point_cloud_from_mesh(const Scene &scene, const int, const int) const {
         PointCloud point_cloud;
@@ -59,12 +161,18 @@ public:
                     std::vector<std::tuple<Point, Real, Real> > points;
                     auto uvs = std::vector<std::pair<Real, Real> >{};
                     auto area = base_triangle.area();
-                    const auto area_ratio = 1 / 10.f;
+                    const auto area_ratio = 1 / 1.f;
                     if (area < 0.0005 * area_ratio) {
                         uvs.emplace_back(1 / 3., 1 / 3.);
                     } else {
                         for (int i = 0; i < area / (0.0005 * area_ratio); i++) {
-                            uvs.emplace_back(rand_real(), rand_real());
+                            auto u = rand_real();
+                            auto v = rand_real();
+                            if (u + v > 1) {
+                                u = 1 - u;
+                                v = 1 - v;
+                            }
+                            uvs.emplace_back(u, v);
                         }
                     }
                     for (const auto &[u, v]: uvs) {
@@ -125,10 +233,14 @@ public:
 
                                 final_color = accumulated_lighting;
                             }
-                            color += final_color.clamp(0, 1);
+                            if (final_color.has_nan()) {
+                                i--;
+                            } else {
+                                color += final_color.clamp(0, 1);
+                            }
                         }
                         color /= samples_per_pixel;
-                        if (color != Color::black())
+                        if (color != Color::black() && !color.has_nan())
                             point_cloud.emplace_back(center, Vecf{color.r, color.g, color.b}, 0);
                     }
                 }
@@ -155,7 +267,12 @@ public:
                 for (int i = 0; i < samples_per_pixel; i++) {
                     auto ray = scene.camera.get_random_orthogonal_ray_at(x, y);
                     ray.direction = normalize(ray.direction);
-                    color += compute_ray_color(ray, scene, max_depth).clamp(0, 1);
+                    const auto new_col = compute_ray_color(ray, scene, max_depth).clamp(0, 1);
+                    if (new_col.has_nan()) {
+                        i--;
+                    } else {
+                        color += new_col;
+                    }
                 }
                 color = (color / samples_per_pixel).clamp(0, 1);
 

@@ -171,6 +171,10 @@ public:
         return color * factor;
     }
 
+    constexpr bool has_nan() const {
+        return std::isnan(r) || std::isnan(g) || std::isnan(b);
+    }
+
     static constexpr Color black() { return Color{0, 0, 0}; }
 
     static constexpr Color white() { return Color{1, 1, 1}; }
