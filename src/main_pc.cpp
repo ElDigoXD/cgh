@@ -23,12 +23,12 @@ namespace rl {
 
 uint target_points = 10'000;
 bool headless = false;
-bool enable_gpu = false;
-bool enable_occlusion = true;
+bool enable_gpu = true;
+bool enable_occlusion = false;
 unsigned int num_images = 1;
 bool use_color = true;
 
-const auto *scene = dragon();
+const auto *scene = cornell_zoom();
 
 int gui_main(PointCloud pc);
 
@@ -67,7 +67,7 @@ void compute_n_cghs(unsigned char *pixels, PointCloud pc, int n, const std::stri
         renderer.render_cgh(pixels, complex_pixels, *scene, pc);
         fprintf(stderr, "[ RESULT ] %d Time: \t%.2f \tPoints: \t%lu\n", i, (now() - start) / 1000.f, pc.size());
         std::string filename;
-#pragma omp parallel for default(none) shared(pixels, output_path, num_images, i, n) private(filename)
+        #pragma omp parallel for default(none) shared(pixels, output_path, num_images, i, n) private(filename)
         for (uint j = 0; j < num_images; j++) {
             if (n == 1) {
                 filename = output_path + std::to_string(j) + ".png";
@@ -132,33 +132,31 @@ int main(const int argc, char **argv) {
 
     PointCloud pc;
     if (enable_occlusion) {
-        srand(42);
-        rng_state = rand();
-        pc = PointCloud::load_point_cloud("../point_cloud.bin");
-        reduce_point_cloud(pc, 400000);
+        pc = PointCloud::load_point_cloud("../point_cloud_mix.bin");
     } else {
-        pc = PointCloud::load_point_cloud("../point_cloud_ortho.bin");
+        pc = PointCloud::load_point_cloud("../point_cloud_orthographic.bin");
     }
 
     //auto pc = Renderer::compute_point_cloud_from_mesh(*scene, IMAGE_WIDTH, IMAGE_HEIGHT);
 
     //    // TODO: Remove. For testing purposes only.
     //#pragma region Temp point cloud
-    //    Renderer renderer{
-    //        .thread_count = 16,
-    //        .samples_per_pixel = 16,
-    //        .max_depth = 10,
-    //        .use_gpu = enable_gpu,
-    //        .enable_occlusion = enable_occlusion
-    //    };
-    //
-    //    pc = renderer.compute_point_cloud_from_mesh(*scene, IMAGE_WIDTH, IMAGE_HEIGHT);
-    //    pc.save_binary_point_cloud("../point_cloud.bin");
+    //Renderer renderer{
+    //    .thread_count = 16,
+    //    .samples_per_pixel = 32,
+    //    .max_depth = 100,
+    //    .use_gpu = enable_gpu,
+    //    .enable_occlusion = enable_occlusion
+    //};
+    //    pc = renderer.compute_point_cloud_orthographic(*scene, IMAGE_WIDTH, IMAGE_HEIGHT);
+    //    pc.save_binary_point_cloud("../point_cloud_orthographic.bin");
     //#pragma endregion Temp point cloud
 
     if (!headless) {
         enable_gpu = true;
-        enable_occlusion = true;
+        enable_occlusion = false;
+        use_color = true;
+        num_images = 1;
         return gui_main(pc);
     }
     srand(42);
@@ -209,6 +207,7 @@ struct GuiState {
 
 int gui_main(PointCloud pc) {
     rl::SetConfigFlags(rl::FLAG_WINDOW_RESIZABLE | rl::FLAG_VSYNC_HINT | rl::FLAG_MSAA_4X_HINT);
+    rl::SetTraceLogLevel(rl::LOG_WARNING);
     rl::InitWindow(1920 / 2, 1080 / 2, "Point Cloud to CGH");
     rl::SetTargetFPS(60);
     rl::SetExitKey(rl::KEY_NULL);
@@ -218,7 +217,6 @@ int gui_main(PointCloud pc) {
     rl::GuiSetStyle(rl::DEFAULT, rl::TEXT_COLOR_NORMAL, 0x000000FF);
     rl::GuiSetStyle(rl::DEFAULT, rl::TEXT_COLOR_PRESSED, 0x101010FF);
     rl::GuiSetStyle(rl::DEFAULT, rl::TEXT_COLOR_FOCUSED, 0x202020FF);
-    rl::SetTraceLogLevel(rl::LOG_WARNING);
 
     bool shouldUpdateTexture = true;
     GuiState state;
@@ -234,7 +232,7 @@ int gui_main(PointCloud pc) {
         .target = rl::Vector3{static_cast<float>(scene->camera.look_at.x), static_cast<float>(scene->camera.look_at.y), static_cast<float>(scene->camera.look_at.z)},
         .up = {0, 1, 0},
         .fovy = 8.5f,
-        .projection = rl::CameraProjection::CAMERA_ORTHOGRAPHIC
+        .projection = rl::CameraProjection::CAMERA_PERSPECTIVE
     };
     const auto pixels = new unsigned char[IMAGE_WIDTH * IMAGE_HEIGHT * 4ull * num_images];
 
@@ -275,7 +273,12 @@ int gui_main(PointCloud pc) {
             state.mouse_dragging = false;
         }
         if (auto delta = rl::GetMouseWheelMove()) {
-            camera.fovy -= delta;
+            if (rl::IsKeyDown(rl::KEY_LEFT_SHIFT)) {
+                camera.fovy *= delta > 0 ? 0.95f : 1.05f;
+            } else {
+                camera.fovy *= delta > 0 ? 0.85f : 1.15f;
+            }
+            if (camera.fovy < 0.1) camera.fovy = 0.1;
             shouldUpdateTexture = true;
         }
         if (rl::IsWindowResized()) {
