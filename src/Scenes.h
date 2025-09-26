@@ -325,15 +325,15 @@ constexpr static Scene *cornell_zoom() {
     cylinder_dragon_mesh.move(center);
     cylinder_dragon_mesh.scale(factor);
 
-    cornell_box_mesh.materials[4] = Material{GGXBRDF{Color{.1, .1, .1}, 0.08, 1}};
+    cornell_box_mesh.materials[4] = Material{GGXBRDF{Color{1, 1, 1}, 0.0, 1}};
     teapot_mesh.materials[0] = Material{GGXBRDF{Color{1, .4, .0}, 0.1, 1}};
     dragon_mesh.materials[0] = Material{GGXBRDF{Color{121, 121, 121} / 255, 0.3, 1}};
 
     const auto scene = new Scene(camera);
     scene->add_mesh(cornell_box_mesh);
-    //scene->add_mesh(teapot_mesh);
+    scene->add_mesh(teapot_mesh);
     scene->add_mesh(dragon_mesh);
-    //scene->add_mesh(cylinder_teapot_mesh);
+    scene->add_mesh(cylinder_teapot_mesh);
     scene->add_mesh(cylinder_dragon_mesh);
 
     scene->point_lights.emplace_back((Point{+2 - 0.1, 1 - 0.1, +2 - 0.1} + Point{center.x, center.y, center.z}) * factor, Color{1, 1, 1} * 0.8);
