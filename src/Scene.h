@@ -26,6 +26,18 @@ public:
         return std::ranges::any_of(meshes, [&](const Mesh &mesh) { return mesh.does_intersect(ray, max_t); });
     }
 
+    [[nodiscard]] constexpr std::vector<TriangleIntersection> all_intersections(const Ray &ray, const Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
+        auto intersections = std::vector<TriangleIntersection>{};
+        for (const auto &mesh: meshes) {
+            auto hits = mesh.all_intersections(ray, cull_backfaces);
+            for (auto &hit: hits) {
+                hit.material = mesh.materials[hit.triangle.material_idx];
+                intersections.emplace_back(hit);
+            }
+        }
+        return intersections;
+    }
+
     [[nodiscard]] HOST_DEVICE TriangleIntersection intersect(const Ray &ray, const Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
         TriangleIntersection closest_hit{};
         for (const auto &mesh: meshes) {
@@ -47,7 +59,7 @@ public:
     }
 
     [[nodiscard]]
-    Scene* prepare_for_occlusion() const {
+    Scene *prepare_for_occlusion() const {
         const auto new_scene = new Scene{camera};
         new_scene->point_lights = point_lights;
 

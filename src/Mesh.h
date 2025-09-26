@@ -208,6 +208,40 @@ public:
         return false;
     }
 
+    [[nodiscard]] std::vector<TriangleIntersection> all_intersections(const Ray &ray, const Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
+        std::vector<int> vec;
+        vec.reserve(log_n);
+        std::stack stack(std::move(vec));
+        stack.push(0);
+        auto intersection_count = 0;
+        std::vector<TriangleIntersection> closest_hits{};
+
+        while (!stack.empty()) {
+            const int i = stack.top();
+            stack.pop();
+            intersection_count++;
+            if (tree[i].triangle_idx >= 0) {
+                auto hit = triangles[tree[i].triangle_idx].intersect(ray, cull_backfaces);
+                if (hit.t != 0) {
+                    hit.intersection_count = intersection_count;
+                    closest_hits.push_back(hit);
+                }
+                continue;
+            }
+
+
+            if (!tree[i].aabb.intersect(ray, T_MAX)) {
+                continue;
+            }
+            assert(i < static_cast<int>(tree.size()) / 2);
+            if (i < static_cast<int>(tree.size()) / 2) {
+                stack.push(i * 2 + 2);
+                stack.push(i * 2 + 1);
+            }
+        }
+        return closest_hits;
+    }
+
     // __attribute_noinline__
     [[nodiscard]] HOST_DEVICE TriangleIntersection intersect(const Ray &ray, const Real max_t, const Triangle::CullBackfaces cull_backfaces = Triangle::CullBackfaces::YES) const {
         std::vector<int> vec;
