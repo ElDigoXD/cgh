@@ -18,6 +18,20 @@ struct GGXBRDF final : BRDF {
         diffuse_reflectance = base_color * (1 - metalness);
     }
 
+    void update_base_color(const Color &new_base_color) {
+        base_color = new_base_color;
+        f0 = mix(f0_dielectrics, base_color, metalness);
+        diffuse_reflectance = base_color * (1 - metalness);
+    }
+    void update_roughness(const float perceptual_roughness) {
+        roughness = perceptual_roughness * perceptual_roughness;
+    }
+    void update_metalness(const float new_metalness) {
+        metalness = new_metalness;
+        f0 = mix(f0_dielectrics, base_color, metalness);
+        diffuse_reflectance = base_color * (1 - metalness);
+    }
+
     [[nodiscard]] constexpr Color brdf(const Vec &L, const Vec &V, const Vec &N) const override {
         const auto h = normalize(L + V);
         const auto n_dot_h = std::max(0.00001, dot(N, h));

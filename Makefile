@@ -1,34 +1,31 @@
-default: run
+default: build
 
-cmake:
-	cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/snap/clion/296/bin/ninja/linux/x64/ninja -G Ninja -S . -B cmake-build-debug
-	cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_MAKE_PROGRAM=/snap/clion/296/bin/ninja/linux/x64/ninja -G Ninja -S . -B cmake-build-release
+prebuild_debug:
+	cmake -DCMAKE_BUILD_TYPE=Debug   -DCMAKE_MAKE_PROGRAM=ninja -G Ninja -S . -B cmake-build-debug
 
-build: cmake
-	cmake --build cmake-build-debug --target untitled -j 14
+prebuild:
+	cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_MAKE_PROGRAM=ninja -G Ninja -S . -B cmake-build-release
 
-build_release: cmake
-	cmake --build cmake-build-release --target untitled -j 14
+build_debug:
+	cmake --build cmake-build-debug --target gui -j 14
+	cmake --build cmake-build-debug --target pc -j 14
 
-run: build
-	@echo "Running in debug mode...\n"
-	@cmake-build-debug/untitled
+build:
+	cmake --build cmake-build-release --target gui -j 14
+	cmake --build cmake-build-release --target pc -j 14
 
-run_release: build_release
-	@echo "Running in release mode...\n"
-	@cmake-build-release/untitled
 clean_cmake:
-	rm -r cmake-build-debug 2> /dev/null
-	rm -r cmake-build-release 2> /dev/null
+	rm -rf cmake-build-debug 2> /dev/null
+	rm -rf cmake-build-release 2> /dev/null
 
 
+clean_debug:
+	rm -r cmake-build-debug/pc 2> /dev/null
+	rm -r cmake-build-debug/gui 2> /dev/null
 
 clean:
-	rm -r cmake-build-debug/untitled 2> /dev/null
-	rm -r ./cmake-build-debug/CMakeFiles/untitled.dir/ 2> /dev/null
-	rm -r cmake-build-release/untitled 2> /dev/null
-	rm -r ./cmake-build-release/CMakeFiles/untitled.dir/ 2> /dev/null
-	echo ""
+	rm -r cmake-build-release/pc 2> /dev/null
+	rm -r cmake-build-release/gui 2> /dev/null
 
 build_release:
 	cmake --build cmake-build-release --target untitled -j 14

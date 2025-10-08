@@ -368,7 +368,7 @@ public:
         }
     }
 
-    void render_intersection_count(u_char out_pixels[], const Scene &scene, const int max_value, const std::stop_token &st = {}) {
+    void render_intersection_count(u_char out_pixels[], const Scene &scene, const int max_value, const std::stop_token &st = {}) const {
 #pragma omp parallel for collapse(1) shared(out_pixels, scene, max_value, st) default(none) num_threads(thread_count)
         for (int y = 0; y < IMAGE_HEIGHT; y++) {
             if (st.stop_requested()) [[unlikely]] continue;

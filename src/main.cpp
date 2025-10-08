@@ -118,13 +118,13 @@ public:
 
 
         for (uint i = 0; i < sizeof(scene_names) / sizeof(char *); i++) {
-            if (strcmp(scene_names[i], "dragon") == 0) {
+            if (strcmp(scene_names[i], "cornell_zoom") == 0) {
                 selected_scene_idx = static_cast<int>(i);
                 break;
             }
         }
         update_scene();
-        scene = scene->prepare_for_occlusion();
+        //scene = scene->prepare_for_occlusion();
 
         //camera.update(1920, 1080);
         memset(pixels, 256 / 2, max_window_size.x * max_window_size.y * 4);
@@ -642,7 +642,9 @@ public:
         for (const auto &m: scene->meshes) {
             for (const auto &t: m.triangles) {
                 if (dot(t.normal(), scene->camera.w) >= 0) {
-                    visible_triangles.emplace_back(t);
+                    auto hit = scene->intersect(Ray{scene->camera.look_from, t.center() - scene->camera.look_from});
+                    if (hit.triangle == t)
+                        visible_triangles.emplace_back(t);
                 }
             }
         }

@@ -27,12 +27,13 @@ bool enable_gpu = true;
 bool enable_occlusion = false;
 unsigned int num_images = 1;
 bool use_color = true;
+std::string generate_pc = "";
+std::string scene_name = "cornell_zoom";
 
-const auto *scene = cornell_zoom();
 
-int gui_main(PointCloud pc);
+int gui_main(PointCloud pc, const Scene &scene);
 
-void compute_n_cghs(unsigned char *pixels, PointCloud pc, int n, const std::string &output_path) {
+void compute_n_cghs(unsigned char *pixels, PointCloud pc, const Scene &scene, int n, const std::string &output_path) {
     const auto complex_pixels = new std::complex<Real>[IMAGE_WIDTH * IMAGE_HEIGHT * 4];
     Renderer renderer{
         .thread_count = 16,
@@ -64,10 +65,10 @@ void compute_n_cghs(unsigned char *pixels, PointCloud pc, int n, const std::stri
             p.phase = static_cast<float>(rand_real() * 2); // In the range [0, 2) instead of [0, 2π) to comply with the CUDA implementation
             p.phase = 0;
         }
-        renderer.render_cgh(pixels, complex_pixels, *scene, pc);
+        renderer.render_cgh(pixels, complex_pixels, scene, pc);
         fprintf(stderr, "[ RESULT ] %d Time: \t%.2f \tPoints: \t%lu\n", i, (now() - start) / 1000.f, pc.size());
         std::string filename;
-        #pragma omp parallel for default(none) shared(pixels, output_path, num_images, i, n) private(filename)
+#pragma omp parallel for default(none) shared(pixels, output_path, num_images, i, n) private(filename)
         for (uint j = 0; j < num_images; j++) {
             if (n == 1) {
                 filename = output_path + std::to_string(j) + ".png";
@@ -99,11 +100,13 @@ int main(const int argc, char **argv) {
 
     args::Group color_group(parser, "", args::Group::Validators::Xor);
     args::Flag use_color_arg(color_group, "", "Use color", {"color"});
-    args::Flag use_grayscale_arg(color_group, "", "Use luminance", {"gs", "grayscale"});
+    args::Flag use_grayscale_arg(color_group, "", "Use grayscale", {"gs", "grayscale"});
 
-    args::Flag use_occlusion_arg(parser, "", "Use occlusion", {'o', "occ"});
-    args::ValueFlag num_images_arg(parser, "", "Number of images", {"num-images"}, num_images);
+    args::Flag use_occlusion_arg(parser, "", "Use strict occlusion", {'o', "occ"});
+    args::ValueFlag num_images_arg(parser, "", "Number of images", {"num", "num-images"}, num_images);
 
+    args::ValueFlag generate_pc_arg(parser, "", "Generate point cloud (ortho, mix, mesh)", {"gen", "generate_pc"}, generate_pc);
+    args::ValueFlag scene_arg(parser, "", "Scene to use", {"scene"}, scene_name);
 
     try {
         parser.ParseCLI(argc, argv);
@@ -116,9 +119,9 @@ int main(const int argc, char **argv) {
 
         std::exit(1);
     } catch (const args::ValidationError &e) {
-        std::cerr << "[ ERROR ] Argument validation error, please use '" << parser.Prog() << " -h' to display the help menu\n";
-        std::cerr << e.what() << std::endl;
-        if (headless_arg.Get()) {
+        if (headless_arg.Get() && generate_pc_arg.Get().empty()) {
+            std::cerr << "[ ERROR ] Argument validation error, please use '" << parser.Prog() << " -h' to display the help menu\n";
+            std::cerr << e.what() << std::endl;
             std::exit(1);
         }
     }
@@ -129,36 +132,56 @@ int main(const int argc, char **argv) {
     enable_occlusion = use_occlusion_arg.Get();
     num_images = num_images_arg.Get();
     use_color = use_color_arg.Get();
+    generate_pc = generate_pc_arg.Get();
+    scene_name = scene_arg.Get();
+    auto *scene = get_scene_by_name(scene_name);
+    if (!scene) {
+        std::cerr << "[ ERROR ] Scene '" << scene_name << "' not found." << std::endl;
+        std::exit(1);
+    }
 
     PointCloud pc;
     if (enable_occlusion) {
         pc = PointCloud::load_point_cloud("../point_cloud_mix.bin");
     } else {
-        pc = PointCloud::load_point_cloud("../point_cloud_orthographic.bin");
+        pc = PointCloud::load_point_cloud("../point_cloud_mix.bin");
     }
 
     //auto pc = Renderer::compute_point_cloud_from_mesh(*scene, IMAGE_WIDTH, IMAGE_HEIGHT);
 
-    //    // TODO: Remove. For testing purposes only.
-    //#pragma region Temp point cloud
-    //Renderer renderer{
-    //    .thread_count = 16,
-    //    .samples_per_pixel = 32,
-    //    .max_depth = 100,
-    //    .use_gpu = enable_gpu,
-    //    .enable_occlusion = enable_occlusion
-    //};
-    //    pc = renderer.compute_point_cloud_orthographic(*scene, IMAGE_WIDTH, IMAGE_HEIGHT);
-    //    pc.save_binary_point_cloud("../point_cloud_orthographic.bin");
-    //#pragma endregion Temp point cloud
+    if (!generate_pc.empty()) {
+        Renderer renderer{
+            .thread_count = 16,
+            .samples_per_pixel = 32,
+            .max_depth = 100,
+            .use_gpu = enable_gpu,
+            .enable_occlusion = enable_occlusion
+        };
 
+        if (generate_pc == "mesh") {
+            pc = renderer.compute_point_cloud_from_mesh(*scene, IMAGE_WIDTH, IMAGE_HEIGHT);
+            pc.save_binary_point_cloud("../point_cloud_mesh.bin");
+        } else if (generate_pc == "ortho") {
+            pc = renderer.compute_point_cloud_orthographic(*scene, IMAGE_WIDTH, IMAGE_HEIGHT);
+            pc.save_binary_point_cloud("../point_cloud_ortho.bin");
+        } else if (generate_pc == "mix") {
+            pc = renderer.compute_point_cloud_mix(*scene, IMAGE_WIDTH, IMAGE_HEIGHT);
+            pc.save_binary_point_cloud("../point_cloud_mix.bin");
+        } else {
+            std::cerr << "[ ERROR ] Unknown point cloud generation method '" << generate_pc << "'. Available methods are: ortho, mix, mesh." << std::endl;
+            std::exit(1);
+        }
+        return 0;
+    }
     if (!headless) {
         enable_gpu = true;
         enable_occlusion = false;
         use_color = true;
         num_images = 1;
-        return gui_main(pc);
+        return gui_main(pc, *scene);
     }
+
+
     srand(42);
     rng_state = rand();
     if (target_points != 0 && target_points < pc.size()) {
@@ -167,7 +190,7 @@ int main(const int argc, char **argv) {
 
     printf("pixel[] size: %llu\n", IMAGE_WIDTH * 1ull * IMAGE_HEIGHT * 1 * 4ull * num_images);
     const auto pixels = new unsigned char[IMAGE_WIDTH * IMAGE_HEIGHT * 4ull * num_images];
-    compute_n_cghs(pixels, pc, 1, "../");
+    compute_n_cghs(pixels, pc, *scene, 1, "../");
 }
 
 
@@ -205,7 +228,7 @@ struct GuiState {
     } computation_done = IDLE;
 };
 
-int gui_main(PointCloud pc) {
+int gui_main(PointCloud pc, const Scene &scene) {
     rl::SetConfigFlags(rl::FLAG_WINDOW_RESIZABLE | rl::FLAG_VSYNC_HINT | rl::FLAG_MSAA_4X_HINT);
     rl::SetTraceLogLevel(rl::LOG_WARNING);
     rl::InitWindow(1920 / 2, 1080 / 2, "Point Cloud to CGH");
@@ -228,8 +251,8 @@ int gui_main(PointCloud pc) {
     auto texture = rl::LoadTextureFromImage(image);
     auto render_texture = rl::LoadRenderTexture(rl::GetScreenWidth(), rl::GetScreenHeight());
     auto camera = rl::Camera3D{
-        .position = rl::Vector3{static_cast<float>(scene->camera.look_from.x), static_cast<float>(scene->camera.look_from.y), static_cast<float>(scene->camera.look_from.z)},
-        .target = rl::Vector3{static_cast<float>(scene->camera.look_at.x), static_cast<float>(scene->camera.look_at.y), static_cast<float>(scene->camera.look_at.z)},
+        .position = rl::Vector3{static_cast<float>(scene.camera.look_from.x), static_cast<float>(scene.camera.look_from.y), static_cast<float>(scene.camera.look_from.z)},
+        .target = rl::Vector3{static_cast<float>(scene.camera.look_at.x), static_cast<float>(scene.camera.look_at.y), static_cast<float>(scene.camera.look_at.z)},
         .up = {0, 1, 0},
         .fovy = 8.5f,
         .projection = rl::CameraProjection::CAMERA_PERSPECTIVE
@@ -342,9 +365,9 @@ int gui_main(PointCloud pc) {
         }
         if (rl::GuiButton({offset_x + 80, offset_y, 80, 20},
                           state.computation_done == GuiState::COMPUTING ? "Computing" : "Compute")) {
-            std::jthread([&new_pc, &state, pixels]() {
+            std::jthread([&new_pc, &state, pixels, &scene]() {
                 state.computation_done = GuiState::COMPUTING;
-                compute_n_cghs(pixels, new_pc, state.num_renders, "../");
+                compute_n_cghs(pixels, new_pc, scene, state.num_renders, "../");
                 state.computation_done = GuiState::DONE;
             }).detach();
         }

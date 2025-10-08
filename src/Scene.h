@@ -53,9 +53,9 @@ public:
         return closest_hit;
     }
 
-    void add_mesh(Mesh &mesh, const Mesh::Heuristic heuristic = Mesh::Heuristic::BOX_AREA) {
+    Mesh &add_mesh(Mesh &mesh, const Mesh::Heuristic heuristic = Mesh::Heuristic::BOX_AREA) {
         mesh.generate_bvh(heuristic);
-        meshes.emplace_back(mesh);
+        return meshes.emplace_back(mesh);
     }
 
     [[nodiscard]]

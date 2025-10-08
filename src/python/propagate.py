@@ -244,6 +244,13 @@ def main():
         plt.savefig("output/propagation/color/figure.png")
         # plt.figure("Luminance")
         # plt.imshow(np.dstack((a, a, a)).clip(0, 1), cmap='gray')
+        #
+        plt.show()
+        plt.figure(figsize=(16, 9))
+        plt.axis("off")
+        plt.margins(0)
+        plt.tight_layout(pad=0)
+        plt.imshow(rgb.clip(0, 1))
         plt.show()
         plt.imsave('output/propagation/color/rgb.png', rgb.clip(0, 1))
         plt.imsave('output/propagation/color/r.png', np.dstack((r, zero, zero)).clip(0, 1))

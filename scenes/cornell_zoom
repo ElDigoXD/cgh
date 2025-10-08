@@ -1,0 +1,100 @@
+scene cornell_zoom
+
+camera ortho
+look_at 0 0 0
+look_from 50 50 290
+
+
+object cornell_box_mesh
+load "../resources/cornell_box_2.obj"
+flip z
+flip x
+normalize
+scale 4 2 4
+move 0 -0.2 0
+scale 7 7 7
+material 4
+type ggx
+albedo 1 1 1
+roughness 0
+metalness 1
+
+
+
+object teapot_mesh
+load "../resources/teapot2.obj"
+flip x
+normalize
+move 0.3 0.248 -0.8
+move 0 -0.2 0
+scale 7 7 7
+material 0
+type ggx
+albedo 1 .4 .0
+roughness 0.1
+metalness 1
+
+
+object dragon_mesh
+load "../resources/dragons/10k_dragon.obj"
+normalize
+scale 0.9 0.9 0.9
+move -0.3 0.315 0.8
+move 0.4 0 0
+move 0 -0.2 0
+scale 7 7 7
+material 0
+type ggx
+albedo 0.47 0.47 0.47
+roughness 0.3
+metalness 1
+
+
+object cylinder_teapot_mesh
+load "../resources/cylinder.obj"
+normalize
+scale 0.8 1 0.8
+move 0.3 -0.5 -0.8
+move 0 -0.2 0
+scale 7 7 7
+
+object cylinder_dragon_mesh
+load "../resources/cylinder.obj"
+normalize
+scale 1 0.94 1
+move -0.3 -0.55 0.8
+move 0.4 0 0
+move 0 -0.2 0
+scale 7 7 7
+
+light point
+move 2 1 2
+move -0.1 -0.1 -0.1
+move 0 -0.2 0
+scale 7 7 7
+color 1 1 1
+intensity 0.8
+
+light point
+move -2 1 -2
+move 0.1 -0.1 0.1
+move 0 -0.2 0
+scale 7 7 7
+color 1 1 1
+intensity 0.8
+
+light point
+move -2 1 +2
+move 0.1 -0.1 -0.1
+move 0 -0.2 0
+scale 7 7 7
+color 1 1 1
+intensity 0.8
+
+light point
+move +2 1 -2
+move -0.1 -0.1 0.1
+move 0 -0.2 0
+scale 7 7 7
+color 1 1 1
+intensity 0.8

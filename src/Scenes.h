@@ -2,6 +2,7 @@
 #include <functional>
 
 #include "OrthoCamera.h"
+#include "SceneParser.h"
 
 constexpr static Scene *basic_triangle() {
     const auto camera = Camera(
@@ -280,6 +281,7 @@ constexpr static Scene *knob() {
 }
 
 constexpr static Scene *cornell_zoom() {
+    return load_scene_from_file("../scenes/cornell_zoom");
     const auto camera = Camera(
         {0, 0, 0}, /* look_at */
         {50, 50, 290} /* look_from */
@@ -289,8 +291,8 @@ constexpr static Scene *cornell_zoom() {
     constexpr auto center = Vecf{0, -0.2, 0};
 
     auto cornell_box_mesh = load("../resources/cornell_box_2.obj");
-    auto teapot_mesh = load("../resources/teapot.obj");
-    auto dragon_mesh = load("../resources/dragon.obj");
+    auto teapot_mesh = load("../resources/teapot2.obj");
+    auto dragon_mesh = load("../resources/dragons/10k_dragon.obj");
     auto cylinder_teapot_mesh = load("../resources/cylinder.obj");
     auto cylinder_dragon_mesh = load("../resources/cylinder.obj");
 
@@ -370,3 +372,12 @@ static const std::function<const Scene *()> scenes[] = {
     knob,
     cornell_zoom,
 };
+
+static Scene *get_scene_by_name(const std::string &name) {
+    for (size_t i = 0; i < sizeof(scene_names) / sizeof(char *); i++) {
+        if (name == scene_names[i]) {
+            return const_cast<Scene *>(scenes[i]());
+        }
+    }
+    return nullptr;
+}
