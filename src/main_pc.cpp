@@ -28,7 +28,7 @@ bool enable_occlusion = false;
 unsigned int num_images = 1;
 bool use_color = true;
 std::string generate_pc = "";
-std::string scene_name = "cornell_zoom";
+std::string scene_name = "dragon";
 
 
 int gui_main(PointCloud pc, const Scene &scene);
@@ -75,6 +75,7 @@ void compute_n_cghs(unsigned char *pixels, PointCloud pc, const Scene &scene, in
             } else {
                 filename = output_path + std::to_string(i) + ".png";
             }
+            filename = output_path + "1um.png";
             printf("Saving CGH to %s\n", filename.c_str());
             const rl::Image image{
                 .data = &pixels[IMAGE_WIDTH * IMAGE_HEIGHT * 4ull * j],
@@ -144,7 +145,7 @@ int main(const int argc, char **argv) {
     if (enable_occlusion) {
         pc = PointCloud::load_point_cloud("../point_cloud_mix.bin");
     } else {
-        pc = PointCloud::load_point_cloud("../point_cloud_mix.bin");
+        pc = PointCloud::load_point_cloud("../point_cloud_ortho.bin");
     }
 
     //auto pc = Renderer::compute_point_cloud_from_mesh(*scene, IMAGE_WIDTH, IMAGE_HEIGHT);
@@ -255,7 +256,7 @@ int gui_main(PointCloud pc, const Scene &scene) {
         .target = rl::Vector3{static_cast<float>(scene.camera.look_at.x), static_cast<float>(scene.camera.look_at.y), static_cast<float>(scene.camera.look_at.z)},
         .up = {0, 1, 0},
         .fovy = 8.5f,
-        .projection = rl::CameraProjection::CAMERA_PERSPECTIVE
+        .projection = rl::CameraProjection::CAMERA_ORTHOGRAPHIC
     };
     const auto pixels = new unsigned char[IMAGE_WIDTH * IMAGE_HEIGHT * 4ull * num_images];
 

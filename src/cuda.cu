@@ -541,7 +541,7 @@ __host__ void use_cuda(unsigned char out_pixels[],
     //std::copy_n(out_pixels_buff, num_pixels * 4, out_pixels);
     CU(cudaFree(out_pixels_buff));
 #if VIRTUAL_SLM_FACTOR > 1
-    std::copy_n(complex_pixels_buff, num_pixels, out_complex_pixels);
+    //std::copy_n(complex_pixels_buff, num_pixels, out_complex_pixels);
     CU(cudaFree(complex_pixels_buff));
 #endif
 }

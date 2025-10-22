@@ -9,8 +9,8 @@ from numpy import ndarray
 from PIL import Image
 from numpy.fft.helper import fftshift
 from numpy.fft import fft2, ifft2
-#import cupy as cp
-#from cupy.fft import fft2, ifft2, fftshift
+# import cupy as cp
+# from cupy.fft import fft2, ifft2, fftshift
 import sys
 
 mm = 1
@@ -92,12 +92,14 @@ def import_cgh(image_path: str, grayscale=False, phase_only=False, rgb_only=Fals
     return [complex_data]
 
 
+Image.MAX_IMAGE_PIXELS = None
+
 # Propagation kernel
 def propagate(data: ndarray[complex], slm_z: float, wavelength: float, virtual_slm_factor=1):
     # Have margins for the fft
-    #data = cp.array(data, dtype=complex, blocking=True)
-    nx = 2048 * 2
-    ny = 2048 * 2
+    # data = cp.array(data, dtype=complex, blocking=True)
+    nx = 2048 * 2 * 2 * 2
+    ny = 2048 * 2 * 2 * 2
 
     # Physical slm size
     pixel_size = 8 * um / virtual_slm_factor
@@ -142,7 +144,6 @@ def main():
 
     args = parser.parse_args()
 
-
     image_path = args.CGH
     grayscale = args.grayscale
     phase_only = args.phase_only
@@ -152,14 +153,14 @@ def main():
 
     # For multiple images
     if count > 1:
-        #if not os.path.exists(f"{image_path}/average"): os.mkdir(f"{image_path}/average")
-        #if not os.path.exists(f"{image_path}/median"): os.mkdir(f"{image_path}/median")
+        # if not os.path.exists(f"{image_path}/average"): os.mkdir(f"{image_path}/average")
+        # if not os.path.exists(f"{image_path}/median"): os.mkdir(f"{image_path}/median")
         if not os.path.exists(f"{image_path}/out"): os.mkdir(f"{image_path}/out")
 
-        #for z in range(2900, 3005, 5):
+        # for z in range(2900, 3005, 5):
         if True:
-            #z /= 10
-            #z = 299
+            # z /= 10
+            # z = 299
             rgbs = []
             import concurrent.futures
 
@@ -180,19 +181,18 @@ def main():
                     plt.imsave(f"{image_path}/out/{i}g.png", a, cmap='gray')
 
             # Parallelize the loop
-            with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()-2) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() - 2) as executor:
                 executor.map(process_image, range(0, count))
-
 
             return
             rgbs = np.array(rgbs)
 
             img = np.average(rgbs, axis=0)
-            plt.imsave(f"{image_path}/average_z{z*10}.png", img)
+            plt.imsave(f"{image_path}/average_z{z * 10}.png", img)
             # plot_image(img)
 
             img = np.median(rgbs, axis=0)
-            plt.imsave(f"{image_path}/median_z{z*10}.png", img)
+            plt.imsave(f"{image_path}/median_z{z * 10}.png", img)
             # plot_image(img)
 
         return
@@ -226,10 +226,10 @@ def main():
         # g = (g - min_val) / (max_val - min_val)
         # b = (b - min_val) / (max_val - min_val)
 
-        r /= 7
-        g /= 7
-        b /= 7
-        a /= 7
+        r /= 4
+        g /= 4
+        b /= 4
+        a /= 4
 
         rgb = np.dstack((r, g, b))
         zero = np.zeros_like(r)
@@ -257,7 +257,6 @@ def main():
         plt.imsave('output/propagation/color/g.png', np.dstack((zero, g, zero)).clip(0, 1))
         plt.imsave('output/propagation/color/b.png', np.dstack((zero, zero, b)).clip(0, 1))
         plt.imsave('output/propagation/color/a.png', np.dstack((a, a, a)).clip(0, 1))
-
 
         exit()
         plt.imsave(f'output/propagation/{image_path.split("/")[-1]}_300.png', np.dstack((r, g, b)))
