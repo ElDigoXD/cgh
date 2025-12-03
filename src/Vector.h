@@ -149,6 +149,10 @@ public:
         return Vector{nostd_clamp(x, a.x, b.x), nostd_clamp(y, a.y, b.y), nostd_clamp(z, a.z, b.z)};
     }
 
+    Vector operator-(const Real real) const {
+        return Vector{x - real, y - real, z - real};
+    };
+
     static Vector random_in_unit_sphere() {
         Vector p;
         do {

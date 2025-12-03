@@ -21,14 +21,14 @@ namespace rl {
 #include "args.hxx"
 //#include "SFML/Graphics.hpp"
 
-uint target_points = 10'000;
+uint target_points = 0;
 bool headless = false;
 bool enable_gpu = true;
 bool enable_occlusion = false;
 unsigned int num_images = 1;
 bool use_color = true;
 std::string generate_pc = "";
-std::string scene_name = "dragon";
+std::string scene_name = "cornell_zoom";
 
 
 int gui_main(PointCloud pc, const Scene &scene);
@@ -75,7 +75,7 @@ void compute_n_cghs(unsigned char *pixels, PointCloud pc, const Scene &scene, in
             } else {
                 filename = output_path + std::to_string(i) + ".png";
             }
-            filename = output_path + "1um.png";
+            // filename = output_path + "_um.png";
             printf("Saving CGH to %s\n", filename.c_str());
             const rl::Image image{
                 .data = &pixels[IMAGE_WIDTH * IMAGE_HEIGHT * 4ull * j],
@@ -153,8 +153,8 @@ int main(const int argc, char **argv) {
     if (!generate_pc.empty()) {
         Renderer renderer{
             .thread_count = 16,
-            .samples_per_pixel = 32,
-            .max_depth = 100,
+            .samples_per_pixel = 10,
+            .max_depth = 10,
             .use_gpu = enable_gpu,
             .enable_occlusion = enable_occlusion
         };
@@ -330,6 +330,10 @@ int gui_main(PointCloud pc, const Scene &scene) {
             for (const auto &point: new_pc) {
                 draw_point(point);
             }
+            // Axis
+            rl::DrawLine3D({0,0,0}, {0,0,-100}, (rl::Color){255, 0, 0, 255});
+            rl::DrawLine3D({0,0,0}, {100,0,0}, (rl::Color){0, 255, 0, 255});
+            rl::DrawLine3D({0,0,0}, {0,100,0}, (rl::Color){0, 0, 255, 255});
             rl::EndMode3D();
             rl::DrawTexture(texture, 0, 0, (rl::Color){255, 255, 255, 255});
         }

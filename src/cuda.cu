@@ -536,7 +536,7 @@ __host__ void use_cuda(unsigned char out_pixels[],
                                        use_color);
         CU(cudaGetLastError());
         CU(cudaDeviceSynchronize());
-        cudaMemcpy(&out_pixels[j*num_pixels*4ull], out_pixels_buff,num_pixels * 4ull, cudaMemcpyDeviceToHost);
+        cudaMemcpy(&out_pixels[j * num_pixels * 4ull], out_pixels_buff, num_pixels * 4ull, cudaMemcpyDeviceToHost);
     }
     //std::copy_n(out_pixels_buff, num_pixels * 4, out_pixels);
     CU(cudaFree(out_pixels_buff));

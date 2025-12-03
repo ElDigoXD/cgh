@@ -109,8 +109,8 @@ public:
         enable_bdrf_viewer = false;
 
         aabb_depth = 1;
-        samples_per_pixel = 10;
-        max_depth = 6;
+        samples_per_pixel = 1;
+        max_depth = 2;
 
         //enable_render_cgh = true;
         //samples_per_pixel = 1000;
@@ -401,6 +401,14 @@ public:
                 update_lights();
                 current_material = nullptr;
             }
+            if (ImGui::Button("Reload Scene")) {
+                update_scene();
+                update_render();
+                update_wireframe();
+                update_aabb_wireframe();
+                update_lights();
+                current_material = nullptr;
+            }
             // if (ImGui::Combo("##heuristic", &selected_heuristic,
             //                  "biggest axis\0box area\0box volume\0triangle area\0")) {
             //     for (auto &mesh: scene->meshes) {
@@ -445,6 +453,13 @@ public:
                     update_aabb_wireframe();
                     update_lights();
                 }
+                // ImGui::Text("fov:");
+                // if (im::DragFloat("##fov", &scene->camera.vfov, 0.1, 1, 179)) {
+                //     update_render();
+                //     update_wireframe();
+                //     update_aabb_wireframe();
+                //     update_lights();
+                // }
             }
 
             ImGui::PopItemWidth();

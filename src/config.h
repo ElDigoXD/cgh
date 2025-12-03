@@ -1,6 +1,6 @@
 #pragma once
 
-#define VIRTUAL_SLM_FACTOR 8
+#define VIRTUAL_SLM_FACTOR 1
 //#define NUM_IMAGES 1
 
 

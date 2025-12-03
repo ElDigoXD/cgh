@@ -24,6 +24,7 @@ Scene *load_scene_from_file(const std::string &path) {
     std::string line;
     int line_number = 0;
     Vec camera_look_from, camera_look_at;
+    float camera_vfov;
     Mesh *current_mesh = nullptr;
     std::pair<Point, Color> *current_light = nullptr;
     Material *current_material = nullptr;
@@ -64,6 +65,18 @@ Scene *load_scene_from_file(const std::string &path) {
                 exit(1);
             }
             sscanf(line.c_str(), "look_at %lf %lf %lf", &camera_look_at.x, &camera_look_at.y, &camera_look_at.z);
+        } else if (line.starts_with("fov ")) {
+            if (state != CAMERA) {
+                fprintf(stderr, "[ ERROR ] 'fov' directive must be inside a camera block. (line %d)\n", line_number);
+                exit(1);
+            }
+            float fov;
+            sscanf(line.c_str(), "fov %f", &fov);
+            if (fov <= 0 || fov >= 180) {
+                fprintf(stderr, "[ ERROR ] 'fov' directive must be between 0 and 180 degrees. (line %d)\n", line_number);
+            } else {
+                camera_vfov = fov;
+            }
         } else if (line.starts_with("object ")) {
             if (state == GLOBAL) {
                 fprintf(stderr, "[ ERROR ] 'object' directive must be after the camera block. (line %d)\n", line_number);
@@ -71,6 +84,11 @@ Scene *load_scene_from_file(const std::string &path) {
             }
             if (state == CAMERA) {
                 auto camera = Camera(camera_look_at, camera_look_from);
+                if constexpr (std::is_same_v<Camera, PerspectiveCamera>) {
+                    PerspectiveCamera *cam = (PerspectiveCamera *)(&camera);
+                    cam->vfov = camera_vfov;
+                    cam->update();
+                }
                 scene = new Scene(camera);
             } else if (state == LIGHT || state == OBJECT || state == MATERIAL) {
                 if (current_mesh != nullptr) {

@@ -23,17 +23,17 @@ public:
         PointCloud point_cloud;
         std::mutex mutex;
         auto camera = scene.camera;
-        const auto viewport_x = camera.u * camera.viewport_width;
-        const auto viewport_y = -camera.v * camera.viewport_height;
-        const auto viewport_upper_left = camera.look_from - viewport_x / 2 - viewport_y / 2;
-        camera.pixel_delta_x = viewport_x / width;
-        camera.pixel_delta_y = viewport_y / height;
-        camera.pixel_00_position = viewport_upper_left + (camera.pixel_delta_x + camera.pixel_delta_y) / 2;
+        // const auto viewport_x = camera.u * camera.viewport_width;
+        // const auto viewport_y = -camera.v * camera.viewport_height;
+        // const auto viewport_upper_left = camera.look_from - viewport_x / 2 - viewport_y / 2;
+        // camera.pixel_delta_x = viewport_x / width;
+        // camera.pixel_delta_y = viewport_y / height;
+        // camera.pixel_00_position = viewport_upper_left + (camera.pixel_delta_x + camera.pixel_delta_y) / 2;
 
 #pragma omp parallel for collapse(2) shared(scene, point_cloud, camera, mutex, width, height) default(none) num_threads(thread_count) schedule(dynamic)
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                const auto &ray = camera.get_random_orthogonal_ray_at(x, y);
+                const auto &ray = camera.get_orthogonal_ray_at(x, y);
 
                 if (const auto &t = scene.intersect(ray).t; t != 0) {
                     auto color = Color{0, 0, 0};

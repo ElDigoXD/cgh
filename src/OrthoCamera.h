@@ -25,7 +25,7 @@ public:
                 const Vec &look_from,
                 const Real viewport_width = PIXEL_SIZE * IMAGE_WIDTH,
                 const Real viewport_height = PIXEL_SIZE * IMAGE_HEIGHT
-    ): look_at{look_at}, look_from{look_from}, viewport_width{viewport_width}, viewport_height{viewport_height} {
+    ) : look_at{look_at}, look_from{look_from}, viewport_width{viewport_width}, viewport_height{viewport_height} {
         update();
     }
 
@@ -62,6 +62,95 @@ public:
             + pixel_delta_y * (rand_real() - 0.5),
             -w
         };
+    }
+
+    /**
+     * Projects a point in 3D space to the pixel coordinates.
+     */
+    [[nodiscard]] std::pair<Real, Real> project(const Point &p) const {
+        const auto o = look_from;
+        auto ax = (p - o).dot(u);
+        auto ay = (p - o).dot(-v);
+
+        const auto pixel_size = viewport_height / IMAGE_HEIGHT;
+        ax = ax / (pixel_size) + IMAGE_WIDTH / 2.0;
+        ay = ay / pixel_size + IMAGE_HEIGHT / 2.0;
+
+        return {ax, ay};
+    }
+
+    [[nodiscard]]
+    std::string to_string() const {
+        return std::format(
+            "OrthoCamera(look_at: {}, look_from: {})", look_at.to_string(), look_from.to_string());
+    }
+};
+
+
+class PerspectiveCamera {
+public:
+    Vec pixel_delta_x;
+    Vec pixel_delta_y;
+    Point pixel_00_position;
+
+    Vec look_at;
+    Vec look_from;
+    Vec u, v, w;
+
+
+    // Necessary to be able to update the camera
+    Real viewport_width;
+    Real viewport_height;
+
+    // Perspective stuff
+    float vfov = 10;
+    Vec viewport_x;
+    Vec viewport_y;
+    Vec viewport_upper_left;
+
+    /**
+     * viewport_width and viewport_height in mm.
+     */
+    PerspectiveCamera(const Vec &look_at,
+                      const Vec &look_from,
+                      const Real viewport_width = PIXEL_SIZE * IMAGE_WIDTH,
+                      const Real viewport_height = PIXEL_SIZE * IMAGE_HEIGHT
+    ) : look_at{look_at}, look_from{look_from}, viewport_width{viewport_width}, viewport_height{viewport_height} {
+        update();
+    }
+
+    void update() {
+        const auto focus_dist = 1;
+        const auto theta = degrees_to_radians(vfov);
+        constexpr auto aspect_ratio = 1.f * IMAGE_WIDTH / IMAGE_HEIGHT;
+        const auto h = tan(theta / 2.f);
+        viewport_height = 2.0 * h * focus_dist;
+        viewport_width = viewport_height * aspect_ratio;
+
+        w = (look_from - look_at).normalize();
+        u = cross({0, 1, 0}, w).normalize();
+        v = cross(w, u);
+
+        viewport_x = u * viewport_width * focus_dist;
+        viewport_y = -v * viewport_height * focus_dist;
+        viewport_upper_left = look_from - (w * focus_dist) - viewport_x / 2 - viewport_y / 2;
+
+        pixel_delta_x = viewport_x / IMAGE_WIDTH;
+        pixel_delta_y = viewport_y / IMAGE_HEIGHT;
+        pixel_00_position = viewport_upper_left + (pixel_delta_x + pixel_delta_y) / 2;
+    }
+
+    [[nodiscard]] HOST_DEVICE constexpr Ray get_orthogonal_ray_at(const int x, const int y) const {
+        return Ray{look_from, (pixel_00_position + pixel_delta_x * x + pixel_delta_y * y) - look_from};
+        return Ray::from_to_normalized(look_from, (pixel_00_position + pixel_delta_x * x + pixel_delta_y * y));
+    }
+
+    [[nodiscard]] Ray get_random_orthogonal_ray_at(const int x, const int y) const {
+        return Ray::from_to_normalized(
+            look_from,
+            viewport_upper_left
+            + (x + rand_real()) * (viewport_x) / IMAGE_WIDTH
+            + (y + rand_real()) * (viewport_y) / IMAGE_HEIGHT);
     }
 
     /**

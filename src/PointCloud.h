@@ -84,7 +84,7 @@ inline void reduce_point_cloud(PointCloud &pc, const int target_points) {
     std::ranges::shuffle(pc.begin(), pc.end(), std::default_random_engine{});
     auto [ret, last] = std::ranges::remove_if(pc, [ratio](const auto &) { return rand_real() >= ratio; });
     pc.erase(pc.begin() + target_points, pc.end());
-    std::ranges::sort(pc, [](const auto &a, const auto &b) {return a.point.x < b.point.x;});
+    std::ranges::sort(pc, [](const auto &a, const auto &b) { return a.point.x < b.point.x; });
 
     //pc.erase(ret + target_points, last);
     printf("Resized point cloud to %s points\n", add_thousand_separator(pc.size()).c_str());
