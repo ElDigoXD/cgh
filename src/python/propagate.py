@@ -1,5 +1,6 @@
 import argparse
 import os
+import random
 from typing import Any
 
 import numpy as np
@@ -7,8 +8,7 @@ import matplotlib.pyplot as plt
 from numpy import ndarray
 
 from PIL import Image
-from numpy.fft.helper import fftshift
-from numpy.fft import fft2, ifft2
+from numpy.fft import fft2, ifft2, fftshift, ifftshift
 # import cupy as cp
 # from cupy.fft import fft2, ifft2, fftshift
 import sys
@@ -94,12 +94,14 @@ def import_cgh(image_path: str, grayscale=False, phase_only=False, rgb_only=Fals
 
 Image.MAX_IMAGE_PIXELS = None
 
+
 # Propagation kernel
-def propagate(data: ndarray[complex], slm_z: float, wavelength: float, virtual_slm_factor=1):
+def propagate_angular(data: ndarray[complex], slm_z: float, wavelength: float, virtual_slm_factor=1):
+    print(f"params: slm_z={slm_z}, wavelength={wavelength}, virtual_slm_factor={virtual_slm_factor}")
     # Have margins for the fft
     # data = cp.array(data, dtype=complex, blocking=True)
-    nx = 2048 * 2 * 2 * 2
-    ny = 2048 * 2 * 2 * 2
+    nx = 2048 * 2 * 2
+    ny = 2048 * 2 * 2
 
     # Physical slm size
     pixel_size = 8 * um / virtual_slm_factor
@@ -113,12 +115,48 @@ def propagate(data: ndarray[complex], slm_z: float, wavelength: float, virtual_s
 
     mod_fxfy = fxx * fxx + fyy * fyy
     k = 2 * np.pi / wavelength
-    kernel = np.exp(1j * ((k * slm_z) * np.sqrt(1 - mod_fxfy)))
-    kernel = fftshift(kernel)
+    steps = 1
+    a = fft2(data, (nx, ny))
+    for i in range(steps):
+        kernel = np.exp(1j * ((k * slm_z / steps) * np.sqrt(1 - mod_fxfy)))
+        kernel = fftshift(kernel)
+        a = ifft2(a * kernel)
+        if i == steps - 1: break
+        a = fft2(a + np.exp(1j * random.random() * 2 * np.pi))
 
-    propagated = ifft2((fft2(data, (nx, ny)) * kernel))[:1080 * virtual_slm_factor, :1920 * virtual_slm_factor]
+    propagated = a[:1080 * virtual_slm_factor, :1920 * virtual_slm_factor]
 
     return propagated
+
+
+def propagate_fresnel(data: ndarray[complex], slm_z: float, wavelength: float, virtual_slm_factor):
+    # Fresnel
+    nx = 2048 * 2
+    ny = 2048 * 2
+
+    # Physical slm size
+    pixel_size = 8 * um
+
+    fx = np.fft.fftfreq(nx, d=8 * um / virtual_slm_factor)
+    fy = np.fft.fftfreq(ny, d=8 * um / virtual_slm_factor)
+    fxx, fyy = np.meshgrid(fx, fy)
+
+    k = 2 * np.pi / wavelength
+    kernel = np.exp(1j * k * slm_z) * np.exp(-1j * np.pi * wavelength * slm_z * (fxx ** 2 + fyy ** 2))
+
+    data_im = fft2(data, (nx, ny))
+    fresnel_image = ifft2(data_im * kernel)
+    return fresnel_image[:1080 * virtual_slm_factor, :1920 * virtual_slm_factor]
+
+
+def normalize(data: ndarray):
+    return data / np.max(np.abs(data))
+
+
+def propagate(data: ndarray[complex], slm_z: float, wavelength: float, virtual_slm_factor=1):
+    out = propagate_angular(data, slm_z, wavelength, virtual_slm_factor)
+
+    return out
 
 
 def plot_image(image: ndarray):
@@ -157,43 +195,27 @@ def main():
         # if not os.path.exists(f"{image_path}/median"): os.mkdir(f"{image_path}/median")
         if not os.path.exists(f"{image_path}/out"): os.mkdir(f"{image_path}/out")
 
-        # for z in range(2900, 3005, 5):
-        if True:
-            # z /= 10
-            # z = 299
-            rgbs = []
-            import concurrent.futures
+        import concurrent.futures
 
-            def process_image(i):
+        def process_image(i):
 
-                print(f"Image {i}:")
-                if grayscale:
-                    complex_data = import_cgh(f"{image_path}/{i}.png", grayscale=True, phase_only=phase_only)
-                    r = (np.abs(propagate(complex_data[0], -z * mm, wl_red)))
-                    plt.imsave(f"{image_path}/out/{i}.png", r, cmap='gray')
-                else:
-                    complex_data = import_cgh(f"{image_path}/{i}.png", grayscale=False, phase_only=True, rgb_only=False)
-                    r = (np.abs(propagate(complex_data[0], -z * mm, wl_red)) / 7).clip(0, 1)
-                    g = (np.abs(propagate(complex_data[1], -z * mm, wl_green)) / 7).clip(0, 1)
-                    b = (np.abs(propagate(complex_data[2], -z * mm, wl_blue)) / 7).clip(0, 1)
-                    a = (np.abs(propagate(complex_data[3], -z * mm, wl_red)) / 7).clip(0, 1)
-                    plt.imsave(f"{image_path}/out/{i}.png", np.dstack((r, g, b)))
-                    plt.imsave(f"{image_path}/out/{i}g.png", a, cmap='gray')
+            print(f"Image {i}:")
+            if grayscale:
+                complex_data = import_cgh(f"{image_path}/{i}.png", grayscale=True, phase_only=phase_only)
+                r = (np.abs(propagate(complex_data[0], -z * mm, wl_red)))
+                plt.imsave(f"{image_path}/out/{i}.png", r, cmap='gray')
+            else:
+                complex_data = import_cgh(f"{image_path}/{i}.png", grayscale=False, phase_only=True, rgb_only=False)
+                r = (np.abs(propagate(complex_data[0], -z * mm, wl_red)) / 7).clip(0, 1)
+                g = (np.abs(propagate(complex_data[1], -z * mm, wl_green)) / 7).clip(0, 1)
+                b = (np.abs(propagate(complex_data[2], -z * mm, wl_blue)) / 7).clip(0, 1)
+                a = (np.abs(propagate(complex_data[3], -z * mm, wl_red)) / 7).clip(0, 1)
+                plt.imsave(f"{image_path}/out/{i}.png", np.dstack((r, g, b)))
+                plt.imsave(f"{image_path}/out/{i}g.png", a, cmap='gray')
 
-            # Parallelize the loop
-            with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() - 2) as executor:
-                executor.map(process_image, range(0, count))
-
-            return
-            rgbs = np.array(rgbs)
-
-            img = np.average(rgbs, axis=0)
-            plt.imsave(f"{image_path}/average_z{z * 10}.png", img)
-            # plot_image(img)
-
-            img = np.median(rgbs, axis=0)
-            plt.imsave(f"{image_path}/median_z{z * 10}.png", img)
-            # plot_image(img)
+        # Parallelize the loop
+        with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() - 2) as executor:
+            executor.map(process_image, range(0, count))
 
         return
 
@@ -206,30 +228,49 @@ def main():
                    np.abs(propagate(complex_data[0], -z * mm, wl_red)),
                    cmap='gray')
 
-    if len(complex_data) == 1:  # Grayscale
-        plt.imsave(f'output/propagation/{image_path.split("/")[-1]}_{z}.png',
-                   np.abs(propagate(complex_data[0], -z * mm, wl_red)), cmap='gray')
-        plt.imshow(np.abs(propagate(complex_data[0], -z * mm, wl_red)), cmap='gray')
+    propagate_range = False
+    if propagate_range:
+        for z in range(2900, 3025, 5):
+            # for z in range(3005, 3105, 5):
+            z /= 10
+            r = (np.abs(propagate(complex_data[0], -z * mm, wl_red)))
+            g = (np.abs(propagate(complex_data[1], -z * mm, wl_green)))
+            b = (np.abs(propagate(complex_data[2], -z * mm, wl_blue)))
+
+            r /= 2
+            g /= 2
+            b /= 2
+
+            rgb = np.dstack((r, g, b))
+            plt.imsave(f'output/propagation/color/range/{z * 10}.png', rgb.clip(0, 1))
+        return
+
+    # Grayscale
+    if len(complex_data) == 1:
+        # plt.imsave(f'output/propagation/{image_path.split("/")[-1]}_{z}.png', np.abs(propagate(complex_data[0], -z * mm, wl_red)), cmap='gray')
+        plt.figure(figsize=(16, 9))
+        plt.margins(0)
+        plt.tight_layout(pad=0)
+        plt.axis('off')
+        a = np.abs(propagate(complex_data[0], -z * mm, wl_red))
+        plt.imsave("out.png", a, cmap='gray')
+        plt.imshow(a, cmap='gray')
         plt.show()
         # imsave_grayscale(292)
         # imsave_grayscale(300)
         # imsave_grayscale(306)
+
+    # Color
     else:
         r = (np.abs(propagate(complex_data[0], -z * mm, wl_red)))
         g = (np.abs(propagate(complex_data[1], -z * mm, wl_green)))
         b = (np.abs(propagate(complex_data[2], -z * mm, wl_blue)))
         a = (np.abs(propagate(complex_data[3], -z * mm, wl_red)))
-        # Normalize to 0-1 with the maximum value of the three channels
-        # max_val = np.max([np.max(r), np.max(g), np.max(b)])
-        # min_val = np.min([np.min(r), np.min(g), np.min(b)])
-        # r = (r - min_val) / (max_val - min_val)
-        # g = (g - min_val) / (max_val - min_val)
-        # b = (b - min_val) / (max_val - min_val)
 
-        r /= 4
-        g /= 4
-        b /= 4
-        a /= 4
+        r /= 2
+        g /= 2
+        b /= 2
+        a /= 2
 
         rgb = np.dstack((r, g, b))
         zero = np.zeros_like(r)
