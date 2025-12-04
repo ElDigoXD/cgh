@@ -293,6 +293,8 @@ Scene *load_scene_from_file(const std::string &path) {
         }
     }
 
-
+    if (state == LIGHT && current_light != nullptr) {
+        scene->point_lights.emplace_back(*current_light);
+    }
     return scene;
 }

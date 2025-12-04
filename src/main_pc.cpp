@@ -138,6 +138,10 @@ int main(const int argc, char **argv) {
     auto *scene = get_scene_by_name(scene_name);
     if (!scene) {
         std::cerr << "[ ERROR ] Scene '" << scene_name << "' not found." << std::endl;
+        std::cerr << "Available scenes: " << std::endl;
+        for (const auto &name: scene_names) {
+            std::cerr << " - " << name << std::endl;
+        }
         std::exit(1);
     }
 

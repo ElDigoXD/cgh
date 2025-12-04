@@ -78,7 +78,7 @@ public:
 
             new_scene->add_mesh(new_mesh);
         }
-        printf("[ Info ] Prepared scene for occlusion with %d triangles (originally %d triangles).\n",
+        printf("[ INFO ] Prepared scene for occlusion with %d triangles (originally %d triangles).\n",
                new_scene->get_triangle_count(), get_triangle_count());
         return new_scene;
     }
