@@ -7,7 +7,7 @@ set(CMAKE_CUDA_FLAGS "-march=native -Wall -Wextra --expt-relaxed-constexpr --max
 set(CMAKE_CUDA_FLAGS_DEBUG "-g -G")
 set(CMAKE_CUDA_FLAGS_RELWITHDEBINFO "-O3 -Xptxas -O3")
 set(CMAKE_CUDA_FLAGS_RELEASE "-O3 -Xptxas -O3")
-set(CMAKE_CUDA_COMPILER "/usr/local/cuda-13.0/bin/nvcc")
+set(CMAKE_CUDA_COMPILER "/usr/local/cuda-13.1/bin/nvcc")
 
 set(CMAKE_CXX_STANDARD_REQUIRED 26)
 set(CMAKE_CXX_STANDARD 26)
@@ -16,7 +16,7 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(CMAKE_CXX_COMPILER "/usr/local/gcc-15/bin/g++")
 
-project(untitled LANGUAGES CXX CUDA)
+project(INCIBE_CGH LANGUAGES CXX CUDA)
 include(FetchContent)
 
 # Deps:

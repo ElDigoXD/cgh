@@ -1,5 +1,7 @@
 ## Como utilizar los programas
 
+> Los ficheros se encuentran en cmake-bulid-releases
+
 ### GUI (Interfaz gráfica para visualizar escenas)
 
 Para obtener una imagen de una escena, se puede configurar desde la interfaz el numero de rebotes y de muestras por pixel. Una vez terminado el render, hay que hacer click en el botón "Save" para guardar la imagen (se guarda en la carpeta output con la fecha actual como nombre).
@@ -29,6 +31,12 @@ OPTIONS:
 ```
 
 Para modificar el numero de rebotes y de muestras por punto (solamente al generar la nube de puntos) es necesario modificar el cóodigo fuente en main_pc.cpp (linea 158-164: Renderer renderer{}).
+
+### Modificar el pixel pitch
+
+Para modificar el pixel pitch, es necesario editar el codigo fuente. Para el cálculo del CGH, hay que modificar la macro VIRTUAL_SLM_FACTOR en el archivo config.h (1 = 8um, 2 = 4um, 4 = 2um, 8 = 1um). Para la propagación, hay que modificar la el parámetro de la función propagate en propagate.py (linea 157).
+
+## Scripts de python
 
 ### Propagate.py
 
@@ -60,6 +68,32 @@ python3 src/python/propagate.py out/gray_bg/0.png --z 296
 python3 src/python/propagate.py out/gray_bg/ --z 296 -c 10
 # Propaga un holograma en escala de grises (utilizando el 4º canal, o el único)
 python3 src/python/propagate.py out/gray_bg/0.png -g --z 296
+```
+
+### Calibrate.py
+
+Calibra todos los CGHs de una carpeta para el SLM.
+
+Los argumentos son:
+
+```
+positional arguments:
+  CGH                   Path to the CGH directory
+options:
+  -c COUNT, --count COUNT
+                        Number of images to calibrate
+```
+
+> Los archivos de entrada deben llamarse {0..COUNT}.png.
+> Los archivos de salida se guardan en la carpeta calibrado.
+
+Algunos ejemplos:
+
+```bash
+# Calibra todos los CGHs de la carpeta out/gray_bg/
+python3 src/python/calibrate.py out/gray_bg/ -c 10
+# Calibra el CGH 0.png de la carpeta out/gray_bg/
+python3 src/python/calibrate.py out/gray_bg/
 ```
 
 ## Comandos de ejemplo:

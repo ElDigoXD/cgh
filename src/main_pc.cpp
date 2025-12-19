@@ -157,8 +157,8 @@ int main(const int argc, char **argv) {
     if (!generate_pc.empty()) {
         Renderer renderer{
             .thread_count = 16,
-            .samples_per_pixel = 10,
-            .max_depth = 10,
+            .samples_per_pixel = 100,
+            .max_depth = 100,
             .use_gpu = enable_gpu,
             .enable_occlusion = enable_occlusion
         };

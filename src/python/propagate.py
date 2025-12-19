@@ -2,6 +2,7 @@ import argparse
 import os
 import random
 from typing import Any
+import concurrent.futures
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -97,7 +98,7 @@ Image.MAX_IMAGE_PIXELS = None
 
 # Propagation kernel
 def propagate_angular(data: ndarray[complex], slm_z: float, wavelength: float, virtual_slm_factor=1):
-    print(f"params: slm_z={slm_z}, wavelength={wavelength}, virtual_slm_factor={virtual_slm_factor}")
+    print(f"  propagating: slm_z={slm_z}mm, wavelength={wavelength*1_000_000:.0f}nm, virtual_slm_factor={virtual_slm_factor}")
     # Have margins for the fft
     # data = cp.array(data, dtype=complex, blocking=True)
     nx = 2048 * 2 * 2
@@ -195,7 +196,6 @@ def main():
         # if not os.path.exists(f"{image_path}/median"): os.mkdir(f"{image_path}/median")
         if not os.path.exists(f"{image_path}/out"): os.mkdir(f"{image_path}/out")
 
-        import concurrent.futures
 
         def process_image(i):
 
@@ -230,7 +230,24 @@ def main():
 
     propagate_range = False
     if propagate_range:
-        for z in range(2900, 3025, 5):
+        def process_range(z):
+            z /= 10
+            r = (np.abs(propagate(complex_data[0], -z * mm, wl_red)))
+            g = (np.abs(propagate(complex_data[1], -z * mm, wl_green)))
+            b = (np.abs(propagate(complex_data[2], -z * mm, wl_blue)))
+
+            r /= 2
+            g /= 2
+            b /= 2
+
+            rgb = np.dstack((r, g, b))
+            plt.imsave(f'output/propagation/color/range/{z * 10}.png', rgb.clip(0, 1))
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            executor.map(process_range, range(2900, 3030, 2))
+
+        return
+        for z in range(2900, 3030, 2):
             # for z in range(3005, 3105, 5):
             z /= 10
             r = (np.abs(propagate(complex_data[0], -z * mm, wl_red)))
